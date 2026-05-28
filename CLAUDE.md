@@ -8,3 +8,10 @@
 - 이 repo는 전역 skill, agent, hook, settings 정의를 복제하지 않는다.
 - Claude/Codex의 tool settings, hooks, model 설정은 자동 동기화하지 않는다.
 - 브릿지 상태를 점검할 때는 로컬 `bridge-auditor`를 report-only로 사용한다.
+
+## 프로젝트 기준
+
+- 현재 repo에서 확인 가능한 상태만 설명한다. 아직 없는 product flow, eval run, before/after 결과를 완료된 것처럼 쓰지 않는다.
+- product가 먼저다. 사용자가 자료를 넣고 확인 가능한 결과를 받는 흐름을 우선 만든다.
+- eval은 product behavior를 관찰한다. product가 eval fixture, run artifact, metric output에 의존하지 않게 둔다.
+- 문서는 필요한 판단만 짧게 남긴다. 작은 구현 판단은 코드, commit, PR 설명 가까이에 둔다.

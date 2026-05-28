@@ -1,0 +1,21 @@
+.DS_Store
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+
+# Build and coverage output
+dist/
+build/
+coverage/
+.next/
+out/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log

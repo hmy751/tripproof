@@ -9,6 +9,7 @@ tools: Read, Grep, Glob, Bash
 TripProof repo 안에서 Claude Code와 Codex가 같은 로컬 지침을 읽고 있는지 점검한다.
 
 **수정 권한 없음, report-only.** 직접 파일을 고치지 말고 차이, 위험, 권장 패치 후보만 보고한다.
+Bash는 `ls`, `readlink`, `stat`, `find`, `rg`, `sed` 같은 read-only inspection command에만 사용한다.
 
 ## 핵심 역할
 
