@@ -15,3 +15,11 @@
 - product가 먼저다. 사용자가 자료를 넣고 확인 가능한 결과를 받는 흐름을 우선 만든다.
 - eval은 product behavior를 관찰한다. product가 eval fixture, run artifact, metric output에 의존하지 않게 둔다.
 - 문서는 필요한 판단만 짧게 남긴다. 작은 구현 판단은 코드, commit, PR 설명 가까이에 둔다.
+
+## Commit 규칙
+
+- commit message는 Conventional Commits 형식을 쓴다: `type(scope): 한국어 요약`.
+- `scope`는 변경 영역을 짧게 표시한다. 예: `docs`, `specs`, `client`, `server`, `shared`, `eval`, `fixtures`, `harness`.
+- 제목과 본문은 기본적으로 한국어로 쓴다. type, scope, 파일명, API 이름, 명령어는 영어를 그대로 둔다.
+- 여러 영역을 함께 바꾸면 가장 중심이 되는 scope를 고르고, 필요한 세부 내용은 본문에 적는다.
+- 아직 구현되지 않은 product flow, eval result, proof를 완료된 것처럼 commit message에 쓰지 않는다.
