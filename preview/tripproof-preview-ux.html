@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TripProof Trust Board Preview</title>
+  <title>TripProof Library Chat Preview</title>
   <style>
     :root {
-      --bg: #f4f6f8;
+      --bg: #f3f5f7;
       --surface: #ffffff;
-      --surface-soft: #f9fbfc;
-      --surface-strong: #edf2f5;
+      --surface-soft: #f8fafb;
+      --surface-strong: #eef2f5;
       --ink: #172026;
-      --muted: #65727d;
-      --line: #d9e1e7;
-      --line-strong: #afbdc8;
+      --muted: #66737e;
+      --line: #d8e0e6;
+      --line-strong: #b2c0cb;
       --blue: #276ef1;
       --blue-soft: #e8f0ff;
       --green: #24763c;
@@ -46,6 +46,7 @@
 
     button,
     textarea,
+    input,
     select {
       font: inherit;
     }
@@ -71,11 +72,11 @@
 
     textarea {
       width: 100%;
-      min-height: 78px;
+      min-height: 72px;
       resize: vertical;
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 10px;
+      padding: 11px 12px;
       background: var(--surface);
       color: var(--ink);
     }
@@ -83,16 +84,22 @@
     h1,
     h2,
     h3,
-    p {
+    p,
+    dl {
       margin: 0;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 12px;
     }
 
     .topbar {
       position: sticky;
       top: 0;
-      z-index: 10;
+      z-index: 20;
       display: grid;
-      grid-template-columns: minmax(260px, 420px) minmax(220px, 1fr) auto;
+      grid-template-columns: minmax(260px, 420px) minmax(200px, 1fr) auto;
       gap: 18px;
       align-items: center;
       min-height: 64px;
@@ -122,7 +129,8 @@
     }
 
     .brand strong,
-    .brand span {
+    .brand span,
+    .truncate {
       display: block;
       min-width: 0;
       overflow: hidden;
@@ -133,15 +141,15 @@
     .brand span,
     .muted,
     .panel-head p,
-    .source-card span,
-    .item-meta,
-    .item-source,
-    .saved-empty,
-    .source-caption,
-    .answer-panel p,
-    .state-column small,
-    .situation-head small,
-    .field-item span {
+    .artifact-meta,
+    .candidate-meta,
+    .message-meta,
+    .evidence-caption,
+    .dashboard-meta,
+    .field-empty,
+    .mini-copy,
+    .source-row dt,
+    .flow-step span {
       color: var(--muted);
       font-size: 12px;
     }
@@ -156,12 +164,87 @@
       padding: 0 10px;
     }
 
+    .workspace {
+      display: grid;
+      grid-template-columns: 310px minmax(0, 1fr) 360px;
+      gap: 16px;
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 18px 22px 32px;
+    }
+
+    .library-rail,
+    .evidence-rail {
+      position: sticky;
+      top: 82px;
+      align-self: start;
+      display: grid;
+      gap: 12px;
+    }
+
+    .main-stack,
+    .panel-body,
+    .artifact-list,
+    .candidate-list,
+    .chat-stack,
+    .dashboard-grid,
+    .field-list,
+    .source-table,
+    .flow-row {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .artifact-list {
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .panel.plain {
+      box-shadow: none;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-head h1 {
+      margin-top: 2px;
+      font-size: 25px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .panel-head h2 {
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    .panel-body {
+      padding: 14px;
+    }
+
     .status-strip,
     .button-row,
     .chip-row,
-    .item-actions,
     .answer-actions,
-    .source-tags {
+    .dashboard-actions,
+    .source-tags,
+    .draft-actions {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -222,81 +305,9 @@
       background: var(--surface-soft);
     }
 
-    .workspace {
-      display: grid;
-      grid-template-columns: 268px minmax(0, 1fr) 340px;
-      gap: 16px;
-      max-width: 1480px;
-      margin: 0 auto;
-      padding: 18px 22px 32px;
-    }
-
-    .side-rail,
-    .inspector {
-      position: sticky;
-      top: 82px;
-      align-self: start;
-      display: grid;
-      gap: 12px;
-    }
-
-    .main-stack,
-    .board-stack,
-    .source-list,
-    .saved-list,
-    .trust-board,
-    .state-column,
-    .source-table,
-    .probe-panel {
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }
-
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .panel.slim {
-      box-shadow: none;
-    }
-
-    .panel-head {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .panel-head h1 {
-      margin-top: 2px;
-      font-size: 25px;
-      line-height: 1.18;
-      letter-spacing: 0;
-    }
-
-    .panel-head h2 {
-      font-size: 16px;
-      line-height: 1.25;
-    }
-
-    .panel-body {
-      padding: 14px;
-    }
-
     .trip-summary {
       display: grid;
       gap: 12px;
-    }
-
-    .trip-summary h2 {
-      font-size: 17px;
-      line-height: 1.25;
     }
 
     .mini-summary {
@@ -306,7 +317,7 @@
     }
 
     .mini-summary div,
-    .status-card {
+    .flow-step {
       display: grid;
       gap: 2px;
       padding: 9px;
@@ -316,44 +327,49 @@
     }
 
     .mini-summary strong,
-    .status-card strong {
+    .flow-step strong {
       font-size: 17px;
       line-height: 1.1;
     }
 
-    .source-card {
-      display: grid;
-      grid-template-columns: 38px minmax(0, 1fr);
-      gap: 10px;
-      align-items: start;
-      min-height: 72px;
-      padding: 10px;
+    .artifact-card,
+    .candidate-card,
+    .dashboard-card,
+    .field-item {
+      width: 100%;
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--surface);
       text-align: left;
     }
 
+    .artifact-card,
+    .candidate-card {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 10px;
+    }
+
+    .artifact-card.active,
+    .candidate-card.active,
+    .dashboard-card.active {
+      border-color: var(--blue);
+      outline: 1px solid var(--blue);
+    }
+
     .file-badge {
       display: grid;
       place-items: center;
-      width: 38px;
-      height: 44px;
+      width: 40px;
+      height: 46px;
       border-radius: 6px;
       background: var(--surface-strong);
       color: var(--muted);
       font-family: var(--mono);
       font-size: 10px;
       font-weight: 800;
-    }
-
-    .source-card strong,
-    .source-card span {
-      display: block;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
 
     .source-tags {
@@ -366,342 +382,280 @@
       font-size: 11px;
     }
 
-    .status-overview {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      padding: 14px;
+    .flow-row {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .status-card {
-      min-height: 70px;
+    .flow-step.active {
+      border-color: #bfd1ff;
+      background: var(--blue-soft);
     }
 
-    .status-card span {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .status-card.good {
+    .flow-step.done {
       border-color: #b9dfc4;
       background: var(--green-soft);
     }
 
-    .status-card.warn {
-      border-color: #f0cf90;
-      background: var(--amber-soft);
+    .chat-panel {
+      overflow: hidden;
     }
 
-    .status-card.danger {
-      border-color: #f2b5b5;
-      background: var(--red-soft);
-    }
-
-    .status-card.saved {
-      border-color: #d6c4ff;
-      background: var(--purple-soft);
-    }
-
-    .trust-board {
+    .chat-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 290px;
       gap: 14px;
-    }
-
-    .situation-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-      overflow: hidden;
-    }
-
-    .situation-card.active {
-      border-color: var(--blue);
-      outline: 1px solid var(--blue);
-    }
-
-    .situation-head {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
       padding: 14px;
-      border-bottom: 1px solid var(--line);
-      background: var(--surface-soft);
     }
 
-    .situation-head h2 {
-      margin: 4px 0 2px;
-      font-size: 18px;
-      line-height: 1.25;
-    }
-
-    .state-groups {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 1px;
-      background: var(--line);
-    }
-
-    .state-column {
-      min-width: 0;
-      padding: 10px;
-      background: var(--surface);
-    }
-
-    .state-column header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      min-height: 30px;
-      margin-bottom: 8px;
-    }
-
-    .state-column h3 {
-      font-size: 12px;
-      line-height: 1.2;
-    }
-
-    .check-item {
-      display: grid;
-      gap: 7px;
-      width: 100%;
-      min-height: 110px;
-      padding: 10px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: var(--surface-soft);
-      text-align: left;
-    }
-
-    .check-item + .check-item {
-      margin-top: 8px;
-    }
-
-    .check-item:hover,
-    .check-item.active {
-      border-color: var(--blue);
-      background: var(--blue-soft);
-    }
-
-    .check-item h4 {
-      margin: 0;
-      font-size: 13px;
-      line-height: 1.2;
-    }
-
-    .item-value {
-      display: block;
-      color: var(--ink);
-      font-size: 15px;
-      font-weight: 800;
-      overflow-wrap: anywhere;
-    }
-
-    .item-meta,
-    .item-source {
-      overflow-wrap: anywhere;
-    }
-
-    .empty-lane {
-      display: grid;
-      place-items: center;
-      min-height: 54px;
-      border: 1px dashed var(--line);
-      border-radius: 7px;
-      color: var(--muted);
-      font-size: 12px;
-      text-align: center;
-    }
-
-    .source-preview {
+    .chat-thread {
       display: grid;
       gap: 10px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: #edf2f5;
+      min-height: 250px;
+      align-content: start;
     }
 
-    .source-page {
+    .message {
       display: grid;
       gap: 8px;
-      min-height: 164px;
-      padding: 18px;
-      border: 1px solid #c8d2db;
-      border-radius: 6px;
-      background: #fff;
-    }
-
-    .line {
-      display: block;
-      height: 10px;
-      border-radius: 999px;
-      background: #d6dde4;
-    }
-
-    .line.dark {
-      width: 48%;
-      height: 12px;
-      background: #24313a;
-    }
-
-    .line.mid {
-      width: 76%;
-    }
-
-    .line.short {
-      width: 55%;
-    }
-
-    .source-highlight {
-      display: grid;
-      gap: 8px;
-      margin-top: 8px;
+      max-width: 92%;
       padding: 12px;
-      border: 2px solid rgb(39 110 241 / 76%);
-      border-radius: 7px;
-      background: rgb(39 110 241 / 8%);
-    }
-
-    .source-table {
-      gap: 1px;
-      margin-top: 12px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      overflow: hidden;
-      background: var(--line);
+      background: var(--surface-soft);
     }
 
-    .source-row {
+    .message.user {
+      justify-self: end;
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .message.user .message-meta {
+      color: rgb(255 255 255 / 72%);
+    }
+
+    .answer-card {
       display: grid;
-      grid-template-columns: 84px minmax(0, 1fr);
-      gap: 10px;
-      padding: 9px 11px;
-      background: var(--surface);
-    }
-
-    .source-row dt {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .source-row dd {
-      margin: 0;
-      overflow-wrap: anywhere;
-    }
-
-    code {
-      font-family: var(--mono);
-      font-size: 12px;
-      white-space: normal;
-    }
-
-    .probe-panel {
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .probe-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 300px;
       gap: 12px;
-      align-items: start;
+      max-width: 100%;
+      border-color: #bfd1ff;
+      background: #fbfdff;
+    }
+
+    .answer-card h3,
+    .draft-panel h3,
+    .dashboard-card h3 {
+      font-size: 16px;
+      line-height: 1.28;
+      letter-spacing: 0;
+    }
+
+    .answer-body {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .evidence-mini {
+      display: grid;
+      gap: 6px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+    }
+
+    .composer {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
     }
 
     .suggestion-button {
       min-height: 30px;
       padding: 0 10px;
-      border-radius: 999px;
-      background: var(--surface-soft);
       font-size: 12px;
     }
 
-    .answer-panel {
+    .draft-panel {
+      display: grid;
+      gap: 12px;
+      border-color: #bfd1ff;
+      background: #fbfdff;
+    }
+
+    .draft-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .draft-field {
+      display: grid;
+      gap: 2px;
+      min-height: 60px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+    }
+
+    .draft-field span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dashboard-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-card {
       display: grid;
       gap: 10px;
-      min-height: 124px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+      min-height: 174px;
+      padding: 13px;
+    }
+
+    .dashboard-value {
+      display: block;
+      font-size: 18px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+
+    .dashboard-card.pending {
+      border-style: dashed;
       background: var(--surface-soft);
     }
 
-    .answer-panel h3 {
-      font-size: 15px;
-      line-height: 1.3;
+    .empty-state {
+      display: grid;
+      gap: 8px;
+      min-height: 160px;
+      place-items: center;
+      padding: 20px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      text-align: center;
+    }
+
+    .evidence-preview {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+
+    .source-page {
+      display: grid;
+      gap: 8px;
+      min-height: 180px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .line {
+      display: block;
+      height: 8px;
+      border-radius: 99px;
+      background: #d9e1e7;
+    }
+
+    .line.dark {
+      width: 54%;
+      background: #7f8b96;
+    }
+
+    .line.mid {
+      width: 82%;
+    }
+
+    .line.short {
+      width: 42%;
+    }
+
+    .source-highlight {
+      display: grid;
+      gap: 7px;
+      margin-top: 8px;
+      padding: 12px;
+      border: 1px solid #f0cf90;
+      border-radius: 7px;
+      background: var(--amber-soft);
+    }
+
+    .source-table {
+      padding: 14px;
+    }
+
+    .source-row {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .source-row:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
     }
 
     .field-item {
       display: grid;
-      gap: 2px;
-      padding: 9px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: rgb(255 255 255 / 78%);
+      gap: 4px;
+      padding: 10px;
     }
 
     .field-item strong {
-      overflow-wrap: anywhere;
+      font-size: 15px;
+      line-height: 1.25;
     }
 
-    @media (max-width: 1240px) {
+    @media (max-width: 1180px) {
       .workspace {
-        grid-template-columns: 250px minmax(0, 1fr);
+        grid-template-columns: 300px minmax(0, 1fr);
       }
 
-      .inspector {
+      .evidence-rail {
         position: static;
-        grid-column: 2;
+        grid-column: 1 / -1;
       }
 
-      .state-groups {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+      .chat-shell {
+        grid-template-columns: 1fr;
       }
     }
 
-    @media (max-width: 920px) {
-      .workspace,
-      .probe-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .side-rail,
-      .inspector {
-        position: static;
-        grid-column: auto;
-      }
-
-      .status-overview {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 720px) {
-      body {
-        font-size: 16px;
-      }
-
-      .topbar,
-      .state-groups {
-        grid-template-columns: 1fr;
-      }
-
+    @media (max-width: 860px) {
       .topbar {
-        gap: 12px;
-        padding: 14px 16px;
+        grid-template-columns: 1fr;
+        align-items: start;
+        padding: 12px 16px;
       }
 
       .workspace {
-        padding: 14px 12px 28px;
+        grid-template-columns: 1fr;
+        padding: 14px;
       }
 
-      .status-overview {
+      .library-rail {
+        position: static;
+      }
+
+      .flow-row,
+      .dashboard-grid,
+      .draft-grid {
         grid-template-columns: 1fr;
       }
 
-      .situation-head,
       .source-row {
         grid-template-columns: 1fr;
       }
@@ -714,7 +668,7 @@
       <div class="mark">TP</div>
       <div>
         <strong>TripProof</strong>
-        <span>여행 자료를 상황별 신뢰 상태로 검증합니다</span>
+        <span>자료에 묻고, 근거 있는 답변을 카드로 올립니다</span>
       </div>
     </div>
     <select aria-label="여행 선택">
@@ -723,29 +677,29 @@
     </select>
     <div class="status-strip">
       <span class="pill info" id="artifactCount">자료 5개</span>
-      <span class="pill good" id="supportedCount">확인됨 0</span>
-      <span class="pill warn" id="reviewCount">확인 필요 0</span>
-      <span class="pill saved" id="savedCount">저장됨 0</span>
+      <span class="pill warn" id="candidateCount">추천 후보 0</span>
+      <span class="pill good" id="dashboardCount">대시보드 0</span>
+      <span class="pill saved" id="fieldCount">현장 0</span>
     </div>
   </header>
 
   <main class="workspace">
-    <aside class="side-rail">
+    <aside class="library-rail">
       <section class="panel trip-summary">
         <div class="panel-head">
           <div>
             <h2>오사카 4박 5일</h2>
-            <p>출발 D-3 · 자료 검증 중</p>
+            <p>자료함 기반 확인 중</p>
           </div>
         </div>
         <div class="panel-body trip-summary">
           <div class="mini-summary">
             <div><strong id="sideArtifactCount">5</strong><span class="muted">자료</span></div>
-            <div><strong id="sideIssueCount">0</strong><span class="muted">확인할 것</span></div>
-            <div><strong id="sideSavedCount">0</strong><span class="muted">현장</span></div>
+            <div><strong id="sideCandidateCount">0</strong><span class="muted">후보</span></div>
+            <div><strong id="sideDashboardCount">0</strong><span class="muted">올린 카드</span></div>
           </div>
           <div class="button-row">
-            <button class="primary">자료 추가</button>
+            <button class="primary">자료 첨부</button>
             <button>메시지 붙여넣기</button>
           </div>
         </div>
@@ -755,24 +709,24 @@
         <div class="panel-head">
           <div>
             <h2>자료함</h2>
-            <p>원본과 근거 연결</p>
+            <p>채팅과 근거의 원천</p>
           </div>
         </div>
         <div class="panel-body">
-          <div class="source-list" id="sourceList"></div>
+          <div class="artifact-list" id="artifactList"></div>
         </div>
       </section>
 
       <section class="panel">
         <div class="panel-head">
           <div>
-            <h2>현장 카드</h2>
-            <p>저장한 정보만</p>
+            <h2>AI 추천 후보</h2>
+            <p>아직 최종 대시보드 전</p>
           </div>
-          <span class="pill saved" id="fieldBadge">0</span>
+          <span class="pill warn" id="candidateBadge">0</span>
         </div>
         <div class="panel-body">
-          <div class="saved-list" id="fieldList"></div>
+          <div class="candidate-list" id="candidateList"></div>
         </div>
       </section>
     </aside>
@@ -781,119 +735,134 @@
       <section class="panel">
         <div class="panel-head">
           <div>
-            <p class="muted">상황별 신뢰 상태</p>
-            <h1>이 정보를 믿고 행동해도 되는가</h1>
-            <p>AI가 먼저 찾은 항목과 사용자의 질문 답변을 같은 보드가 아니라 같은 신뢰 축 위에서 다룹니다.</p>
+            <p class="muted">현재 흐름</p>
+            <h1>답변을 보고, 사람이 카드로 올립니다</h1>
+            <p>자료함 채팅과 추천 후보가 카드 초안을 만들고, 채택한 것만 최종 대시보드에 쌓입니다.</p>
           </div>
-          <span class="pill info">검증 보드</span>
+          <span class="pill info">하이브리드</span>
         </div>
-        <div class="status-overview" id="statusOverview"></div>
+        <div class="panel-body">
+          <div class="flow-row" id="flowRow"></div>
+        </div>
       </section>
 
-      <section class="trust-board" id="trustBoard"></section>
-
-      <section class="probe-panel">
-        <div class="panel-head" style="padding:0 0 12px;border-bottom:0">
+      <section class="panel chat-panel">
+        <div class="panel-head">
           <div>
-            <h2>자료에 묻기</h2>
-            <p>현재 선택: <strong id="probeContext">숙소 체크인</strong></p>
+            <h2>자료함 채팅</h2>
+            <p>현재 대상: <strong id="chatScope">전체 자료함</strong></p>
           </div>
-          <span class="pill info">질문 probe</span>
+          <span class="pill info">답변에서 카드로</span>
         </div>
-        <div class="probe-grid">
-          <div class="probe-panel slim" style="padding:0;border:0;box-shadow:none">
+        <div class="chat-shell">
+          <div class="chat-stack">
+            <div class="chat-thread" id="chatThread"></div>
+          </div>
+          <aside class="composer">
+            <div>
+              <strong>질문</strong>
+              <p class="mini-copy">자료함 안의 PDF, 캡처, 메시지 기준</p>
+            </div>
             <textarea id="questionInput">호텔에 늦게 도착하면 어떻게 돼?</textarea>
             <div class="chip-row" id="questionSuggestions"></div>
             <div class="button-row">
-              <button class="primary" id="askButton">자료 안에서 답 찾기</button>
+              <button class="primary" id="askButton">답변 받기</button>
             </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="panel draft-panel" id="draftPanel"></section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>최종 대시보드</h2>
+            <p>사람이 올린 카드만</p>
           </div>
-          <div id="answerSlot"></div>
+          <span class="pill good" id="dashboardBadge">0</span>
+        </div>
+        <div class="panel-body">
+          <div class="dashboard-grid" id="dashboardGrid"></div>
         </div>
       </section>
     </section>
 
-    <aside class="inspector">
-      <section class="panel" id="inspectorPanel"></section>
+    <aside class="evidence-rail">
+      <section class="panel" id="evidencePanel"></section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>현장 카드</h2>
+            <p>대시보드에서 저장한 정보</p>
+          </div>
+          <span class="pill saved" id="fieldBadge">0</span>
+        </div>
+        <div class="panel-body">
+          <div class="field-list" id="fieldList"></div>
+        </div>
+      </section>
     </aside>
   </main>
 
   <script>
     const artifacts = [
-      { id: "hotel", name: "호텔 예약 화면", file: "hotel-booking-screenshot.png", kind: "IMG", kindLabel: "이미지", linked: ["숙소 체크인", "결제 확인"], meta: "체크인 시간, 늦은 도착, 예약번호" },
-      { id: "host", name: "호스트 체크인 안내", file: "host-message-capture.png", kind: "IMG", kindLabel: "이미지", linked: ["숙소 체크인"], meta: "출입 코드, 도착 지연 연락" },
-      { id: "voucher", name: "후지산 투어 바우처", file: "fuji-tour-voucher.pdf", kind: "PDF", kindLabel: "PDF", linked: ["투어 출발"], meta: "모바일 바우처, 집합 시간, 장소" },
-      { id: "rental", name: "렌터카 예약 약관", file: "rental-car-terms.pdf", kind: "PDF", kindLabel: "PDF", linked: ["렌터카 반납"], meta: "연료 정책, 보증금 조건" },
-      { id: "receipt", name: "호텔 도시세 영수증", file: "hotel-city-tax-receipt.jpg", kind: "JPG", kindLabel: "영수증", linked: ["숙소 체크인", "결제 확인"], meta: "도시세, 추가 결제 이유" }
+      { id: "hotel", name: "호텔 예약 화면", file: "hotel-booking-screenshot.png", kind: "IMG", tags: ["숙소", "결제"], meta: "체크인 시간, 늦은 도착, 예약번호" },
+      { id: "host", name: "호스트 체크인 안내", file: "host-message-capture.png", kind: "IMG", tags: ["숙소"], meta: "출입 코드, 도착 지연 연락" },
+      { id: "voucher", name: "후지산 투어 바우처", file: "fuji-tour-voucher.pdf", kind: "PDF", tags: ["투어"], meta: "모바일 바우처, 집합 시간, 장소" },
+      { id: "rental", name: "렌터카 예약 약관", file: "rental-car-terms.pdf", kind: "PDF", tags: ["렌터카"], meta: "연료 정책, 보증금 조건" },
+      { id: "receipt", name: "호텔 도시세 영수증", file: "hotel-city-tax-receipt.jpg", kind: "JPG", tags: ["결제"], meta: "도시세, 추가 결제 이유" }
     ];
 
-    const situations = [
-      { id: "checkin", title: "숙소 체크인", badge: "숙소", meta: "5월 12일 · 신주쿠", description: "도착 전에 시간, 연락 조건, 민감 정보를 가릅니다.", sourceIds: ["hotel", "host", "receipt"] },
-      { id: "tour", title: "투어 출발", badge: "액티비티", meta: "5월 13일 · 도쿄 출발", description: "바우처 제시, 집합 시간, 지각 규정을 확인합니다.", sourceIds: ["voucher"] },
-      { id: "rental", title: "렌터카 반납", badge: "렌터카", meta: "5월 14일 · 가와구치코", description: "연료 정책과 보증금 조건을 반납 전에 확인합니다.", sourceIds: ["rental"] },
-      { id: "payment", title: "결제 확인", badge: "정산", meta: "여행 후 · 영수증 대조", description: "추가 결제 이유와 예약 조건을 대조합니다.", sourceIds: ["hotel", "receipt"] }
+    const candidates = [
+      card("lateArrival", "candidate", "숙소 체크인", "늦은 도착", "22:00 이후 숙소 연락 필요", "supported", ["hotel", "host"], "호텔 예약 화면 + 호스트 체크인 안내", "늦은 도착 안내", "22:00 이후 도착 시 숙소 연락 필요. 호스트 메시지에도 같은 조건이 있습니다.", "두 자료가 같은 조건을 말합니다."),
+      card("doorCode", "candidate", "숙소 체크인", "출입 코드", "원문 직접 확인", "needs_review", ["host"], "호스트 체크인 안내", "셀프 체크인 안내", "출입 코드는 민감 정보라 자동 저장하지 않습니다.", "민감 정보는 카드보다 원문 확인이 우선입니다.", false),
+      card("mobileVoucher", "candidate", "투어 출발", "바우처 제시", "모바일 바우처 가능", "supported", ["voucher"], "후지산 투어 바우처", "2쪽 바우처 조건", "Mobile voucher accepted.", "프린트 없이 화면 제시로 처리할 수 있습니다."),
+      card("lateTour", "candidate", "투어 출발", "지각 환불 규정", "근거 부족", "missing", ["voucher"], "현재 자료", "자료 전체", "지각 시 환불 규정은 현재 자료에서 찾지 못했습니다.", "관련 약관을 더 첨부해야 합니다.", false)
     ];
 
-    const checkItems = [
-      item("checkinTime", "checkin", "체크인 시간", "15:00", "supported", "호텔 예약 화면", "hotel", "예약 요약 영역", "체크인 15:00. 22:00 이후 도착 시 숙소 연락 필요.", "체크인 전 바로 써도 되는 값입니다.", true),
-      item("lateArrival", "checkin", "늦은 도착", "22:00 이후 숙소 연락 필요", "supported", "호텔 예약 화면 + 호스트 체크인 안내", "hotel", "늦은 도착 안내", "22:00 이후 도착 시 숙소 연락 필요. 호스트 메시지에도 같은 조건이 있습니다.", "두 자료가 같은 행동을 말합니다."),
-      item("bookingNumber", "checkin", "예약번호", "****1234", "needs_review", "호텔 예약 화면", "hotel", "예약번호 영역", "예약번호는 화면에 있지만 공개 값은 마스킹했습니다.", "민감 정보라 원문에서 직접 확인합니다.", false, false),
-      item("doorCode", "checkin", "출입 코드", "원문 직접 확인", "needs_review", "호스트 체크인 안내", "host", "셀프 체크인 안내", "출입 코드는 민감 정보라 원문에서 직접 확인해야 합니다.", "숙소 앞에서 원문을 열어 확인합니다.", false, false),
-      item("cityTax", "checkin", "도시세", "JPY 1,200", "supported", "호텔 도시세 영수증", "receipt", "금액 표시 영역", "체크인 시 도시세 JPY 1,200 결제.", "현장 결제 참고 정보입니다."),
-      item("mobileVoucher", "tour", "바우처 제시", "모바일 바우처 가능", "supported", "후지산 투어 바우처", "voucher", "2쪽 바우처 조건", "Mobile voucher accepted.", "프린트 없이 보여줄 수 있습니다.", true),
-      item("meetTime", "tour", "집합 시간", "08:45", "supported", "후지산 투어 바우처", "voucher", "1쪽 집합 안내", "Arrive 15 minutes before departure at 09:00.", "출발 전 도착해야 하는 시간입니다."),
-      item("meetPlace", "tour", "집합 장소", "Shinjuku Center Building 1F", "needs_review", "후지산 투어 바우처", "voucher", "1쪽 집합 장소", "Meet at Shinjuku Center Building 1F.", "건물명은 있으나 정확한 입구는 직접 확인이 좋습니다."),
-      item("lateTour", "tour", "지각 환불 규정", "근거 부족", "missing", "현재 자료", "voucher", "자료 전체", "지각 시 대기 여부나 환불 규정은 현재 자료에서 찾지 못했습니다.", "관련 약관이나 취소 규정 자료가 더 필요합니다.", false, false),
-      item("fuel", "rental", "연료 정책", "가득 채워 반납", "supported", "렌터카 예약 약관", "rental", "4쪽 연료 정책 표", "Return with a full tank.", "반납 전 행동으로 옮길 수 있는 조건입니다."),
-      item("deposit", "rental", "보증금", "JPY 50,000 보류 가능", "needs_review", "렌터카 예약 약관", "rental", "3쪽 보증금 안내", "Deposit up to JPY 50,000 may be held.", "결제 수단과 실제 청구 여부를 직접 확인해야 합니다."),
-      item("returnGate", "rental", "반납 위치", "근거 부족", "missing", "현재 자료", "rental", "자료 전체", "정확한 반납 게이트나 주차장 입구는 현재 자료에서 찾지 못했습니다.", "지도나 렌터카 업체 안내가 더 필요합니다.", false, false),
-      item("extraChargeReason", "payment", "추가 결제 이유", "도시세", "supported", "호텔 예약 화면 + 도시세 영수증", "receipt", "금액 표시 영역", "City tax JPY 1,200.", "이해형 답변으로 충분할 수 있지만 저장도 가능합니다."),
-      item("refundDeposit", "payment", "보증금 환불", "근거 부족", "missing", "현재 자료", "receipt", "자료 전체", "숙소 보증금 환불 조건은 현재 자료에서 찾지 못했습니다.", "자료가 없으면 답을 만들지 않습니다.", false, false)
-    ];
-
-    const chatAnswers = {
-      "호텔에 늦게 도착하면 어떻게 돼?": answer("호텔에 늦게 도착하면 어떻게 돼?", "22:00 이후 도착하면 숙소에 연락해야 합니다. 호텔 예약 화면과 호스트 안내가 같은 조건을 말합니다.", "supported", "checkin", "lateArrival", "save", "호텔 예약 화면 + 호스트 체크인 안내", "늦은 도착 안내"),
-      "투어 바우처 프린트해야 해?": answer("투어 바우처 프린트해야 해?", "현재 바우처에는 모바일 바우처 가능이라고 적혀 있습니다. 프린트 없이 화면 제시로 처리할 수 있습니다.", "supported", "tour", "mobileVoucher", "save", "후지산 투어 바우처", "2쪽 바우처 조건"),
-      "투어 늦으면 환불돼?": answer("투어 늦으면 환불돼?", "현재 자료에서는 지각 시 환불 규정을 찾지 못했습니다. 취소 규정이나 투어 약관 자료가 더 필요합니다.", "missing", "tour", "lateTour", "add_source", "현재 자료", "자료 전체"),
-      "이 영수증은 왜 낸 거야?": answer("이 영수증은 왜 낸 거야?", "호텔 도시세 JPY 1,200 결제 영수증으로 보입니다. 체크인 때 낸 추가 결제의 이유를 이해하는 데 충분합니다.", "supported", "payment", "extraChargeReason", "keep_answer", "호텔 도시세 영수증", "금액 표시 영역")
+    const answerBank = {
+      "호텔에 늦게 도착하면 어떻게 돼?": answer("a-late-arrival", "호텔에 늦게 도착하면 어떻게 돼?", "22:00 이후 도착하면 숙소에 연락해야 합니다. 호텔 예약 화면과 호스트 안내가 같은 조건을 말합니다.", "supported", card("lateArrival", "answer", "숙소 체크인", "늦은 도착", "22:00 이후 숙소 연락 필요", "supported", ["hotel", "host"], "호텔 예약 화면 + 호스트 체크인 안내", "늦은 도착 안내", "22:00 이후 도착 시 숙소 연락 필요. 호스트 메시지에도 같은 조건이 있습니다.", "두 근거가 같은 행동을 가리킵니다.")),
+      "투어 바우처 프린트해야 해?": answer("a-voucher", "투어 바우처 프린트해야 해?", "현재 바우처에는 모바일 바우처 가능이라고 적혀 있습니다. 프린트 없이 화면 제시로 처리할 수 있습니다.", "supported", card("mobileVoucher", "answer", "투어 출발", "바우처 제시", "모바일 바우처 가능", "supported", ["voucher"], "후지산 투어 바우처", "2쪽 바우처 조건", "Mobile voucher accepted.", "프린트가 아니라 화면 제시가 가능한 조건입니다.")),
+      "투어 늦으면 환불돼?": answer("a-late-tour", "투어 늦으면 환불돼?", "현재 자료에서는 지각 시 환불 규정을 찾지 못했습니다. 취소 규정이나 투어 약관 자료가 더 필요합니다.", "missing", card("lateTour", "answer", "투어 출발", "지각 환불 규정", "근거 부족", "missing", ["voucher"], "현재 자료", "자료 전체", "지각 시 환불 규정은 현재 자료에서 찾지 못했습니다.", "근거 부족 항목으로 남길 수 있습니다.", false)),
+      "이 영수증은 왜 낸 거야?": answer("a-receipt", "이 영수증은 왜 낸 거야?", "호텔 도시세 JPY 1,200 결제 영수증으로 보입니다. 체크인 때 낸 추가 결제의 이유를 이해하는 데 충분합니다.", "supported", card("cityTax", "answer", "결제 확인", "도시세", "JPY 1,200", "supported", ["receipt", "hotel"], "호텔 도시세 영수증 + 호텔 예약 화면", "금액 표시 영역", "City tax JPY 1,200.", "현장에서 다시 볼 필요가 있으면 카드로 올릴 수 있습니다."))
     };
 
-    const stateOrder = ["saved", "supported", "needs_review", "missing", "conflict"];
+    let selectedArtifactId = "hotel";
+    let selectedEvidence = candidates[0];
+    let selectedCardId = null;
+    let activeQuestion = "호텔에 늦게 도착하면 어떻게 돼?";
+    let activeAnswer = answerBank[activeQuestion];
+    let draftCard = null;
+    const dashboardCards = [
+      card("checkinTime", "dashboard", "숙소 체크인", "체크인 시간", "15:00", "supported", ["hotel"], "호텔 예약 화면", "예약 요약 영역", "체크인 15:00. 22:00 이후 도착 시 숙소 연락 필요.", "사용자가 이미 올린 카드입니다.", true)
+    ];
+
+    const flow = [
+      { key: "library", title: "자료함", copy: "원본 5개" },
+      { key: "chat", title: "채팅 답변", copy: "근거와 상태" },
+      { key: "draft", title: "카드 초안", copy: "사람이 검토" },
+      { key: "dashboard", title: "최종 대시보드", copy: "올린 카드만" }
+    ];
+
     const stateMeta = {
-      saved: { label: "저장됨", className: "saved", empty: "현장 카드 없음" },
-      supported: { label: "확인됨", className: "good", empty: "확인된 값 없음" },
-      needs_review: { label: "확인 필요", className: "warn", empty: "확인할 항목 없음" },
-      missing: { label: "근거 부족", className: "danger", empty: "부족한 근거 없음" },
-      conflict: { label: "자료 충돌", className: "danger", empty: "충돌 없음" }
+      supported: { label: "근거 있음", className: "good" },
+      needs_review: { label: "확인 필요", className: "warn" },
+      missing: { label: "근거 부족", className: "danger" },
+      saved: { label: "현장 저장", className: "saved" }
     };
-
-    let selectedSituationId = "checkin";
-    let selectedItemId = "lateArrival";
-    let activeAnswer = null;
 
     const $ = (selector) => document.querySelector(selector);
-    const artifactById = (id) => artifacts.find((artifactItem) => artifactItem.id === id);
-    const situationById = (id) => situations.find((situationItem) => situationItem.id === id);
-    const checkItemById = (id) => checkItems.find((checkItem) => checkItem.id === id);
+    const artifactById = (id) => artifacts.find((artifact) => artifact.id === id);
+    const dashboardById = (id) => dashboardCards.find((item) => item.id === id);
 
-    function item(id, situationId, label, value, state, source, artifactId, locator, snippet, note, saved = false, saveable = true) {
-      return { id, situationId, label, value, state, source, artifactId, locator, snippet, note, saved, saveable };
+    function card(id, origin, situation, title, value, state, artifactIds, source, locator, snippet, note, saveable = true) {
+      return { id, origin, situation, title, value, state, artifactIds, source, locator, snippet, note, saveable, saved: false };
     }
 
-    function answer(question, body, state, situationId, targetId, outcome, source, locator) {
-      return { question, body, state, situationId, targetId, outcome, source, locator };
-    }
-
-    function displayState(checkItem) {
-      return checkItem.saved ? "saved" : checkItem.state;
-    }
-
-    function stateLabel(state) {
-      return stateMeta[state]?.label || state;
-    }
-
-    function stateClass(state) {
-      return stateMeta[state]?.className || "info";
+    function answer(id, question, body, state, proposedCard) {
+      return { id, question, body, state, proposedCard };
     }
 
     function escapeHtml(value) {
@@ -905,293 +874,309 @@
         .replaceAll("'", "&#039;");
     }
 
+    function stateLabel(state) {
+      return stateMeta[state]?.label || state;
+    }
+
+    function stateClass(state) {
+      return stateMeta[state]?.className || "info";
+    }
+
+    function cloneCard(source, origin) {
+      return { ...source, origin, saved: false };
+    }
+
     function renderAll() {
       renderCounters();
-      renderSources();
+      renderFlow();
+      renderArtifacts();
+      renderCandidates();
+      renderChat();
+      renderDraft();
+      renderDashboard();
+      renderEvidence();
       renderFieldCards();
-      renderOverview();
-      renderTrustBoard();
-      renderInspector();
-      renderProbe();
     }
 
     function renderCounters() {
-      const saved = checkItems.filter((checkItem) => checkItem.saved);
-      const supported = checkItems.filter((checkItem) => checkItem.state === "supported");
-      const review = checkItems.filter((checkItem) => ["needs_review", "missing", "conflict"].includes(checkItem.state));
+      const dashboardCount = dashboardCards.length;
+      const fieldCount = dashboardCards.filter((item) => item.saved).length;
       $("#artifactCount").textContent = `자료 ${artifacts.length}개`;
-      $("#supportedCount").textContent = `확인됨 ${supported.length}`;
-      $("#reviewCount").textContent = `확인 필요 ${review.length}`;
-      $("#savedCount").textContent = `저장됨 ${saved.length}`;
+      $("#candidateCount").textContent = `추천 후보 ${candidates.length}`;
+      $("#dashboardCount").textContent = `대시보드 ${dashboardCount}`;
+      $("#fieldCount").textContent = `현장 ${fieldCount}`;
       $("#sideArtifactCount").textContent = artifacts.length;
-      $("#sideIssueCount").textContent = review.length;
-      $("#sideSavedCount").textContent = saved.length;
-      $("#fieldBadge").textContent = saved.length;
+      $("#sideCandidateCount").textContent = candidates.length;
+      $("#sideDashboardCount").textContent = dashboardCount;
+      $("#candidateBadge").textContent = candidates.length;
+      $("#dashboardBadge").textContent = dashboardCount;
+      $("#fieldBadge").textContent = fieldCount;
     }
 
-    function renderSources() {
-      $("#sourceList").innerHTML = artifacts.map((artifact) => `
-        <article class="source-card">
+    function renderFlow() {
+      const hasDraft = Boolean(draftCard);
+      $("#flowRow").innerHTML = flow.map((step) => {
+        const status = {
+          library: "done",
+          chat: activeAnswer ? "active" : "",
+          draft: hasDraft ? "active" : "",
+          dashboard: dashboardCards.length > 1 ? "done" : ""
+        }[step.key];
+        return `
+          <div class="flow-step ${status}">
+            <strong>${step.title}</strong>
+            <span>${step.copy}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderArtifacts() {
+      $("#artifactList").innerHTML = artifacts.map((artifact) => `
+        <button class="artifact-card ${artifact.id === selectedArtifactId ? "active" : ""}" data-artifact="${artifact.id}">
           <span class="file-badge">${artifact.kind}</span>
           <span>
-            <strong>${artifact.name}</strong>
-            <span>${artifact.meta}</span>
-            <span>${artifact.file}</span>
-            <span class="source-tags">${artifact.linked.map((tag) => `<span class="pill info">${tag}</span>`).join("")}</span>
+            <strong class="truncate">${artifact.name}</strong>
+            <span class="artifact-meta truncate">${artifact.meta}</span>
+            <span class="artifact-meta truncate">${artifact.file}</span>
+            <span class="source-tags">${artifact.tags.map((tag) => `<span class="pill info">${tag}</span>`).join("")}</span>
           </span>
-        </article>
+        </button>
       `).join("");
     }
 
-    function renderFieldCards() {
-      const saved = checkItems.filter((checkItem) => checkItem.saved);
-      if (!saved.length) {
-        $("#fieldList").innerHTML = `<p class="saved-empty">아직 현장 카드에 저장한 정보가 없습니다.</p>`;
+    function renderCandidates() {
+      $("#candidateList").innerHTML = candidates.map((item) => {
+        const alreadyAdded = Boolean(dashboardById(item.id));
+        return `
+          <article class="candidate-card ${selectedEvidence?.id === item.id ? "active" : ""}">
+            <span class="file-badge">AI</span>
+            <span>
+              <strong class="truncate">${item.situation} · ${item.title}</strong>
+              <span class="candidate-meta truncate">${item.value}</span>
+              <span class="candidate-meta truncate">근거: ${item.source}</span>
+              <span class="button-row" style="margin-top:8px">
+                <button data-evidence="${item.id}">근거</button>
+                <button class="primary" data-candidate="${item.id}" ${alreadyAdded || !item.saveable ? "disabled" : ""}>카드 초안</button>
+              </span>
+            </span>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderChat() {
+      $("#chatScope").textContent = selectedArtifactId === "all" ? "전체 자료함" : artifactById(selectedArtifactId)?.name || "전체 자료함";
+      $("#questionSuggestions").innerHTML = Object.keys(answerBank).map((question) => `
+        <button class="suggestion-button" data-question="${question}">${question}</button>
+      `).join("");
+
+      $("#chatThread").innerHTML = `
+        <div class="message user">
+          <span class="message-meta">나</span>
+          <p>${escapeHtml(activeQuestion)}</p>
+        </div>
+        ${activeAnswer ? renderAnswer(activeAnswer) : ""}
+      `;
+    }
+
+    function renderAnswer(currentAnswer) {
+      const item = currentAnswer.proposedCard;
+      const alreadyAdded = Boolean(dashboardById(item.id));
+      const canPromote = item.saveable && item.state === "supported" && !alreadyAdded;
+      return `
+        <article class="message answer-card">
+          <div class="chip-row">
+            <span class="pill ${stateClass(currentAnswer.state)}">${stateLabel(currentAnswer.state)}</span>
+            <span class="pill info">연결 가능: ${item.situation}</span>
+          </div>
+          <div>
+            <span class="message-meta">TripProof</span>
+            <p class="answer-body">${currentAnswer.body}</p>
+          </div>
+          <div class="evidence-mini">
+            <strong>근거</strong>
+            <span>${item.source}</span>
+            <span class="evidence-caption">${item.locator}</span>
+          </div>
+          <div class="answer-actions">
+            <button class="primary" data-promote-answer="${currentAnswer.id}" ${canPromote ? "" : "disabled"}>${alreadyAdded ? "이미 대시보드에 있음" : "카드로 올리기"}</button>
+            <button data-answer-evidence="${currentAnswer.id}">근거 상세</button>
+            <button class="quiet" disabled>답변으로 남김</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderDraft() {
+      if (!draftCard) {
+        $("#draftPanel").innerHTML = `
+          <div class="panel-head">
+            <div>
+              <h2>카드 초안</h2>
+              <p>답변이나 추천 후보를 고르면 여기서 확인합니다</p>
+            </div>
+            <span class="pill info">대기</span>
+          </div>
+          <div class="panel-body">
+            <div class="empty-state">
+              <strong>아직 선택한 답변이 없습니다</strong>
+              <p class="muted">채팅 답변의 카드로 올리기 또는 추천 후보의 카드 초안을 선택하세요.</p>
+            </div>
+          </div>
+        `;
         return;
       }
 
-      $("#fieldList").innerHTML = saved.map((checkItem) => `
-        <button class="field-item" data-item="${checkItem.id}">
-          <span>${situationById(checkItem.situationId).title} · ${checkItem.label}</span>
-          <strong>${checkItem.value}</strong>
-        </button>
-      `).join("");
-    }
-
-    function renderOverview() {
-      const counts = {
-        saved: checkItems.filter((checkItem) => checkItem.saved).length,
-        supported: checkItems.filter((checkItem) => !checkItem.saved && checkItem.state === "supported").length,
-        needs_review: checkItems.filter((checkItem) => checkItem.state === "needs_review").length,
-        missing: checkItems.filter((checkItem) => checkItem.state === "missing").length,
-        conflict: checkItems.filter((checkItem) => checkItem.state === "conflict").length
-      };
-
-      $("#statusOverview").innerHTML = stateOrder.map((state) => `
-        <div class="status-card ${stateClass(state)}">
-          <span>${stateLabel(state)}</span>
-          <strong>${counts[state]}</strong>
-          <span>${overviewCopy(state)}</span>
-        </div>
-      `).join("");
-    }
-
-    function overviewCopy(state) {
-      return {
-        saved: "현장에서 다시 볼 정보",
-        supported: "근거가 있는 값",
-        needs_review: "직접 확인할 정보",
-        missing: "자료가 더 필요한 gap",
-        conflict: "원문 비교 필요"
-      }[state];
-    }
-
-    function renderTrustBoard() {
-      $("#trustBoard").innerHTML = situations.map(renderSituation).join("");
-    }
-
-    function renderSituation(situation) {
-      const related = checkItems.filter((checkItem) => checkItem.situationId === situation.id);
-      const saved = related.filter((checkItem) => checkItem.saved).length;
-      const needsAttention = related.filter((checkItem) => ["needs_review", "missing", "conflict"].includes(checkItem.state)).length;
-      const sourceNames = situation.sourceIds.map((id) => artifactById(id).name).join(", ");
-
-      return `
-        <article class="situation-card ${situation.id === selectedSituationId ? "active" : ""}">
-          <header class="situation-head">
-            <div>
-              <span class="pill info">${situation.badge}</span>
-              <h2>${situation.title}</h2>
-              <small>${situation.meta} · 근거: ${sourceNames}</small>
-            </div>
-            <div class="status-strip">
-              <span class="pill warn">확인할 것 ${needsAttention}</span>
-              <span class="pill saved">저장 ${saved}</span>
-            </div>
-          </header>
-          <div class="state-groups">
-            ${stateOrder.map((state) => renderStateColumn(state, related)).join("")}
-          </div>
-        </article>
-      `;
-    }
-
-    function renderStateColumn(state, related) {
-      const items = related.filter((checkItem) => displayState(checkItem) === state);
-      return `
-        <section class="state-column">
-          <header>
-            <h3>${stateLabel(state)}</h3>
-            <span class="pill ${stateClass(state)}">${items.length}</span>
-          </header>
-          ${items.length ? items.map(renderCheckItem).join("") : `<div class="empty-lane">${stateMeta[state].empty}</div>`}
-        </section>
-      `;
-    }
-
-    function renderCheckItem(checkItem) {
-      const state = displayState(checkItem);
-      return `
-        <button class="check-item ${checkItem.id === selectedItemId ? "active" : ""}" data-item="${checkItem.id}">
-          <span class="item-meta">${checkItem.label}</span>
-          <span class="item-value">${checkItem.value}</span>
-          <span class="item-source">근거: ${checkItem.source}</span>
-          <span class="pill ${stateClass(state)}">${stateLabel(state)}</span>
-        </button>
-      `;
-    }
-
-    function renderInspector() {
-      const checkItem = checkItemById(selectedItemId) || checkItems[0];
-      const artifact = artifactById(checkItem.artifactId);
-      const display = displayState(checkItem);
-
-      $("#inspectorPanel").innerHTML = `
+      $("#draftPanel").innerHTML = `
         <div class="panel-head">
           <div>
-            <p class="muted">${situationById(checkItem.situationId).title}</p>
-            <h2>${checkItem.label}</h2>
-            <p>${checkItem.note}</p>
+            <h2>${draftCard.situation} · ${draftCard.title}</h2>
+            <p>${draftCard.note}</p>
           </div>
-          <span class="pill ${stateClass(display)}">${stateLabel(display)}</span>
+          <span class="pill ${stateClass(draftCard.state)}">${stateLabel(draftCard.state)}</span>
         </div>
         <div class="panel-body">
-          <div class="source-preview" aria-hidden="true">
-            <div class="source-page">
-              <span class="line dark"></span>
+          <div class="draft-grid">
+            <div class="draft-field"><span>상황</span><strong>${draftCard.situation}</strong></div>
+            <div class="draft-field"><span>카드 이름</span><strong>${draftCard.title}</strong></div>
+            <div class="draft-field"><span>값</span><strong>${draftCard.value}</strong></div>
+            <div class="draft-field"><span>근거</span><strong>${draftCard.source}</strong></div>
+          </div>
+          <div class="draft-actions" style="margin-top:12px">
+            <button class="primary" id="confirmDraftButton">최종 대시보드에 올리기</button>
+            <button id="draftEvidenceButton">근거 상세</button>
+            <button class="quiet" id="cancelDraftButton">초안 닫기</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderDashboard() {
+      if (!dashboardCards.length) {
+        $("#dashboardGrid").innerHTML = `
+          <div class="empty-state">
+            <strong>아직 올린 카드가 없습니다</strong>
+            <p class="muted">답변을 검토한 뒤 카드로 올리면 여기에 쌓입니다.</p>
+          </div>
+        `;
+        return;
+      }
+
+      $("#dashboardGrid").innerHTML = dashboardCards.map((item) => `
+        <article class="dashboard-card ${selectedCardId === item.id ? "active" : ""}" data-dashboard-card="${item.id}">
+          <div class="chip-row">
+            <span class="pill info">${item.situation}</span>
+            <span class="pill ${item.saved ? "saved" : stateClass(item.state)}">${item.saved ? "현장 저장" : stateLabel(item.state)}</span>
+          </div>
+          <div>
+            <h3>${item.title}</h3>
+            <span class="dashboard-value">${item.value}</span>
+          </div>
+          <p class="dashboard-meta">근거: ${item.source}</p>
+          <div class="dashboard-actions">
+            <button data-dashboard-evidence="${item.id}">근거 상세</button>
+            <button class="primary" data-save-field="${item.id}" ${item.saved || !item.saveable ? "disabled" : ""}>현장 카드로 저장</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderEvidence() {
+      const item = selectedEvidence || activeAnswer?.proposedCard || dashboardCards[0];
+      const artifactNames = item.artifactIds.map((id) => artifactById(id)?.name).filter(Boolean).join(", ");
+      $("#evidencePanel").innerHTML = `
+        <div class="panel-head">
+          <div>
+            <p class="muted">근거 상세</p>
+            <h2>${item.situation} · ${item.title}</h2>
+            <p>${item.note}</p>
+          </div>
+          <span class="pill ${stateClass(item.state)}">${stateLabel(item.state)}</span>
+        </div>
+        <div class="evidence-preview">
+          <div class="source-page" aria-hidden="true">
+            <span class="line dark"></span>
+            <span class="line mid"></span>
+            <span class="line"></span>
+            <span class="line short"></span>
+            <div class="source-highlight">
               <span class="line mid"></span>
               <span class="line"></span>
               <span class="line short"></span>
-              <div class="source-highlight">
-                <span class="line mid"></span>
-                <span class="line"></span>
-                <span class="line short"></span>
-              </div>
             </div>
-            <p class="source-caption">${checkItem.source} · ${checkItem.locator}</p>
           </div>
-          <dl class="source-table">
-            <div class="source-row"><dt>값</dt><dd><strong>${checkItem.value}</strong></dd></div>
-            <div class="source-row"><dt>상태</dt><dd>${stateLabel(display)}</dd></div>
-            <div class="source-row"><dt>근거 자료</dt><dd>${checkItem.source}</dd></div>
-            <div class="source-row"><dt>자료 종류</dt><dd>${artifact?.kindLabel || "자료"}</dd></div>
-            <div class="source-row"><dt>찾은 위치</dt><dd>${checkItem.locator}</dd></div>
-            <div class="source-row"><dt>원문</dt><dd><code>${checkItem.snippet}</code></dd></div>
-          </dl>
-          <div class="item-actions" style="margin-top:12px">
-            ${renderItemActions(checkItem)}
-          </div>
+          <p class="evidence-caption">${item.source} · ${item.locator}</p>
         </div>
+        <dl class="source-table">
+          <div class="source-row"><dt>연결 카드</dt><dd><strong>${item.situation} · ${item.title}</strong></dd></div>
+          <div class="source-row"><dt>값</dt><dd>${item.value}</dd></div>
+          <div class="source-row"><dt>상태</dt><dd>${stateLabel(item.state)}</dd></div>
+          <div class="source-row"><dt>자료</dt><dd>${artifactNames || item.source}</dd></div>
+          <div class="source-row"><dt>찾은 위치</dt><dd>${item.locator}</dd></div>
+          <div class="source-row"><dt>원문</dt><dd><code>${escapeHtml(item.snippet)}</code></dd></div>
+        </dl>
       `;
     }
 
-    function renderItemActions(checkItem) {
-      if (checkItem.saved) {
-        return `<button disabled>현장 카드에 저장됨</button><button class="quiet">원문 보기</button>`;
+    function renderFieldCards() {
+      const saved = dashboardCards.filter((item) => item.saved);
+      if (!saved.length) {
+        $("#fieldList").innerHTML = `<p class="field-empty">아직 현장 카드에 저장한 정보가 없습니다.</p>`;
+        return;
       }
 
-      if (checkItem.state === "supported" && checkItem.saveable) {
-        return `<button class="primary" data-save="${checkItem.id}">현장 정보로 저장</button><button class="quiet">원문 보기</button>`;
-      }
-
-      if (checkItem.state === "missing") {
-        return `<button class="primary">관련 자료 추가</button><button class="quiet">근거 부족으로 유지</button>`;
-      }
-
-      if (checkItem.state === "conflict") {
-        return `<button class="primary">원문 비교</button><button class="quiet">확인 필요로 유지</button>`;
-      }
-
-      return `<button class="primary">원문에서 직접 확인</button><button class="quiet">확인 필요로 유지</button>`;
-    }
-
-    function renderProbe() {
-      $("#probeContext").textContent = situationById(selectedSituationId).title;
-      $("#questionSuggestions").innerHTML = Object.keys(chatAnswers).map((question) => `
-        <button class="suggestion-button" data-question="${question}">${question}</button>
+      $("#fieldList").innerHTML = saved.map((item) => `
+        <button class="field-item" data-dashboard-card="${item.id}">
+          <span class="muted">${item.situation} · ${item.title}</span>
+          <strong>${item.value}</strong>
+        </button>
       `).join("");
-      $("#answerSlot").innerHTML = renderAnswer();
-    }
-
-    function renderAnswer() {
-      if (!activeAnswer) {
-        return `
-          <div class="answer-panel">
-            <span class="pill info">답변 대기</span>
-            <h3>질문하면 답변은 여기 남습니다</h3>
-            <p>저장할 만한 값이면 현장 정보로 올리고, 이해형 답변이나 근거 부족은 다른 결말로 남깁니다.</p>
-          </div>
-        `;
-      }
-
-      const target = activeAnswer.targetId ? checkItemById(activeAnswer.targetId) : null;
-      return `
-        <div class="answer-panel">
-          <div class="chip-row">
-            <span class="pill ${stateClass(activeAnswer.state)}">${stateLabel(activeAnswer.state)}</span>
-            <span class="pill info">연결: ${situationById(activeAnswer.situationId).title}</span>
-          </div>
-          <h3>${escapeHtml(activeAnswer.question)}</h3>
-          <p>${activeAnswer.body}</p>
-          <p>근거: ${activeAnswer.source} · ${activeAnswer.locator}</p>
-          <div class="answer-actions">
-            ${renderAnswerActions(activeAnswer, target)}
-          </div>
-        </div>
-      `;
-    }
-
-    function renderAnswerActions(currentAnswer, target) {
-      if (currentAnswer.outcome === "save" && target) {
-        if (target.saved) return `<button disabled>이미 현장 카드에 저장됨</button><button data-item="${target.id}">근거 보기</button>`;
-        return `<button class="primary" data-save="${target.id}">현장 정보로 저장</button><button data-item="${target.id}">근거 보기</button>`;
-      }
-
-      if (currentAnswer.outcome === "add_source") {
-        return `<button class="primary">관련 자료 추가</button>${target ? `<button data-item="${target.id}">근거 부족 보기</button>` : ""}`;
-      }
-
-      if (currentAnswer.outcome === "keep_answer") {
-        return `${target ? `<button data-item="${target.id}">근거 보기</button>` : ""}<button class="quiet" disabled>답변으로 남김</button>`;
-      }
-
-      return `<button class="quiet" disabled>답변으로 남김</button>`;
     }
 
     function askQuestion(question) {
       const cleanQuestion = question.trim();
       if (!cleanQuestion) return;
-      const fallback = answer(cleanQuestion, "현재 자료에서는 이 질문에 답할 수 있는 원문 근거를 찾지 못했습니다. 관련 자료를 추가하면 다시 확인할 수 있습니다.", "missing", selectedSituationId, null, "add_source", "현재 자료", "자료 전체");
-      activeAnswer = chatAnswers[cleanQuestion] || fallback;
-      selectedSituationId = activeAnswer.situationId;
-      if (activeAnswer.targetId) selectedItemId = activeAnswer.targetId;
+      const fallbackCard = card("fallbackMissing", "answer", "자료함 질문", "추가 확인", "근거 부족", "missing", [selectedArtifactId], "현재 자료", "자료 전체", "현재 자료에서는 이 질문에 답할 수 있는 원문 근거를 찾지 못했습니다.", "관련 자료를 더 첨부해야 합니다.", false);
+      activeQuestion = cleanQuestion;
+      activeAnswer = answerBank[cleanQuestion] || answer("a-fallback", cleanQuestion, "현재 자료에서는 이 질문에 답할 수 있는 원문 근거를 찾지 못했습니다. 관련 자료를 첨부하면 다시 확인할 수 있습니다.", "missing", fallbackCard);
+      selectedEvidence = activeAnswer.proposedCard;
+      selectedCardId = null;
       renderAll();
     }
 
-    function saveItem(id) {
-      const target = checkItemById(id);
-      if (!target || target.state !== "supported" || !target.saveable) return;
+    function openDraft(sourceCard) {
+      if (!sourceCard || !sourceCard.saveable || sourceCard.state !== "supported") return;
+      draftCard = cloneCard(sourceCard, "draft");
+      selectedEvidence = draftCard;
+      selectedCardId = null;
+      renderAll();
+      $("#draftPanel").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function confirmDraft() {
+      if (!draftCard || dashboardById(draftCard.id)) return;
+      dashboardCards.unshift(cloneCard(draftCard, "dashboard"));
+      selectedCardId = draftCard.id;
+      selectedEvidence = dashboardById(draftCard.id);
+      draftCard = null;
+      renderAll();
+    }
+
+    function saveFieldCard(id) {
+      const target = dashboardById(id);
+      if (!target || !target.saveable) return;
       target.saved = true;
-      selectedItemId = target.id;
-      selectedSituationId = target.situationId;
+      selectedCardId = target.id;
+      selectedEvidence = target;
       renderAll();
     }
 
     document.body.addEventListener("click", (event) => {
-      const itemTarget = event.target.closest("[data-item]");
-      if (itemTarget) {
-        const target = checkItemById(itemTarget.dataset.item);
-        if (target) {
-          selectedItemId = target.id;
-          selectedSituationId = target.situationId;
-          renderAll();
-        }
-        return;
-      }
-
-      const saveTarget = event.target.closest("[data-save]");
-      if (saveTarget) {
-        saveItem(saveTarget.dataset.save);
+      const artifactTarget = event.target.closest("[data-artifact]");
+      if (artifactTarget) {
+        selectedArtifactId = artifactTarget.dataset.artifact;
+        renderAll();
         return;
       }
 
@@ -1202,8 +1187,77 @@
         return;
       }
 
+      const candidateTarget = event.target.closest("[data-candidate]");
+      if (candidateTarget) {
+        openDraft(candidates.find((item) => item.id === candidateTarget.dataset.candidate));
+        return;
+      }
+
+      const evidenceTarget = event.target.closest("[data-evidence]");
+      if (evidenceTarget) {
+        selectedEvidence = candidates.find((item) => item.id === evidenceTarget.dataset.evidence) || selectedEvidence;
+        selectedCardId = null;
+        renderAll();
+        return;
+      }
+
+      const answerPromoteTarget = event.target.closest("[data-promote-answer]");
+      if (answerPromoteTarget) {
+        const answerItem = Object.values(answerBank).find((item) => item.id === answerPromoteTarget.dataset.promoteAnswer) || activeAnswer;
+        openDraft(answerItem.proposedCard);
+        return;
+      }
+
+      const answerEvidenceTarget = event.target.closest("[data-answer-evidence]");
+      if (answerEvidenceTarget) {
+        const answerItem = Object.values(answerBank).find((item) => item.id === answerEvidenceTarget.dataset.answerEvidence) || activeAnswer;
+        selectedEvidence = answerItem.proposedCard;
+        selectedCardId = null;
+        renderAll();
+        return;
+      }
+
+      const dashboardEvidenceTarget = event.target.closest("[data-dashboard-evidence]");
+      if (dashboardEvidenceTarget) {
+        selectedEvidence = dashboardById(dashboardEvidenceTarget.dataset.dashboardEvidence) || selectedEvidence;
+        selectedCardId = dashboardEvidenceTarget.dataset.dashboardEvidence;
+        renderAll();
+        return;
+      }
+
+      const saveFieldTarget = event.target.closest("[data-save-field]");
+      if (saveFieldTarget) {
+        saveFieldCard(saveFieldTarget.dataset.saveField);
+        return;
+      }
+
+      const dashboardCardTarget = event.target.closest("[data-dashboard-card]");
+      if (dashboardCardTarget) {
+        selectedCardId = dashboardCardTarget.dataset.dashboardCard;
+        selectedEvidence = dashboardById(selectedCardId) || selectedEvidence;
+        renderAll();
+        return;
+      }
+
       if (event.target.id === "askButton") {
         askQuestion($("#questionInput").value);
+        return;
+      }
+
+      if (event.target.id === "confirmDraftButton") {
+        confirmDraft();
+        return;
+      }
+
+      if (event.target.id === "draftEvidenceButton") {
+        selectedEvidence = draftCard || selectedEvidence;
+        renderAll();
+        return;
+      }
+
+      if (event.target.id === "cancelDraftButton") {
+        draftCard = null;
+        renderAll();
       }
     });
 
