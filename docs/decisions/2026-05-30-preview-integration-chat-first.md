@@ -31,7 +31,7 @@ TripProof에는 두 갈래의 제품 서술이 있었다. `docs/`(prd.md, specs/
 ## 검증
 
 - `src/shared/tripFacts.ts` 실제 타입을 읽어 기준 문서 매핑을 맞췄다. 확인: EvidenceState 4값은 코드와 일치. `TripFact.value`는 현재 `string`(코드), slice spec은 `string|null` 확장 필요를 이미 지적. category/reviewDecision/conflictCandidates/reason은 코드에 없음 → 확장 후보로 명시.
-- `docs/archive/preview/tripproof-preview-c.html`의 confirmDraft 로직이 결정 축을 실제로 구현함을 확인: 근거 없는 카드 또는 supported인데 사람이 값·이름을 고친 카드를 state='user'(직접 확인)로 강등한다. 기준 문서의 '강등' 규칙은 preview 동작에 근거한다.
+- `docs/archive/preview/tripproof-preview-c.html`의 confirmDraft 로직이 결정 축을 실제로 구현함을 확인: 근거 없는 카드 또는 supported인데 사람이 값·이름을 고친 카드를 state='user'(직접 확인)로 바꾼다. 기준 문서의 출처를 바꾸는 규칙은 preview 동작에 근거한다.
 - docs/archive/preview/prd.md line 234가 두 축의 직교성을 이미 인정함을 확인.
 - 통합 초안을 콘텐츠 손실 / 정직성·CLAUDE.md 준수 / preview 충실도 3개 렌즈로 적대적 검증했고, 셋 다 pass_with_fixes(needs_rework 없음). 지적된 fix(타입 계약 목표/현재 분리 표기, 탭 위계 명시, 결정 축 supported origin 직교성 주석, 문구 나열 순서 통일)는 최종 문서에 반영했다.
 
