@@ -30,6 +30,7 @@ TripProof의 spec은 기능 목록을 크게 적기 위한 문서가 아니라, 
 
 | 영역 | 역할 |
 | --- | --- |
+| `docs/product-model.md` | 제품 어휘·상태·흐름의 단일 기준 문서. PRD/spec/README가 재서술 없이 참조 |
 | `docs/specs/` | 여러 작업으로 이어지는 product behavior 기준 |
 | `fixtures/` | synthetic 또는 sanitized sample material |
 | `src/client/` | 사용자가 보는 product UI와 검수 상태 표현 |
@@ -57,10 +58,11 @@ TripProof의 spec은 기능 목록을 크게 적기 위한 문서가 아니라, 
 
 ## 지금 만들 문서
 
-초기 개발에 필요한 최소 spec만 둔다.
+초기 개발에 필요한 최소 spec만 둔다. 제품 어휘·상태·흐름은 `docs/product-model.md` 기준 문서에서 한 번만 서술하고, 아래 문서들은 그 기준 문서를 참조한다.
 
 | 문서 | 역할 | 완료 기준 |
 | --- | --- | --- |
+| `docs/product-model.md` | 제품 통합 모델 기준 문서(chat-first 흐름, 객체 모델, 상태 2축) | PRD/spec/README가 어휘·상태·흐름을 재서술하지 않고 이 기준 문서를 참조함 |
 | `docs/prd.md` | TripProof의 제품 요구사항, 경계, 사용자 흐름, AI 동작 기준 | slice spec과 README가 같은 제품 기준을 참조할 수 있음 |
 | `docs/specs/accommodation-checkin.md` | 첫 product slice의 목표, 입력/출력, acceptance, 열린 질문 | 첫 product contract와 fixture 설계를 시작할 만큼 명확함 |
 | `src/shared/tripFacts.ts` contract 메모 또는 타입 수정 | UI와 eval이 함께 읽을 최소 결과 구조 | fact, evidence, evidence state, sensitive 여부가 표현됨 |

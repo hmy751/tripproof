@@ -1,5 +1,11 @@
 # TripProof Preview PRD
 
+> **상태 안내 (2026-05-30):** 이 문서는 TripProof의 chat-first UX 원천이며, 그 내용은 `docs/product-model.md`(제품 통합 모델 기준 문서)와 `docs/prd.md`(제품 요구사항)로 승격되었다.
+>
+> - 제품 어휘·상태·흐름의 **단일 기준은 `docs/` 쪽**이다. 어휘나 상태가 충돌하면 `docs/product-model.md`를 따른다.
+> - 이 파일은 지우지 않고 **UX 레퍼런스로 보존**한다. `docs/archive/preview/tripproof-preview-c.html`과 함께 chat-first 화면 위계(상단 탭 확인/대시보드/현장, 오른쪽 rail AI 추천 후보, 인라인 근거, 일정×카테고리 대시보드)의 원천 참고용이다.
+> - 한 가지 정렬: 이 문서의 Information States 표(아래 5절)는 근거 상태와 사람이 결정한 카드 출처를 한 표에 섞었다. 기준 문서는 이를 **근거 축(EvidenceState) / 결정 축(ReviewDecision·카드 출처) 2개 표**로 분리한다. 두 축이 충돌처럼 보이면 `docs/product-model.md` 4절을 기준으로 읽는다.
+
 ## 1. Product Concept
 
 TripProof는 여행 자료함에 넣은 PDF, 캡처, 메시지, 영수증에 대해 AI와 묻고 답하면서, 사용자가 근거를 보거나 직접 확인한 답변만 카드로 올려 일정 순서의 대시보드와 현장 카드로 정리하는 여행 자료 확인 도구다.
