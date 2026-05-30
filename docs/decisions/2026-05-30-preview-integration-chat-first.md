@@ -39,7 +39,7 @@ TripProof에는 두 갈래의 제품 서술이 있었다. `docs/`(prd.md, specs/
 
 - 이 통합은 기준 문서(`docs/product-model.md`)·결정 노트·`docs/prd.md`·`docs/specs/accommodation-checkin.md` 정렬과 `docs/archive/preview/prd.md` 배너·`README.md`·`docs/specs/00-spec-driven-development.md` 색인을 **한 변경 단위로** 적용한다. README/spec 색인이 product-model.md를 참조하므로, 기준 문서 파일 생성과 같은 단위가 아니면 dangling reference가 된다.
 - `docs/development-notes.md`(product/eval 기본 방향 노트)는 유지한다. 흐름 서술이 기준 문서와 겹치면 기준 문서를 참조하도록 정리하는 것은 별도 후보.
-- 코드 드리프트 follow-up(문서만으로는 닫지 않음, 구현 slice에서 판단):
+- 코드 드리프트(drift, 코드와 문서가 벌어진 지점) follow-up(문서만으로는 닫지 않음, 구현 slice에서 판단):
   - `TripFact.confidence: number`가 코드에 있으나 사용자 언어로 쓰지 않기로 했다. UI에서 confidence 수치를 노출하지 않는지, 필드 자체를 둘지/뺄지 구현 시 점검한다. (현재 `src/client/app.js`는 confidence bar와 "근거 선명" 같은 문구를 노출 중이다.)
   - `TripFact.value`를 `missing`/`conflict` 표현을 위해 `string | null`로 확장할지 구현 전 판단한다.
   - 결정 축을 서버/eval이 읽어야 하면 `ReviewDecision`(또는 카드 출처 필드)을 공유 타입으로 승격한다. 현재 공유 타입에 미존재 — `src/client/` local state로 둔다.

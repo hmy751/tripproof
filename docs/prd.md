@@ -399,7 +399,7 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 - `TripFact`에 `category` 필드가 없다. 대시보드의 카테고리(숙소·투어·렌터카·결제) 2차 분류축을 계약으로 올리려면 추가 후보다.
 - 결정 축(카드 출처)을 서버나 eval이 읽어야 하면 `ReviewDecision` 또는 카드 출처 필드를 공유 타입으로 승격하는 것이 후보다. 현재는 `src/client/`의 local state로 둔다.
 - conflict 표현을 위한 `conflictGroupId`, `conflictCandidates`, fact의 `reason`은 현재 공유 타입에 없다. P0 출력 계약에서 필요해지면 작게 확장한다(slice spec 참조).
-- `TripFact.confidence: number`가 코드에 있으나 이 PRD는 사용자 언어로 쓰지 않는다(아래 정직성 원칙). 필드 자체를 둘지/뺄지는 코드 드리프트 follow-up으로 둔다.
+- `TripFact.confidence: number`가 코드에 있으나 이 PRD는 사용자 언어로 쓰지 않는다(아래 정직성 원칙). 필드 자체를 둘지/뺄지는 코드 드리프트(drift, 코드와 문서가 벌어진 지점) follow-up으로 둔다.
 
 ### 정직성 원칙
 

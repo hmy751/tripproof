@@ -31,6 +31,7 @@ TripProof의 spec은 기능 목록을 크게 적기 위한 문서가 아니라, 
 | 영역 | 역할 |
 | --- | --- |
 | `docs/product-model.md` | 제품 어휘·상태·흐름의 단일 기준 문서. PRD/spec/README가 재서술 없이 참조 |
+| `docs/roadmap/` | 1차 로드맵(현재 `v1.md`) — 느슨한 작업 메뉴(변하지 않는 목표·MVP가 통과시킬 한 흐름·확장 후보 목록). 다른 세션이 단독으로 작업을 고를 기준. 고정 계획·일정표 아님 |
 | `docs/specs/` | 여러 작업으로 이어지는 product behavior 기준 |
 | `fixtures/` | synthetic 또는 sanitized sample material |
 | `src/client/` | 사용자가 보는 product UI와 검수 상태 표현 |

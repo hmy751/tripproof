@@ -196,7 +196,7 @@ type TripProofResult = {
 
 `TripFact`는 채팅 답변의 근거 축 상태(`evidenceState`)와 원문 근거(`evidence`)를 함께 담는다. 답변 본문 텍스트와 카드 출처(결정 축)는 이 공유 타입 밖이며, 카드 출처는 현재 `src/client/`의 local state로 둔다.
 
-`TripFact.value`는 현재 `string`이지만, P0의 `missing`과 `conflict`를 답변 후보로 표현하려면 `string | null` 확장이 필요할 수 있다. 구현 전에 이 확장을 먼저 판단하고, 바꾸면 이 spec과 기준 문서의 도메인 매핑을 같이 맞춘다. `TripFact.confidence: number`는 코드에 존재하나, P0에서 confidence 수치를 사용자 노출이나 저장 판단 근거로 쓰지 않는다(필드 존치/제거는 코드 드리프트 follow-up). 그 외 코드 드리프트로 남겨둔 항목(`category` 필드, 카드 출처/`ReviewDecision`의 공유 타입 승격, `reason`/`conflict*` 필드)은 이 slice에서 닫지 않고 기준 문서의 확장 후보로 둔다.
+`TripFact.value`는 현재 `string`이지만, P0의 `missing`과 `conflict`를 답변 후보로 표현하려면 `string | null` 확장이 필요할 수 있다. 구현 전에 이 확장을 먼저 판단하고, 바꾸면 이 spec과 기준 문서의 도메인 매핑을 같이 맞춘다. `TripFact.confidence: number`는 코드에 존재하나, P0에서 confidence 수치를 사용자 노출이나 저장 판단 근거로 쓰지 않는다(필드 존치/제거는 코드 드리프트 follow-up). 그 외 코드 드리프트(drift, 코드와 문서가 벌어진 지점)로 남겨둔 항목(`category` 필드, 카드 출처/`ReviewDecision`의 공유 타입 승격, `reason`/`conflict*` 필드)은 이 slice에서 닫지 않고 기준 문서의 확장 후보로 둔다.
 
 P0에서 `TripProofResult.facts`는 답변/후보 fact 목록이다. AI나 extractor가 만든 후보 fact는 사용자가 카드 초안에서 확인해 올리기 전까지 대시보드의 confirmed 정보가 되면 안 된다. 카드 출처(직접 확인/근거 있음/현장 저장)는 현재처럼 `src/client/`의 local state에서 먼저 다루고, 서버/shared 계약으로 올릴 필요가 생기면 별도 작은 변경으로 연다.
 
