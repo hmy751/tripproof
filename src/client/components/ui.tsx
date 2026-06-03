@@ -1,8 +1,4 @@
-import { AlertTriangle, Check, ShieldAlert } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import type { EvidenceState } from "../../shared/tripFacts";
-import type { CardDecision } from "../data/tripSession";
-import { evidenceLabels, evidencePillClasses, sourceLabels, sourcePillClasses } from "../lib/tripUi";
 
 export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -88,18 +84,4 @@ export function Pill({
       {children}
     </span>
   );
-}
-
-export function EvidencePill({ state }: { state: EvidenceState }) {
-  const Icon = state === "supported" ? Check : state === "missing" || state === "conflict" ? AlertTriangle : ShieldAlert;
-  return (
-    <Pill className={evidencePillClasses[state]}>
-      <Icon size={14} />
-      {evidenceLabels[state]}
-    </Pill>
-  );
-}
-
-export function SourcePill({ source }: { source: CardDecision["source"] }) {
-  return <Pill className={sourcePillClasses[source]}>{sourceLabels[source]}</Pill>;
 }

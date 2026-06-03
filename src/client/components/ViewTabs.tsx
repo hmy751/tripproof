@@ -4,13 +4,9 @@ import { cx } from "./ui";
 
 export function ViewTabs({
   activeView,
-  boardCount,
-  fieldCount,
   onChange,
 }: {
   activeView: View;
-  boardCount: number;
-  fieldCount: number;
   onChange: (view: View) => void;
 }) {
   return (
@@ -19,10 +15,10 @@ export function ViewTabs({
         확인
       </TabButton>
       <TabButton active={activeView === "board"} onClick={() => onChange("board")}>
-        대시보드 <span className="rounded-full bg-slate-100 px-1.5 text-[11px]">{boardCount}</span>
+        대시보드
       </TabButton>
       <TabButton active={activeView === "field"} onClick={() => onChange("field")}>
-        현장 <span className="rounded-full bg-slate-100 px-1.5 text-[11px]">{fieldCount}</span>
+        현장
       </TabButton>
     </nav>
   );
