@@ -1,0 +1,4 @@
+interface:
+  display_name: "TripProof Spec Driven"
+  short_description: "TripProof light spec loop guidance"
+  default_prompt: "Use $tripproof-spec-driven to decide whether this TripProof task needs a light slice brief."

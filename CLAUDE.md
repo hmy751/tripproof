@@ -6,6 +6,8 @@
 - Codex는 `AGENTS.md` symlink로 같은 내용을 읽는다.
 - `AGENTS.md`는 `CLAUDE.md`를 가리키는 symlink로 유지한다.
 - 이 repo는 전역 skill, agent, hook, settings 정의를 복제하지 않는다.
+- 이 repo의 반복 작업에만 필요한 skill은 repo-local `.claude/skills/`에 둔다. Codex 호환이 필요하면 `.codex/skills/`에서 같은 skill을 symlink한다.
+- `tripproof-spec-driven`은 TripProof 전용 light spec-driven 작업 루프다. 큰 slice, AI 위임, acceptance 선택, product-first/eval 관찰, 사람 판단 회수, spec/decision/work-log 기록 위치를 판단할 때 사용한다.
 - Claude/Codex의 tool settings, hooks, model 설정은 자동 동기화하지 않는다.
 - 브릿지 상태를 점검할 때는 로컬 `bridge-auditor`를 report-only로 사용한다.
 
