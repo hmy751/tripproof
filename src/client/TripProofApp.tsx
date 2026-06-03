@@ -1,124 +1,212 @@
 import {
   AlertTriangle,
-  BookOpen,
   Check,
+  Clipboard,
   Eye,
-  FileText,
   Library,
   MapPin,
   MessageSquare,
-  Pencil,
   Save,
-  Search,
+  Send,
   ShieldAlert,
+  Upload,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import type { EvidenceState, TripFact } from "../shared/tripFacts";
-import { type CardDecision, demoTrip, suggestedQuestions } from "./demoTrip";
+import { useMemo, useState, type ReactNode } from "react";
+import type { EvidenceState, TravelArtifact, TripFact } from "../shared/tripFacts";
+import {
+  artifactNotes,
+  candidateMeta,
+  categoryColors,
+  demoTrip,
+  extraQuestionMatches,
+  phases,
+  type CardDecision,
+  type Category,
+  type PhaseKey,
+} from "./demoTrip";
 
-type View = "confirm" | "dashboard" | "field";
+type View = "ask" | "board" | "field";
+
+type ChatMessage =
+  | { id: string; role: "ai"; kind: "intro" }
+  | { id: string; role: "user"; text: string }
+  | { id: string; role: "ai"; kind: "answer"; factId: string };
+
+type DraftCard = {
+  factId: string;
+  title: string;
+  value: string;
+  category: Category;
+  phase: PhaseKey;
+  originalTitle: string;
+  originalValue: string;
+};
 
 const evidenceLabels: Record<EvidenceState, string> = {
   supported: "근거 있음",
-  needs_review: "직접 확인 필요",
+  needs_review: "확인 필요",
   missing: "근거 부족",
   conflict: "자료 충돌",
 };
 
-const evidenceTone: Record<EvidenceState, "good" | "warn" | "bad"> = {
+const evidenceTone: Record<EvidenceState, "good" | "warn" | "danger"> = {
   supported: "good",
   needs_review: "warn",
-  missing: "warn",
-  conflict: "bad",
+  missing: "danger",
+  conflict: "warn",
 };
 
-const sourceLabels: Record<NonNullable<CardDecision["source"]>, string> = {
-  ai_supported: "근거 보고 저장",
+const sourceLabels: Record<CardDecision["source"], string> = {
+  ai_supported: "근거 있음",
   manual: "직접 확인",
 };
 
+const sourceTone: Record<CardDecision["source"], "good" | "user"> = {
+  ai_supported: "good",
+  manual: "user",
+};
+
+const initialThread: ChatMessage[] = [{ id: "m1", role: "ai", kind: "intro" }];
+
 export function App() {
-  const [activeView, setActiveView] = useState<View>("confirm");
-  const [selectedFactId, setSelectedFactId] = useState("checkin-start");
-  const [question, setQuestion] = useState(suggestedQuestions[0].text);
+  const [activeView, setActiveView] = useState<View>("ask");
+  const [question, setQuestion] = useState("");
+  const [thread, setThread] = useState<ChatMessage[]>(initialThread);
+  const [draft, setDraft] = useState<DraftCard | null>(null);
   const [decisions, setDecisions] = useState<Record<string, CardDecision>>({});
+  const [expandedAnswers, setExpandedAnswers] = useState<Record<string, boolean>>({});
+  const [expandedCandidates, setExpandedCandidates] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState("");
 
-  const selectedFact = useMemo(
-    () => demoTrip.facts.find((fact) => fact.id === selectedFactId) ?? demoTrip.facts[0],
-    [selectedFactId],
+  const factById = useMemo(
+    () => new Map(demoTrip.facts.map((fact) => [fact.id, fact])),
+    [],
+  );
+  const artifactById = useMemo(
+    () => new Map(demoTrip.artifacts.map((artifact) => [artifact.id, artifact])),
+    [],
   );
 
-  const confirmedFacts = demoTrip.facts.filter(
-    (fact) => decisions[fact.id]?.state === "confirmed",
+  const confirmedCards = Object.values(decisions).filter(
+    (decision) => decision.state === "confirmed",
   );
-  const fieldFacts = confirmedFacts.filter((fact) => decisions[fact.id]?.fieldSaved);
+  const fieldCards = confirmedCards.filter((decision) => decision.fieldSaved);
 
   function flash(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 1800);
   }
 
-  function ask(nextQuestion = question) {
-    const matched =
-      suggestedQuestions.find((candidate) => candidate.text === nextQuestion) ??
-      suggestedQuestions.find((candidate) => {
-        const normalized = nextQuestion.replace(/\s/g, "");
-        return (
-          normalized.includes("체크인") && candidate.factId === "checkin-start"
-        ) || (
-          normalized.includes("늦") && candidate.factId === "late-arrival"
-        ) || (
-          normalized.includes("출입") && candidate.factId === "door-code"
-        );
-      });
+  function getFact(factId: string) {
+    return factById.get(factId) ?? demoTrip.facts[0];
+  }
 
-    if (matched) {
-      setSelectedFactId(matched.factId);
-      setQuestion(nextQuestion);
-      flash("자료 안에서 연결된 후보를 열었습니다.");
+  function findQuestionFactId(rawQuestion: string) {
+    const trimmed = rawQuestion.trim();
+    if (extraQuestionMatches[trimmed]) return extraQuestionMatches[trimmed];
+
+    const exact = candidateMeta.find((candidate) => candidate.question === trimmed);
+    if (exact) return exact.factId;
+
+    const normalized = trimmed.replace(/\s/g, "");
+    if (normalized.includes("체크인") && normalized.includes("몇시")) return "checkin-time";
+    if (normalized.includes("늦") && normalized.includes("호텔")) return "late-arrival";
+    if (normalized.includes("바우처") || normalized.includes("프린트")) return "mobile-voucher";
+    if (normalized.includes("렌터카") || normalized.includes("기름")) return "fuel-policy";
+    if (normalized.includes("영수증") || normalized.includes("도시세")) return "city-tax";
+    if (normalized.includes("출입") || normalized.includes("코드")) return "door-code";
+    if (normalized.includes("환불") || normalized.includes("지각")) return "late-tour-refund";
+    return "late-tour-refund";
+  }
+
+  function ask(rawQuestion = question) {
+    const trimmed = rawQuestion.trim();
+    if (!trimmed) return;
+
+    const factId = findQuestionFactId(trimmed);
+    const idSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setThread((current) => [
+      ...current,
+      { id: `u-${idSeed}`, role: "user", text: trimmed },
+      { id: `a-${idSeed}`, role: "ai", kind: "answer", factId },
+    ]);
+    setQuestion("");
+    setActiveView("ask");
+  }
+
+  function stageFact(factId: string) {
+    if (decisions[factId]?.state === "confirmed") {
+      flash("이미 대시보드에 올라간 카드입니다.");
       return;
     }
 
-    flash("현재 샘플 자료에서는 근거를 찾지 못했습니다.");
+    const fact = getFact(factId);
+    const meta = metaForFact(factId);
+    const value = fact.value ?? "";
+    setDraft({
+      factId,
+      title: fact.label,
+      value,
+      category: meta.category,
+      phase: meta.phase,
+      originalTitle: fact.label,
+      originalValue: value,
+    });
+    setActiveView("ask");
+    window.setTimeout(() => {
+      document.querySelector("#draft-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
   }
 
-  function updateDecision(fact: TripFact, decision: CardDecision) {
+  function updateDraft<K extends keyof DraftCard>(key: K, value: DraftCard[K]) {
+    setDraft((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function confirmDraft() {
+    if (!draft) return;
+    const fact = getFact(draft.factId);
+    const value = draft.value.trim();
+    const title = draft.title.trim();
+
+    if (!value) {
+      flash("값을 입력해야 대시보드에 올릴 수 있습니다.");
+      return;
+    }
+
+    const edited = title !== draft.originalTitle || value !== draft.originalValue;
+    const source = fact.evidenceState === "supported" && !edited ? "ai_supported" : "manual";
+
     setDecisions((current) => ({
       ...current,
-      [fact.id]: decision,
+      [draft.factId]: {
+        factId: draft.factId,
+        state: "confirmed",
+        source,
+        fieldSaved: current[draft.factId]?.fieldSaved ?? false,
+        titleOverride: title,
+        valueOverride: value,
+        category: draft.category,
+        phase: draft.phase,
+      },
     }));
+    setDraft(null);
+    setActiveView("board");
+    flash("대시보드에 올렸습니다.");
   }
 
-  function confirmFact(fact: TripFact, source: NonNullable<CardDecision["source"]>) {
-    updateDecision(fact, {
-      factId: fact.id,
-      state: "confirmed",
-      source,
-      valueOverride: fact.value ?? "현장에서 직접 확인",
-      fieldSaved: decisions[fact.id]?.fieldSaved ?? false,
-    });
-    flash(`${fact.label}을 카드로 올렸습니다.`);
-  }
+  function toggleFieldSave(factId: string) {
+    const current = decisions[factId];
+    if (!current || current.state !== "confirmed") return;
 
-  function dismissFact(fact: TripFact) {
-    updateDecision(fact, {
-      factId: fact.id,
-      state: "dismissed",
-    });
-    flash(`${fact.label} 후보를 제외했습니다.`);
-  }
-
-  function toggleFieldSave(fact: TripFact) {
-    const current = decisions[fact.id];
-    if (current?.state !== "confirmed") return;
-
-    updateDecision(fact, {
-      ...current,
-      fieldSaved: !current.fieldSaved,
-    });
-    flash(current.fieldSaved ? "현장 탭에서 내렸습니다." : "현장 탭에 저장했습니다.");
+    setDecisions((all) => ({
+      ...all,
+      [factId]: {
+        ...current,
+        fieldSaved: !current.fieldSaved,
+      },
+    }));
+    flash(current.fieldSaved ? "현장 카드에서 내렸습니다." : "현장 카드로 저장했습니다.");
   }
 
   return (
@@ -128,138 +216,185 @@ export function App() {
           <div className="mark">TP</div>
           <div>
             <strong>TripProof</strong>
-            <span>여행 자료에서 믿을 정보와 직접 확인할 정보를 나눕니다</span>
+            <span>자료에 묻고, 근거 있는 답변만 남깁니다</span>
           </div>
         </div>
         <select aria-label="여행 선택" defaultValue="osaka">
-          <option value="osaka">오사카 4박 5일 · 숙소 체크인 준비</option>
+          <option value="osaka">오사카 4박 5일 · 출발 D-3</option>
+          <option value="tokyo">도쿄 체크인 테스트 여행</option>
         </select>
-        <div className="status-strip">
-          <span className="pill info">React web app</span>
-          <span className="pill good">카드 {confirmedFacts.length}</span>
-          <span className="pill warn">확인 필요 {demoTrip.openIssues.length}</span>
+        <span className="spacer" />
+        <div className="counters">
+          <span className="pill info">자료 {demoTrip.artifacts.length}</span>
+          <span className="pill warn">후보 {candidateMeta.length}</span>
+          <span className="pill good">대시보드 {confirmedCards.length}</span>
+          <span className="pill saved">현장 {fieldCards.length}</span>
         </div>
       </header>
 
-      <div className="workspace">
-        <aside className="sidebar">
-          <section className="upload-box">
-            <div className="section-title">
-              <span>여행 자료</span>
-              <span>{demoTrip.artifacts.length}개</span>
-            </div>
-            <strong>샘플 자료함</strong>
-            <p>예약 확인서와 호스트 안내를 기준으로 숙소 체크인 흐름을 확인합니다.</p>
-            <button className="primary icon-button" onClick={() => setActiveView("confirm")}>
-              <BookOpen size={16} />
-              확인 탭 열기
-            </button>
-          </section>
-
-          <section>
-            <div className="section-title">
-              <span>추가한 자료</span>
-            </div>
-            <div className="artifact-list">
-              {demoTrip.artifacts.map((artifact) => (
-                <button
-                  className={`artifact-item ${selectedFact.evidence.some((ref) => ref.artifactId === artifact.id) ? "active" : ""}`}
-                  key={artifact.id}
-                  onClick={() => {
-                    const fact = demoTrip.facts.find((item) =>
-                      item.evidence.some((ref) => ref.artifactId === artifact.id),
-                    );
-                    if (fact) setSelectedFactId(fact.id);
-                  }}
-                >
-                  <span className="file-badge">{artifact.kind.toUpperCase()}</span>
-                  <span className="artifact-text">
-                    <strong>{artifact.name}</strong>
-                    <span>{artifact.fileName}</span>
-                    <small>{artifact.kind}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <div className="section-title">
-              <span>확인 후보</span>
-            </div>
-            <div className="need-list">
-              {demoTrip.facts.map((fact) => (
-                <button
-                  className={`candidate-row ${fact.id === selectedFact.id ? "active" : ""}`}
-                  key={fact.id}
-                  onClick={() => setSelectedFactId(fact.id)}
-                >
-                  <span>
-                    <strong>{fact.label}</strong>
-                    <small>{evidenceLabels[fact.evidenceState]}</small>
-                  </span>
-                  {decisions[fact.id]?.state === "confirmed" ? <Check size={16} /> : null}
-                </button>
-              ))}
-            </div>
-          </section>
+      <main className="layout">
+        <aside className="rail">
+          <TripSummary
+            artifactCount={demoTrip.artifacts.length}
+            boardCount={confirmedCards.length}
+            fieldCount={fieldCards.length}
+            onAttach={() => flash("자료 첨부 흐름은 다음 slice에서 연결합니다.")}
+            onPaste={() => flash("붙여넣기 입력은 다음 slice에서 연결합니다.")}
+          />
+          <LibraryPanel
+            artifacts={demoTrip.artifacts}
+            onArtifactClick={(artifact) => flash(`${artifact.name} — 채팅에서 자료명을 멘션해 범위를 좁힐 수 있습니다.`)}
+          />
         </aside>
 
-        <main className="main">
+        <section className="main">
           <nav className="tabs" aria-label="TripProof 화면">
-            <TabButton active={activeView === "confirm"} onClick={() => setActiveView("confirm")}>
-              <MessageSquare size={16} />
-              확인
+            <TabButton active={activeView === "ask"} onClick={() => setActiveView("ask")}>
+              확인 (채팅)
             </TabButton>
-            <TabButton active={activeView === "dashboard"} onClick={() => setActiveView("dashboard")}>
-              <Library size={16} />
-              대시보드
+            <TabButton active={activeView === "board"} onClick={() => setActiveView("board")}>
+              대시보드 <span className="badge">{confirmedCards.length}</span>
             </TabButton>
             <TabButton active={activeView === "field"} onClick={() => setActiveView("field")}>
-              <MapPin size={16} />
-              현장
+              현장 <span className="badge">{fieldCards.length}</span>
             </TabButton>
           </nav>
 
-          {activeView === "confirm" ? (
-            <ConfirmView
-              question={question}
-              selectedFact={selectedFact}
-              decisions={decisions}
-              onAsk={ask}
-              onConfirm={confirmFact}
-              onDismiss={dismissFact}
-              onQuestionChange={setQuestion}
-              onSelectFact={setSelectedFactId}
-            />
+          {activeView === "ask" ? (
+            <div className="view active">
+              <ChatPanel
+                artifactCount={demoTrip.artifacts.length}
+                decisions={decisions}
+                expandedAnswers={expandedAnswers}
+                factById={factById}
+                question={question}
+                thread={thread}
+                onAsk={ask}
+                onQuestionChange={setQuestion}
+                onStageFact={stageFact}
+                onToggleEvidence={(messageId) =>
+                  setExpandedAnswers((current) => ({ ...current, [messageId]: !current[messageId] }))
+                }
+              />
+              <DraftPanel
+                draft={draft}
+                fact={draft ? getFact(draft.factId) : null}
+                onClose={() => setDraft(null)}
+                onConfirm={confirmDraft}
+                onDraftChange={updateDraft}
+              />
+            </div>
           ) : null}
 
-          {activeView === "dashboard" ? (
+          {activeView === "board" ? (
             <DashboardView
-              decisions={decisions}
-              facts={confirmedFacts}
-              onOpenFact={(factId) => {
-                setSelectedFactId(factId);
-                setActiveView("confirm");
-              }}
+              decisions={confirmedCards}
+              factById={factById}
+              onShowEvidence={(factId) => flash(`근거: ${sourceNames(getFact(factId), artifactById)}`)}
               onToggleFieldSave={toggleFieldSave}
             />
           ) : null}
 
           {activeView === "field" ? (
-            <FieldView
-              decisions={decisions}
-              facts={fieldFacts}
-              onOpenDashboard={() => setActiveView("dashboard")}
-            />
+            <FieldView decisions={fieldCards} factById={factById} onOpenBoard={() => setActiveView("board")} />
           ) : null}
-        </main>
-      </div>
+        </section>
+
+        <aside className="rail right">
+          <CandidateRail
+            decisions={decisions}
+            expandedCandidates={expandedCandidates}
+            factById={factById}
+            onAskCandidate={(factId) => ask(metaForFact(factId).question)}
+            onStageFact={stageFact}
+            onToggleEvidence={(factId) =>
+              setExpandedCandidates((current) => ({ ...current, [factId]: !current[factId] }))
+            }
+          />
+        </aside>
+      </main>
 
       <div className={`toast ${toast ? "show" : ""}`} aria-live="polite">
         {toast}
       </div>
     </div>
+  );
+}
+
+function TripSummary({
+  artifactCount,
+  boardCount,
+  fieldCount,
+  onAttach,
+  onPaste,
+}: {
+  artifactCount: number;
+  boardCount: number;
+  fieldCount: number;
+  onAttach: () => void;
+  onPaste: () => void;
+}) {
+  return (
+    <section className="card-box">
+      <div className="box-body">
+        <div className="trip-name">오사카 4박 5일</div>
+        <div className="trip-sub">자료함 기반 확인 중 · 출발 D-3</div>
+        <div className="mini-stats">
+          <div>
+            <strong>{artifactCount}</strong>
+            <span>자료</span>
+          </div>
+          <div>
+            <strong>{boardCount}</strong>
+            <span>올린 카드</span>
+          </div>
+          <div>
+            <strong>{fieldCount}</strong>
+            <span>현장</span>
+          </div>
+        </div>
+        <div className="add-row">
+          <button className="btn primary block" onClick={onAttach}>
+            <Upload size={16} />
+            자료 첨부
+          </button>
+          <button className="btn" onClick={onPaste}>
+            <Clipboard size={16} />
+            붙여넣기
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LibraryPanel({
+  artifacts,
+  onArtifactClick,
+}: {
+  artifacts: TravelArtifact[];
+  onArtifactClick: (artifact: TravelArtifact) => void;
+}) {
+  return (
+    <section className="card-box">
+      <div className="box-head">
+        <h2>자료함</h2>
+        <span className="sub">근거의 원천</span>
+      </div>
+      <div className="box-body">
+        <div className="lib-list">
+          {artifacts.map((artifact) => (
+            <button className="lib-item" key={artifact.id} onClick={() => onArtifactClick(artifact)}>
+              <span className="file-badge">{kindLabel(artifact)}</span>
+              <span>
+                <strong>{artifact.name}</strong>
+                <span>{artifactNotes[artifact.id] ?? artifact.fileName}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -269,261 +404,525 @@ function TabButton({
   onClick,
 }: {
   active: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
   onClick: () => void;
 }) {
   return (
-    <button className={`tab icon-tab ${active ? "active" : ""}`} onClick={onClick}>
+    <button className={`tab ${active ? "active" : ""}`} onClick={onClick}>
       {children}
     </button>
   );
 }
 
-function ConfirmView({
-  question,
-  selectedFact,
+function ChatPanel({
+  artifactCount,
   decisions,
+  expandedAnswers,
+  factById,
+  question,
+  thread,
   onAsk,
-  onConfirm,
-  onDismiss,
   onQuestionChange,
-  onSelectFact,
+  onStageFact,
+  onToggleEvidence,
 }: {
-  question: string;
-  selectedFact: TripFact;
+  artifactCount: number;
   decisions: Record<string, CardDecision>;
+  expandedAnswers: Record<string, boolean>;
+  factById: Map<string, TripFact>;
+  question: string;
+  thread: ChatMessage[];
   onAsk: (question?: string) => void;
-  onConfirm: (fact: TripFact, source: NonNullable<CardDecision["source"]>) => void;
-  onDismiss: (fact: TripFact) => void;
   onQuestionChange: (value: string) => void;
-  onSelectFact: (factId: string) => void;
+  onStageFact: (factId: string) => void;
+  onToggleEvidence: (messageId: string) => void;
 }) {
-  const decision = decisions[selectedFact.id];
-  const value = decision?.valueOverride ?? selectedFact.value;
+  return (
+    <section className="card-box chat-box">
+      <div className="scope-row">
+        대상: <strong>전체 자료함 ({artifactCount}개)</strong> · 자료를 멘션하면 좁혀서 물어볼 수 있어요
+      </div>
+      <div className="thread">
+        {thread.map((message) => {
+          if (message.role === "user") {
+            return (
+              <div className="msg user" key={message.id}>
+                <div className="bubble-user">{message.text}</div>
+              </div>
+            );
+          }
+
+          if (message.kind === "intro") {
+            return (
+              <div className="msg msg-ai" key={message.id}>
+                <AiWho />
+                <div className="answer intro-answer">
+                  <div className="answer-body">
+                    자료 {artifactCount}개를 읽었어요. 오른쪽 <strong>추천 후보</strong>를 채팅으로 보내거나 바로 카드 초안으로 만들 수 있고, 아래에 직접 물어봐도 됩니다. 답변에는 근거와 상태가 함께 붙어요.
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          const fact = factById.get(message.factId);
+          if (!fact) return null;
+
+          return (
+            <ChatAnswer
+              confirmed={decisions[fact.id]?.state === "confirmed"}
+              expanded={Boolean(expandedAnswers[message.id])}
+              fact={fact}
+              key={message.id}
+              messageId={message.id}
+              onStageFact={onStageFact}
+              onToggleEvidence={onToggleEvidence}
+            />
+          );
+        })}
+      </div>
+      <div className="composer">
+        <textarea
+          aria-label="이번 여행 자료에 질문"
+          placeholder="이번 여행 자료에 대해 물어보세요 (예: 호텔에 늦게 도착하면?)"
+          value={question}
+          onChange={(event) => onQuestionChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              onAsk();
+            }
+          }}
+        />
+        <button className="btn primary" onClick={() => onAsk()}>
+          <Send size={16} />
+          물어보기
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ChatAnswer({
+  confirmed,
+  expanded,
+  fact,
+  messageId,
+  onStageFact,
+  onToggleEvidence,
+}: {
+  confirmed: boolean;
+  expanded: boolean;
+  fact: TripFact;
+  messageId: string;
+  onStageFact: (factId: string) => void;
+  onToggleEvidence: (messageId: string) => void;
+}) {
+  const meta = metaForFact(fact.id);
+  const stageLabel = fact.evidenceState === "supported" ? "카드 초안으로" : "직접 채워 카드 초안";
 
   return (
-    <section className="split confirm-layout">
-      <article className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>자료함에 묻기</h2>
-            <p>샘플 자료 안에서만 답하고, 근거 상태를 함께 보여줍니다.</p>
-          </div>
-          <span className="pill info">숙소 체크인</span>
+    <div className="msg msg-ai">
+      <AiWho />
+      <div className="answer">
+        <div className="answer-top">
+          <EvidencePill state={fact.evidenceState} />
+          <span className="pill">
+            <span style={{ color: categoryColors[meta.category] }}>●</span>
+            {meta.category} · {fact.label}
+          </span>
         </div>
-
-        <div className="question-list">
-          {suggestedQuestions.map((candidate) => (
-            <button
-              className="icon-button"
-              key={candidate.factId}
-              onClick={() => {
-                onQuestionChange(candidate.text);
-                onSelectFact(candidate.factId);
-              }}
-            >
-              <Search size={16} />
-              {candidate.text}
-            </button>
-          ))}
-        </div>
-
-        <div className="chat-box">
-          <textarea
-            aria-label="자료함 질문"
-            value={question}
-            onChange={(event) => onQuestionChange(event.target.value)}
-          />
-          <button className="primary icon-button" onClick={() => onAsk()}>
-            <Search size={16} />
-            자료 안에서 답 찾기
+        <div className="answer-body">{answerText(fact)}</div>
+        <button className={`ev-toggle ${expanded ? "open" : ""}`} onClick={() => onToggleEvidence(messageId)}>
+          <span className="caret">▸</span>
+          근거 {fact.evidence.length}개 {expanded ? "접기" : "펼치기"}
+        </button>
+        {expanded ? <EvidenceList fact={fact} /> : null}
+        <div className="answer-actions">
+          <button
+            className={`btn sm ${fact.evidenceState === "supported" ? "primary" : "ghost"}`}
+            disabled={confirmed}
+            onClick={() => onStageFact(fact.id)}
+          >
+            {confirmed ? "대시보드에 있음" : stageLabel}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="answer-box">
-          <div className="answer-head">
-            <EvidencePill state={selectedFact.evidenceState} />
-            {selectedFact.sensitive ? (
-              <span className="pill warn">
-                <ShieldAlert size={14} />
-                민감 정보
-              </span>
-            ) : null}
-          </div>
-          <h3>{selectedFact.label}</h3>
-          <p>{answerText(selectedFact, value)}</p>
-          <EvidenceList fact={selectedFact} />
-        </div>
-      </article>
-
-      <article className="panel">
-        <div className="panel-head">
+function DraftPanel({
+  draft,
+  fact,
+  onClose,
+  onConfirm,
+  onDraftChange,
+}: {
+  draft: DraftCard | null;
+  fact: TripFact | null;
+  onClose: () => void;
+  onConfirm: () => void;
+  onDraftChange: <K extends keyof DraftCard>(key: K, value: DraftCard[K]) => void;
+}) {
+  if (!draft || !fact) {
+    return (
+      <section className="card-box draft-box" id="draft-panel">
+        <div className="box-head">
           <div>
             <h2>카드 초안</h2>
-            <p>AI 후보는 확정 정보가 아닙니다. 사람이 저장한 카드만 대시보드에 올라갑니다.</p>
+            <span className="sub">답변·후보를 고르면 여기서 확인하고 올립니다</span>
           </div>
-          <span className="pill">{decisionLabel(decision)}</span>
+          <span className="pill info">대기</span>
         </div>
-
-        <div className="fact-card">
-          <div className="fact-head">
-            <div>
-              <h3>{selectedFact.label}</h3>
-              <div className="fact-value">{value ?? "직접 확인 후 입력"}</div>
-            </div>
-            <EvidencePill state={selectedFact.evidenceState} />
-          </div>
-          <div className="citation">
-            <FileText size={16} />
-            <span>{selectedFact.evidence[0]?.label ?? "자료함 전체"}</span>
-            <code>{selectedFact.evidence[0]?.locator ?? "근거 위치 없음"}</code>
-          </div>
-          <div className="fact-actions">
-            {selectedFact.evidenceState === "supported" ? (
-              <button className="success icon-button" onClick={() => onConfirm(selectedFact, "ai_supported")}>
-                <Save size={16} />
-                근거 보고 저장
-              </button>
-            ) : null}
-            <button className="icon-button" onClick={() => onConfirm(selectedFact, "manual")}>
-              <Pencil size={16} />
-              직접 확인으로 올리기
-            </button>
-            <button className="danger icon-button" onClick={() => onDismiss(selectedFact)}>
-              <X size={16} />
-              제외
-            </button>
+        <div className="box-body">
+          <div className="empty">
+            <strong>아직 선택한 답변이 없습니다</strong>
+            <p>채팅 답변의 '카드 초안으로' 또는 오른쪽 추천 후보의 '카드 초안'을 누르세요.</p>
           </div>
         </div>
+      </section>
+    );
+  }
 
-        <dl className="source-table">
-          <div>
-            <dt>근거 상태</dt>
-            <dd>{evidenceLabels[selectedFact.evidenceState]}</dd>
-          </div>
-          <div>
-            <dt>자료</dt>
-            <dd>
-              <strong>{selectedFact.evidence[0]?.label ?? "자료 없음"}</strong>
-              <small>{selectedFact.evidence[0]?.artifactId ?? "missing"}</small>
-            </dd>
-          </div>
-          <div>
-            <dt>찾은 위치</dt>
-            <dd>
-              <code>{selectedFact.evidence[0]?.locator ?? "근거 위치 없음"}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>원문 근거</dt>
-            <dd>
-              <code>{selectedFact.evidence[0]?.snippet ?? "근거가 부족해 직접 확인이 필요합니다."}</code>
-            </dd>
-          </div>
-        </dl>
-      </article>
+  const meta = metaForFact(draft.factId);
+  const caution = draftCaution(fact);
+
+  return (
+    <section className="card-box draft-box active-draft" id="draft-panel">
+      <div className="box-head">
+        <div>
+          <h2>카드 초안</h2>
+          <span className="sub">{meta.note}</span>
+        </div>
+        <EvidencePill state={fact.evidenceState} />
+      </div>
+      <div className="box-body draft-body">
+        {caution ? <div className={`draft-caution ${fact.sensitive ? "danger" : ""}`}>{caution}</div> : null}
+        <div className="draft-grid">
+          <label className="field">
+            <span>카테고리</span>
+            <select value={draft.category} onChange={(event) => onDraftChange("category", event.target.value as Category)}>
+              {Object.keys(categoryColors).map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>일정</span>
+            <select value={draft.phase} onChange={(event) => onDraftChange("phase", event.target.value as PhaseKey)}>
+              {phases.map((phase) => (
+                <option key={phase.key} value={phase.key}>
+                  {phase.label} · {phase.when}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={`field ${fact.evidenceState === "supported" ? "" : "edit"}`}>
+            <span>카드 이름</span>
+            <input value={draft.title} onChange={(event) => onDraftChange("title", event.target.value)} />
+          </label>
+          <label className={`field ${fact.evidenceState === "supported" ? "" : "edit"}`}>
+            <span>값</span>
+            <input
+              placeholder={fact.evidenceState === "supported" ? "" : "직접 확인한 값 입력"}
+              value={draft.value}
+              onChange={(event) => onDraftChange("value", event.target.value)}
+            />
+          </label>
+        </div>
+        <div className="field evidence-field">
+          <span>근거</span>
+          <strong>{sourceNames(fact)}</strong>
+        </div>
+        <div className="answer-actions">
+          <button className="btn primary" onClick={onConfirm}>
+            <Save size={16} />
+            대시보드에 올리기
+          </button>
+          <button className="btn ghost" onClick={onClose}>
+            <X size={16} />
+            초안 닫기
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CandidateRail({
+  decisions,
+  expandedCandidates,
+  factById,
+  onAskCandidate,
+  onStageFact,
+  onToggleEvidence,
+}: {
+  decisions: Record<string, CardDecision>;
+  expandedCandidates: Record<string, boolean>;
+  factById: Map<string, TripFact>;
+  onAskCandidate: (factId: string) => void;
+  onStageFact: (factId: string) => void;
+  onToggleEvidence: (factId: string) => void;
+}) {
+  return (
+    <section className="card-box">
+      <div className="box-head">
+        <div>
+          <h2>AI 추천 후보</h2>
+          <span className="sub">채팅으로 보내거나 바로 초안</span>
+        </div>
+        <span className="pill warn">{candidateMeta.length}</span>
+      </div>
+      <div className="box-body">
+        <div className="cand-list">
+          {candidateMeta.map((candidate) => {
+            const fact = factById.get(candidate.factId);
+            if (!fact) return null;
+            const confirmed = decisions[fact.id]?.state === "confirmed";
+            const expanded = Boolean(expandedCandidates[fact.id]);
+            return (
+              <article className="cand-card" key={candidate.factId}>
+                <div className="cc-title">
+                  <span className="cat" style={{ color: categoryColors[candidate.category] }}>
+                    {candidate.category}
+                  </span>
+                  {" · "}
+                  {fact.label}
+                </div>
+                <div className="cc-value">{fact.value ?? "값 미정 · 직접 확인"}</div>
+                <div className="answer-top">
+                  <EvidencePill state={fact.evidenceState} />
+                </div>
+                {expanded ? <EvidenceList fact={fact} compact /> : null}
+                <div className="cc-actions">
+                  <button className="btn sm ghost" onClick={() => onToggleEvidence(fact.id)}>
+                    <Eye size={14} />
+                    {expanded ? "근거 접기" : "근거"}
+                  </button>
+                  <button className="btn sm ghost" onClick={() => onAskCandidate(fact.id)}>
+                    <MessageSquare size={14} />
+                    채팅으로
+                  </button>
+                  <button
+                    className={`btn sm ${fact.evidenceState === "supported" ? "primary" : "ghost"}`}
+                    disabled={confirmed}
+                    onClick={() => onStageFact(fact.id)}
+                  >
+                    {confirmed ? "대시보드에 있음" : "카드 초안"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }
 
 function DashboardView({
   decisions,
-  facts,
-  onOpenFact,
+  factById,
+  onShowEvidence,
   onToggleFieldSave,
 }: {
-  decisions: Record<string, CardDecision>;
-  facts: TripFact[];
-  onOpenFact: (factId: string) => void;
-  onToggleFieldSave: (fact: TripFact) => void;
+  decisions: CardDecision[];
+  factById: Map<string, TripFact>;
+  onShowEvidence: (factId: string) => void;
+  onToggleFieldSave: (factId: string) => void;
 }) {
-  if (facts.length === 0) {
-    return (
-      <section className="panel">
-        <div className="empty-state">확인 탭에서 근거를 보고 카드로 올리면 여기에 모입니다.</div>
-      </section>
-    );
-  }
-
   return (
-    <section className="panel">
-      <div className="panel-head">
+    <section className="card-box">
+      <div className="box-head">
         <div>
-          <h2>상황별 저장 정보</h2>
-          <p>사람이 카드로 올린 정보만 표시합니다.</p>
+          <h2>최종 대시보드</h2>
+          <span className="sub">사람이 올린 카드만 · 일정 순서로</span>
         </div>
-        <span className="pill good">저장 카드 {facts.length}</span>
+        <span className="pill good">{decisions.length}</span>
       </div>
-      <div className="board-grid">
-        {facts.map((fact) => (
-          <article className="schedule-card" key={fact.id}>
-            <div>
-              <strong>{fact.schedule}</strong>
-              <span>{sourceLabels[decisions[fact.id]?.source ?? "manual"]}</span>
-            </div>
-            <div className="mini-fact">
-              <strong>{fact.label}</strong>
-              <span>{decisions[fact.id]?.valueOverride ?? fact.value ?? "직접 확인"}</span>
-            </div>
-            <EvidencePill state={fact.evidenceState} />
-            <div className="fact-actions">
-              <button className="icon-button" onClick={() => onOpenFact(fact.id)}>
-                <Eye size={16} />
-                근거 보기
-              </button>
-              <button className="icon-button" onClick={() => onToggleFieldSave(fact)}>
-                <MapPin size={16} />
-                {decisions[fact.id]?.fieldSaved ? "현장에서 내리기" : "현장 저장"}
-              </button>
-            </div>
-          </article>
-        ))}
+      <div className="box-body">
+        {decisions.length === 0 ? (
+          <div className="empty">
+            <strong>아직 올린 카드가 없습니다</strong>
+            <p>초안을 확정하면 일정 순서로 쌓입니다.</p>
+          </div>
+        ) : (
+          <div className="phase-stack">
+            {phases
+              .filter((phase) => decisions.some((decision) => decision.phase === phase.key))
+              .map((phase, index, usedPhases) => {
+                const phaseCards = decisions.filter((decision) => decision.phase === phase.key);
+                const categories = Array.from(new Set(phaseCards.map((decision) => decision.category)));
+                return (
+                  <div className="phase-rail" key={phase.key}>
+                    <div className="phase-line">
+                      <span className="knob" />
+                      {index === usedPhases.length - 1 ? null : <span className="stem" />}
+                    </div>
+                    <div className="phase-block">
+                      <div className="phase-head">
+                        <h3>{phase.label}</h3>
+                        <span className="when">{phase.when}</span>
+                      </div>
+                      {categories.map((category) => (
+                        <div className="cat-group" key={category}>
+                          <div className="cat-label">
+                            <span style={{ color: categoryColors[category] }}>●</span>
+                            {category}
+                          </div>
+                          <div className="cat-cards">
+                            {phaseCards
+                              .filter((decision) => decision.category === category)
+                              .map((decision) => {
+                                const fact = factById.get(decision.factId);
+                                if (!fact) return null;
+                                return (
+                                  <BoardCard
+                                    decision={decision}
+                                    fact={fact}
+                                    key={decision.factId}
+                                    onShowEvidence={onShowEvidence}
+                                    onToggleFieldSave={onToggleFieldSave}
+                                  />
+                                );
+                              })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </div>
     </section>
+  );
+}
+
+function BoardCard({
+  decision,
+  fact,
+  onShowEvidence,
+  onToggleFieldSave,
+}: {
+  decision: CardDecision;
+  fact: TripFact;
+  onShowEvidence: (factId: string) => void;
+  onToggleFieldSave: (factId: string) => void;
+}) {
+  return (
+    <article className={`board-card ${decision.fieldSaved ? "saved-card" : ""}`}>
+      <div className="bc-top">
+        <h4>{decision.titleOverride || fact.label}</h4>
+        <span className="bc-pills">
+          <span className={`pill ${sourceTone[decision.source]}`}>{sourceLabels[decision.source]}</span>
+          {decision.fieldSaved ? <span className="pill saved">현장 저장</span> : null}
+        </span>
+      </div>
+      <div className="bc-value">{decision.valueOverride || fact.value || "—"}</div>
+      <div className="bc-actions">
+        <button className="btn sm ghost" disabled={fact.evidence.length === 0} onClick={() => onShowEvidence(fact.id)}>
+          <Eye size={14} />
+          {fact.evidence.length ? "근거" : "근거 없음"}
+        </button>
+        <button className={`btn sm ${decision.fieldSaved ? "ghost" : "primary"}`} onClick={() => onToggleFieldSave(fact.id)}>
+          <MapPin size={14} />
+          {decision.fieldSaved ? "저장됨" : "현장 저장"}
+        </button>
+      </div>
+    </article>
   );
 }
 
 function FieldView({
   decisions,
-  facts,
-  onOpenDashboard,
+  factById,
+  onOpenBoard,
 }: {
-  decisions: Record<string, CardDecision>;
-  facts: TripFact[];
-  onOpenDashboard: () => void;
+  decisions: CardDecision[];
+  factById: Map<string, TripFact>;
+  onOpenBoard: () => void;
 }) {
+  if (decisions.length === 0) {
+    return (
+      <section className="field-view">
+        <div className="field-head">
+          <div>
+            <h3>현장 카드</h3>
+            <p>대시보드에서 저장한 것만 · 현장에서 빠르게 보기</p>
+          </div>
+          <button className="btn" onClick={onOpenBoard}>
+            <Library size={16} />
+            대시보드
+          </button>
+        </div>
+        <div className="empty field-empty">
+          <strong>현장 카드가 비어 있습니다</strong>
+          <p>대시보드에서 '현장 저장'을 누른 카드만 여기에 모입니다.</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="panel">
-      <div className="panel-head">
+    <section className="field-view">
+      <div className="field-head">
         <div>
-          <h2>현장에서 다시 볼 카드</h2>
-          <p>현장 저장한 카드만 짧게 모읍니다.</p>
+          <h3>현장 카드</h3>
+          <p>대시보드에서 저장한 것만 · 현장에서 빠르게 보기</p>
         </div>
-        <button className="icon-button" onClick={onOpenDashboard}>
-          <Library size={16} />
-          대시보드로
-        </button>
+        <span className="pill saved">{decisions.length}</span>
       </div>
-      {facts.length === 0 ? (
-        <div className="empty-state">대시보드에서 현장 저장을 누르면 여기에 표시됩니다.</div>
-      ) : (
-        <div className="field-grid">
-          {facts.map((fact) => (
-            <article className="field-card" key={fact.id}>
-              <span className="pill info">{fact.schedule}</span>
-              <h3>{fact.label}</h3>
-              <strong>{decisions[fact.id]?.valueOverride ?? fact.value ?? "직접 확인"}</strong>
-              <EvidencePill state={fact.evidenceState} />
-            </article>
+      <div className="field-stack">
+        {phases
+          .filter((phase) => decisions.some((decision) => decision.phase === phase.key))
+          .map((phase) => (
+            <div className="field-phase" key={phase.key}>
+              <h4>
+                {phase.label} · {phase.when}
+              </h4>
+              <div className="field-grid">
+                {decisions
+                  .filter((decision) => decision.phase === phase.key)
+                  .map((decision) => {
+                    const fact = factById.get(decision.factId);
+                    if (!fact) return null;
+                    return (
+                      <article className="field-card" key={decision.factId}>
+                        <div className="fc-row">
+                          <span className="fc-cat" style={{ color: categoryColors[decision.category] }}>
+                            ● {decision.category}
+                          </span>
+                          <span className={`pill ${sourceTone[decision.source]}`}>{sourceLabels[decision.source]}</span>
+                        </div>
+                        <span className="fc-title">{decision.titleOverride || fact.label}</span>
+                        <span className="fc-value">{decision.valueOverride || fact.value || "—"}</span>
+                      </article>
+                    );
+                  })}
+              </div>
+            </div>
           ))}
-        </div>
-      )}
+      </div>
     </section>
   );
 }
 
+function AiWho() {
+  return (
+    <div className="who">
+      <span className="ai-dot">TP</span>
+      TripProof
+    </div>
+  );
+}
+
 function EvidencePill({ state }: { state: EvidenceState }) {
-  const Icon = state === "supported" ? Check : state === "conflict" ? AlertTriangle : ShieldAlert;
+  const Icon = state === "supported" ? Check : state === "missing" || state === "conflict" ? AlertTriangle : ShieldAlert;
   return (
     <span className={`pill ${evidenceTone[state]}`}>
       <Icon size={14} />
@@ -532,48 +931,107 @@ function EvidencePill({ state }: { state: EvidenceState }) {
   );
 }
 
-function EvidenceList({ fact }: { fact: TripFact }) {
+function EvidenceList({ compact = false, fact }: { compact?: boolean; fact: TripFact }) {
   if (fact.evidence.length === 0) {
     return (
-      <div className="citation">
-        <AlertTriangle size={16} />
-        <span>근거 부족</span>
-        <code>자료함에서 답할 수 있는 원문을 찾지 못했습니다.</code>
+      <div className="ev-none">
+        이 답변에는 자료 근거가 없습니다. AI가 못 찾았을 수 있으니 직접 확인이 필요해요.
       </div>
     );
   }
 
   return (
-    <div className="evidence-list">
-      {fact.evidence.map((ref) => (
-        <div className="citation" key={`${ref.artifactId}-${ref.locator}`}>
-          <FileText size={16} />
-          <span>{ref.label}</span>
-          <code>{ref.snippet}</code>
-        </div>
-      ))}
+    <div className={`ev-list ${compact ? "compact" : ""}`}>
+      {fact.evidence.map((ref) => {
+        const artifact = demoTrip.artifacts.find((item) => item.id === ref.artifactId);
+        return (
+          <div className="ev-item" key={`${ref.artifactId}-${ref.locator}`}>
+            <div className="ev-head">
+              <span className="file-badge small">{artifact ? kindLabel(artifact) : "DOC"}</span>
+              <div>
+                <strong>{artifact?.name ?? ref.label}</strong>
+                <div className="ev-loc">{ref.locator}</div>
+              </div>
+            </div>
+            <div className="ev-snippet">{ref.snippet}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function answerText(fact: TripFact, value: string | null | undefined) {
-  if (fact.sensitive) {
-    return "민감한 값은 자동 저장하지 않습니다. 원문 위치만 열어 두고 현장에서 직접 확인하세요.";
-  }
-  if (fact.evidenceState === "supported") {
-    return `${value}로 확인됩니다. 카드로 올리기 전에 아래 원문 근거를 확인하세요.`;
-  }
-  if (fact.evidenceState === "needs_review") {
-    return `${value ?? "값을 바로 확정하지 않습니다"}. 원문 근거는 있지만 직접 확인 후 카드로 올리는 흐름입니다.`;
-  }
-  if (fact.evidenceState === "conflict") {
-    return "자료끼리 값이 충돌합니다. 양쪽 근거를 보고 직접 확인해야 합니다.";
-  }
-  return "현재 자료함에서는 답할 원문 근거를 찾지 못했습니다.";
+function metaForFact(factId: string) {
+  return (
+    candidateMeta.find((candidate) => candidate.factId === factId) ?? {
+      factId,
+      category: "숙소" as const,
+      phase: "day1" as const,
+      question: "체크인 몇 시부터야?",
+      note: "예약 요약에 명시.",
+    }
+  );
 }
 
-function decisionLabel(decision: CardDecision | undefined) {
-  if (!decision || decision.state === "draft") return "초안";
-  if (decision.state === "dismissed") return "제외됨";
-  return decision.source ? sourceLabels[decision.source] : "저장됨";
+function sourceNames(fact: TripFact, artifacts = new Map(demoTrip.artifacts.map((artifact) => [artifact.id, artifact]))) {
+  return (
+    fact.evidence
+      .map((evidence) => artifacts.get(evidence.artifactId)?.name ?? evidence.label)
+      .filter(Boolean)
+      .join(" + ") || "근거 없음"
+  );
+}
+
+function kindLabel(artifact: TravelArtifact) {
+  if (artifact.kind === "image") return "IMG";
+  if (artifact.kind === "pdf") return "PDF";
+  if (artifact.kind === "receipt") return "JPG";
+  if (artifact.kind === "message") return "MSG";
+  return "DOC";
+}
+
+function draftCaution(fact: TripFact) {
+  if (fact.sensitive) {
+    return (
+      <>
+        <AlertTriangle size={16} />
+        <span>
+          <strong>민감 정보.</strong> 원문에서 직접 확인한 값만 입력하세요. 올리면 <strong>직접 확인</strong> 카드가 됩니다.
+        </span>
+      </>
+    );
+  }
+  if (fact.evidenceState === "missing") {
+    return (
+      <>
+        <AlertTriangle size={16} />
+        <span>
+          <strong>근거 부족.</strong> AI가 자료에서 못 찾았을 뿐일 수 있어요. 직접 확인한 값을 넣으면 <strong>직접 확인</strong> 카드로 올라갑니다.
+        </span>
+      </>
+    );
+  }
+  return null;
+}
+
+function answerText(fact: TripFact) {
+  if (fact.id === "late-arrival") {
+    return "22:00 이후 도착하면 숙소에 미리 연락해야 합니다. 호텔 예약 화면과 호스트 메시지가 같은 조건을 말하고 있어요.";
+  }
+  if (fact.id === "mobile-voucher") {
+    return "프린트 없이 화면 제시로 됩니다. 바우처에 '모바일 바우처 가능'이라고 적혀 있어요.";
+  }
+  if (fact.id === "fuel-policy") {
+    return "네, 만탱크 반납 조건입니다(full-to-full). 반납 시 가득 채우지 않으면 차액과 수수료가 붙어요.";
+  }
+  if (fact.id === "city-tax") {
+    return "호텔 도시세 JPY 1,200 결제 영수증입니다. 체크인 때 낸 추가 결제예요.";
+  }
+  if (fact.id === "door-code") {
+    return "출입 코드는 민감 정보예요. 호스트 메시지 원문에서 직접 확인한 뒤, 필요하면 직접 채워서 카드로 올릴 수 있어요.";
+  }
+  if (fact.id === "checkin-time") {
+    return "체크인은 15:00부터입니다. 호텔 예약 화면 예약 요약에 적혀 있어요.";
+  }
+  return "현재 자료에서는 지각 시 환불 규정을 찾지 못했습니다. 다만 AI가 못 찾았을 수도 있으니, 직접 확인한 내용이 있으면 채워서 올릴 수 있어요.";
 }
