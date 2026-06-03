@@ -246,7 +246,7 @@ normalizeTripFacts(input: NormalizeTripFactsInput): TripProofResult
 - conflict를 단일 값으로 조용히 고르지 않는다.
 
 ```ts
-src/client/app.js 채팅 답변, 카드 초안, 대시보드, 현장 카드 상태
+src/client/App.tsx + src/client/components/* 채팅 답변, 카드 초안, 대시보드, 현장 카드 상태
 ```
 
 - 답변에 근거 축 상태와 인라인 근거 펼침을 보여준다.

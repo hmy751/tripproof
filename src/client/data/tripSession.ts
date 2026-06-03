@@ -1,4 +1,4 @@
-import type { TripProofResult } from "../shared/tripFacts";
+import type { TripProofResult } from "../../shared/tripFacts";
 
 export type Category = "숙소" | "투어" | "렌터카" | "결제";
 export type PhaseKey = "pre" | "day1" | "day2" | "day4" | "common";
@@ -16,7 +16,7 @@ export type CardDecision = {
   phase: PhaseKey;
 };
 
-export type CandidateMeta = {
+export type CandidateCard = {
   factId: string;
   category: Category;
   phase: PhaseKey;
@@ -32,14 +32,30 @@ export const phases: Array<{ key: PhaseKey; label: string; when: string }> = [
   { key: "common", label: "공통", when: "결제·기타" },
 ];
 
-export const categoryColors: Record<Category, string> = {
-  숙소: "#2f6bf0",
-  투어: "#1f7a3d",
-  렌터카: "#966200",
-  결제: "#6c3fb4",
+export const categoryThemes: Record<Category, { dot: string; badge: string; ring: string }> = {
+  숙소: {
+    dot: "bg-blue-600",
+    badge: "border-blue-200 bg-blue-50 text-blue-700",
+    ring: "ring-blue-200",
+  },
+  투어: {
+    dot: "bg-emerald-600",
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    ring: "ring-emerald-200",
+  },
+  렌터카: {
+    dot: "bg-amber-600",
+    badge: "border-amber-200 bg-amber-50 text-amber-800",
+    ring: "ring-amber-200",
+  },
+  결제: {
+    dot: "bg-violet-600",
+    badge: "border-violet-200 bg-violet-50 text-violet-700",
+    ring: "ring-violet-200",
+  },
 };
 
-export const artifactNotes: Record<string, string> = {
+export const artifactSummaries: Record<string, string> = {
   "hotel-booking": "체크인·늦은 도착·예약번호",
   "host-message": "출입 코드·도착 지연 연락",
   "fuji-voucher": "모바일 바우처·집합 시간",
@@ -47,7 +63,7 @@ export const artifactNotes: Record<string, string> = {
   "city-tax": "도시세·추가 결제 이유",
 };
 
-export const demoTrip: TripProofResult = {
+export const tripSession: TripProofResult = {
   artifacts: [
     {
       id: "hotel-booking",
@@ -216,7 +232,7 @@ export const demoTrip: TripProofResult = {
   ],
 };
 
-export const candidateMeta: CandidateMeta[] = [
+export const candidateCards: CandidateCard[] = [
   {
     factId: "late-arrival",
     category: "숙소",
@@ -250,22 +266,17 @@ export const candidateMeta: CandidateMeta[] = [
     category: "숙소",
     phase: "day1",
     question: "출입 코드 뭐였지?",
-    note: "민감 정보 — 원문에서 확인한 값만 입력하세요.",
+    note: "민감 정보 - 원문에서 확인한 값만 입력하세요.",
   },
   {
     factId: "late-tour-refund",
     category: "투어",
     phase: "day2",
     question: "투어 늦으면 환불돼?",
-    note: "AI 근거 미발견 — 직접 확인한 내용을 입력하세요.",
+    note: "AI 근거 미발견 - 직접 확인한 내용을 입력하세요.",
   },
 ];
 
 export const extraQuestionMatches: Record<string, string> = {
   "체크인 몇 시부터야?": "checkin-time",
 };
-
-export const suggestedQuestions = candidateMeta.map((candidate) => ({
-  factId: candidate.factId,
-  text: candidate.question,
-}));

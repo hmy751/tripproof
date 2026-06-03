@@ -20,4 +20,9 @@
 ## 2026-06-03 - React client 골격과 Python AI 후보 생성 경계
 
 - 바뀐 것: 최신 LTS Node 기준 `.nvmrc`와 Vite/React 실행 세팅을 추가했고, active client를 React 앱으로 전환했다. 기존 preview를 버리지 않고 상단/자료함/확인/대시보드/현장/원문 근거 표의 구조를 살리되, confidence bar와 넓은 moment-first 목업 세계는 새 화면 중심에서 제외했다. Python AI는 `src/ai/`에 후보 생성 baseline과 prompt/provider 자리를 두고, TS `src/server/trip-facts`가 후보를 `src/shared/tripFacts.ts`의 product contract로 정규화하는 경계를 택했다. 관련 결정 근거는 `docs/decisions/2026-06-03-react-client-python-ai-boundary.md`.
-- 남은 관찰: `src/client/demoTrip.ts`는 아직 dev sample이므로 server stub/adapter가 붙으면 client 밖으로 옮기거나 제거한다. 다음 구현 판단은 Python 후보 JSON을 TS server entry에 연결할지, 먼저 client sample을 더 줄일지에서 다시 닫는다.
+- 남은 관찰: client sample은 `src/client/data/tripSession.ts`에 typed session data로 남겼다. server stub/adapter가 붙으면 client 밖으로 옮기거나 제거한다. 다음 구현 판단은 Python 후보 JSON을 TS server entry에 연결할지, 먼저 client sample을 더 줄일지에서 다시 닫는다.
+
+## 2026-06-03 - client Tailwind 컴포넌트화 / app.js 잔재 제거
+
+- 바뀐 것: active client entry를 `src/client/App.tsx`로 정리하고, 상단바·자료함 rail·확인 채팅·카드 초안·후보 rail·대시보드·현장 카드를 `src/client/components/`로 분리했다. Tailwind v4 Vite plugin과 CSS entry를 연결했고, 기존 대형 `styles.css`는 Tailwind import와 최소 base만 남겼다. 연결되지 않던 vanilla DOM `src/client/app.js`, 단일 파일 `TripProofApp.tsx`, mock 이름의 `demoTrip.ts`는 제거했다.
+- 남은 관찰: in-app Browser backend는 비어 있어 자동 클릭 검증은 대체 수단으로만 시도했다. Vite build와 데스크톱/모바일 Playwright screenshot으로 레이아웃은 확인했다. Node 20.18.1에서는 Vite가 20.19+ 또는 22.12+ 필요 경고를 내지만 build는 완료됐다.
