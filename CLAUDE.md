@@ -15,6 +15,10 @@
 - product가 먼저다. 사용자가 자료를 넣고 확인 가능한 결과를 받는 흐름을 우선 만든다.
 - eval은 product behavior를 관찰한다. product가 eval fixture, run artifact, metric output에 의존하지 않게 둔다.
 - 문서는 필요한 판단만 짧게 남긴다. 작은 구현 판단은 코드, commit, PR 설명 가까이에 둔다.
+- 하네스와 문서는 실행을 돕는 기준이지 현재 작업 승인권이 아니다. 과거 분석, roadmap, work-log, subagent report를 그대로 다음 명령으로 승격하지 않는다.
+- 삭제, 스택 전환, shared 계약 변경, legacy 제거, commit/stage처럼 되돌리기 비용이 큰 변경은 먼저 사용자에게 알린다. 이미 합의된 slice 안의 작은 UI, 함수, 스타일, 타입 정리는 멈춰 묻기보다 진행하고 결과로 설명한다.
+- subagent와 로컬 agent는 판단 재료를 제공하는 report-only 도구다. 승인/반려 권한은 갖지 않는다.
+- 사용자가 "두고", "멈춰", "보류"라고 말하면 파일 수정과 추가 실행을 멈추고 현재 상태를 보고한다.
 
 ## Commit 규칙
 

@@ -1,6 +1,6 @@
 # TripProof Product Model
 
-상태: 통합 모델 기준 문서. 이 문서는 제품의 단일 어휘·상태·흐름 기준이며, 구현 완료나 eval 결과를 주장하지 않는다. 이후 모든 제품 문서(PRD, slice spec, README)는 이 기준 문서의 어휘/상태/흐름을 그대로 쓰고, 재서술하지 않고 참조한다.
+상태: 통합 모델 기준 문서. 이 문서는 제품의 단일 어휘·상태·흐름 기준이며, 구현 완료나 eval 결과를 주장하지 않는다. 이후 모든 제품 문서(PRD, slice spec, README)는 이 기준 문서의 어휘/상태/흐름을 그대로 쓰고, 재서술하지 않고 참조한다. 여기의 확장 후보와 타입 매핑은 현재 작업 queue나 구현 순서가 아니다.
 
 이 기준 문서는 `docs/archive/preview/prd.md`와 `docs/archive/preview/tripproof-preview-c.html`의 chat-first 경험을 인터랙션·UX의 1차 기준으로 삼고, `docs/`의 acceptance·AI behavior·도메인 타입 이름·eval 축을 어휘 정렬해 흡수한다. 제품·UX·인터랙션이 충돌하면 preview를 채택한다. 단, AI 기능(추출·근거·근거 부족·충돌·민감정보 처리)의 요구와 엄밀함은 `docs/`를 보존한다 (아래 6. 레이어 소유권).
 
