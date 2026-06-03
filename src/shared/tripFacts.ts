@@ -18,7 +18,7 @@ export type TripFact = {
   id: string;
   schedule: string;
   label: string;
-  value: string;
+  value: string | null;
   confidence: number;
   evidenceState: EvidenceState;
   evidence: EvidenceRef[];

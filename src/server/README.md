@@ -8,5 +8,5 @@ server는 client가 부르는 product entry point를 둔다.
 
 초기 구조:
 
-- `ai/` — LLM prompt, provider, extraction workflow.
+- `trip-facts/` — Python 후보나 deterministic 후보를 `TripProofResult`로 정규화하는 TS server 경계.
 - `../shared/` — client와 server가 함께 읽는 결과 타입.

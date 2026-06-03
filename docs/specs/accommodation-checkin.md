@@ -128,7 +128,7 @@ P0에서는 아래를 구현하지 않는다.
 
 초기 입력은 synthetic text fixture로 시작한다.
 
-현재 서버 entry point는 `src/server/ai/extractTripFacts.ts`의 `ExtractTripFactsInput`이고, 공유 자료 메타 타입은 `src/shared/tripFacts.ts`의 `TravelArtifact`다. 지금 타입은 자료 메타 중심이므로, P0에서 실제 문장 기반 baseline을 만들 때 text를 어디에 둘지 먼저 작게 확장한다.
+현재 서버 entry point는 `src/server/trip-facts/extractTripFacts.ts`의 `ExtractTripFactsInput`이고, 공유 자료 메타 타입은 `src/shared/tripFacts.ts`의 `TravelArtifact`다. 지금 타입은 자료 메타 중심이므로, P0에서 실제 문장 기반 baseline을 만들 때 text를 어디에 둘지 먼저 작게 확장한다.
 
 ```ts
 type VerifyAccommodationCheckinInput = {
@@ -138,7 +138,7 @@ type VerifyAccommodationCheckinInput = {
 };
 ```
 
-`materialTexts`는 P0 synthetic fixture의 원문 문자열을 `artifact.id`로 연결하는 서버 입력이다. `artifacts`는 자료함에 들어온 자료들을 나타내고, `userQuestion`은 전체 자료함에 묻는 채팅 질문("체크인 몇 시부터?")을 받는다. 이 이름은 구현 중 바꿀 수 있지만, 별도 `src/product` 계약을 만들지 않고 현재 `src/server/ai` entry point와 `src/shared` 타입을 기준으로 맞춘다.
+`materialTexts`는 P0 synthetic fixture의 원문 문자열을 `artifact.id`로 연결하는 서버 입력이다. `artifacts`는 자료함에 들어온 자료들을 나타내고, `userQuestion`은 전체 자료함에 묻는 채팅 질문("체크인 몇 시부터?")을 받는다. 이 이름은 구현 중 바꿀 수 있지만, 별도 `src/product` 계약을 만들지 않고 현재 `src/server/trip-facts` entry point와 `src/shared` 타입을 기준으로 맞춘다.
 
 P0에서는 실제 예약 PDF, 실제 screenshot, 실제 이메일을 repo에 넣지 않는다.
 

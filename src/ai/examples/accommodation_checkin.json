@@ -1,0 +1,21 @@
+{
+  "artifacts": [
+    {
+      "id": "hotel-booking",
+      "name": "호텔 예약 확인서",
+      "fileName": "hotel-booking-confirmation.png",
+      "kind": "image"
+    },
+    {
+      "id": "host-message",
+      "name": "호스트 체크인 안내",
+      "fileName": "host-checkin-message.txt",
+      "kind": "message"
+    }
+  ],
+  "materialTexts": {
+    "hotel-booking": "체크인 15:00. 체크아웃 11:00.",
+    "host-message": "22:00 이후 도착하면 메시지로 알려주세요. 출입 코드는 도착 당일 전달합니다."
+  },
+  "userQuestion": "체크인은 몇 시부터야?"
+}

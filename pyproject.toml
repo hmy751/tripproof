@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tripproof-ai"
+version = "0.1.0"
+description = "TripProof Python AI candidate generation"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src/ai"]
+include = ["tripproof_ai*"]

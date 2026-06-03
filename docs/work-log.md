@@ -16,3 +16,8 @@
 
 - 바뀐 것: 1차 로드맵 `docs/roadmap/v1.md`를 신설했다. 고정 계획이 아니라 갈아엎을 수 있는 초안이라 `docs/roadmap/` 폴더에 버전 파일로 쌓기로 했다(현재 `v1.md`, 이후 `v2.md`로 추가하고 폴더 README의 '현재 기준'을 갱신). 코드를 분석해 현재 상태(실행 세팅 없음, client는 옛 moment-first 데모, server ai 미연결, 데이터 2벌)를 출발점으로 적고, 구조 정비(AI를 `src/server/ai`→`src/ai`로 상위화 + 최소 실행 세팅, 권장: 단일 패키지+경계 별칭) → MVP가 통과시킬 한 흐름(숙소 체크인 흐름이 실제 `shared` 계약을 통해 끝까지 돔) → 확장 후보 목록을 느슨한 메뉴로 정리했다. 다른 세션이 단독으로 작업을 고를 수 있게 일정·강한 단계는 두지 않았다.
 - 남은 관찰: 구조 정비를 실제로 하면 `decisions/`에 결정 노트를 남기고 README·`00-spec-driven-development.md`의 구조 색인을 맞춘다(AI 위치 베이스라인 변경). 관련 MVP 판단은 현재 코드 상태와 사용자 요청에서 다시 닫는다.
+
+## 2026-06-03 - React client 골격과 Python AI 후보 생성 경계
+
+- 바뀐 것: 최신 LTS Node 기준 `.nvmrc`와 Vite/React 실행 세팅을 추가했고, active client를 React 앱으로 전환했다. 기존 preview를 버리지 않고 상단/자료함/확인/대시보드/현장/원문 근거 표의 구조를 살리되, confidence bar와 넓은 moment-first 목업 세계는 새 화면 중심에서 제외했다. Python AI는 `src/ai/`에 후보 생성 baseline과 prompt/provider 자리를 두고, TS `src/server/trip-facts`가 후보를 `src/shared/tripFacts.ts`의 product contract로 정규화하는 경계를 택했다. 관련 결정 근거는 `docs/decisions/2026-06-03-react-client-python-ai-boundary.md`.
+- 남은 관찰: `src/client/demoTrip.ts`는 아직 dev sample이므로 server stub/adapter가 붙으면 client 밖으로 옮기거나 제거한다. 다음 구현 판단은 Python 후보 JSON을 TS server entry에 연결할지, 먼저 client sample을 더 줄일지에서 다시 닫는다.

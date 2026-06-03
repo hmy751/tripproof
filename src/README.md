@@ -8,7 +8,8 @@ product code는 root의 `eval/`, `fixtures/`, run artifact, metric output과 분
 
 ## 구조
 
-- `client/` — 사용자가 보는 TripProof UI. 현재는 브라우저에서 바로 열 수 있는 정적 뼈대다.
+- `client/` — 사용자가 보는 TripProof React web app.
+- `ai/` — Python AI 후보 생성 코드와 prompt/provider 자리. 최종 product contract가 아니라 server가 정규화할 후보 JSON을 만든다.
 - `server/` — product entry point와 서버 내부 구현 자리.
-- `server/ai/` — 자료 추출, 근거 확인, LLM provider 연결 자리.
+- `server/trip-facts/` — 자료 후보를 `shared` 계약으로 정규화하는 TS server 경계.
 - `shared/` — client와 server가 함께 읽는 결과 타입.

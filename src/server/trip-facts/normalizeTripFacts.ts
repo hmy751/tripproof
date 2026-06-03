@@ -11,7 +11,7 @@ export type RawTripFactCandidate = {
   artifactId?: string;
   schedule: string;
   label: string;
-  value: string;
+  value: string | null;
   confidence: number;
   locator?: string;
   snippet?: string;

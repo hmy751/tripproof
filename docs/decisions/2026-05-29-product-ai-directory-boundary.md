@@ -1,5 +1,7 @@
 # 2026-05-29 - Product와 AI 디렉토리 경계
 
+> 상태: 2026-06-03 `docs/decisions/2026-06-03-react-client-python-ai-boundary.md` 결정으로 대체됨. 현재 구조는 Python 후보 생성 `src/ai/`, TS product 정규화 `src/server/trip-facts/`, 공유 계약 `src/shared/`를 기준으로 한다.
+
 ## 맥락
 
 TripProof는 AI 기능을 붙이는 초기 product 실험이다. 이전 작업에서 eval code, fixture, run artifact, metric output이 product code로 스며들면 제품 흐름이 오염될 수 있다는 문제가 있었다.

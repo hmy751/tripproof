@@ -40,6 +40,10 @@ textarea {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -148,6 +152,7 @@ dl {
 .pill {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   min-height: 26px;
   padding: 0 9px;
   border: 1px solid var(--line);
@@ -174,6 +179,20 @@ dl {
   border-color: #f0cf90;
   background: var(--amber-soft);
   color: var(--amber);
+}
+
+.pill.bad,
+.danger {
+  border-color: #f2b8b5;
+  background: #fff0ef;
+  color: var(--red);
+}
+
+.success {
+  border-color: #b9dfc4;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 700;
 }
 
 .workspace {
@@ -293,6 +312,25 @@ dl {
   display: block;
 }
 
+.candidate-row {
+  justify-content: space-between;
+  width: 100%;
+  min-height: 50px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.candidate-row.active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.candidate-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .main {
   min-width: 0;
   padding: 18px 22px 28px;
@@ -314,6 +352,10 @@ dl {
   background: transparent;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.icon-tab {
+  gap: 7px;
 }
 
 .tab.active {
@@ -663,6 +705,33 @@ code {
   text-align: left;
 }
 
+.icon-button {
+  white-space: nowrap;
+}
+
+.chat-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.chat-box textarea {
+  margin-bottom: 0;
+}
+
+.answer-head,
+.evidence-list,
+.field-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.answer-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 textarea {
   width: 100%;
   min-height: 86px;
@@ -687,6 +756,30 @@ textarea {
 
 .answer-box p {
   margin-bottom: 12px;
+}
+
+.field-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-card {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfd;
+}
+
+.field-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.field-card strong {
+  font-size: 18px;
+  overflow-wrap: anywhere;
 }
 
 .issue {
@@ -743,7 +836,8 @@ textarea {
 
   .moment-grid,
   .board-grid,
-  .flow-row {
+  .flow-row,
+  .field-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -773,6 +867,7 @@ textarea {
   .moment-grid,
   .board-grid,
   .flow-row,
+  .field-grid,
   .source-table > div,
   .panel-head,
   .fact-head,
