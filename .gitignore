@@ -23,3 +23,7 @@ out/
 *.log
 
 /doc
+
+# Local research material. May contain email IDs or source handles.
+docs/material-research/
+fixtures/private/
