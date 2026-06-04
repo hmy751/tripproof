@@ -1,8 +1,48 @@
-# Spec
+# Specs
 
-이 폴더는 여러 작업으로 이어지는 설계 맥락을 남길 때만 쓴다.
+현재 specs 운영 기준은 이 README다. spec-driven 구조를 light loop로 낮춘 배경 결정은 `docs/decisions/2026-06-03-light-spec-driven-loop/`를 본다.
+
+`docs/specs/`에는 여러 작업으로 이어지는 제품 동작 기준만 둔다. 과거의 `00-spec-driven-development.md`는 `docs/archive/spec-driven/00-spec-driven-development.md`에 보관된 스냅샷이며, 현재 작업 queue나 절차 gate가 아니다.
 
 작은 수정마다 spec을 만들 필요는 없다. 나중에 다시 봐야 할 목표, 제약, 결정, 남은 쟁점만 짧게 남긴다.
+
+## 처음 읽는 법
+
+TripProof의 light spec-driven은 구현 전에 사용자 장면, 경계, 확인 기준을 짧게 맞춰 사람과 AI가 같은 완료 조건을 보게 하는 작업 루프다.
+
+spec은 승인 gate나 작업 목록이 아니라, 큰 slice에서 무엇을 통과로 볼지와 무엇을 Non-goals로 둘지를 맞추는 얇은 기준이다. 처음 읽을 때는 아래 순서로 본다.
+
+1. **사용자 장면**: 사용자가 어떤 자료를 넣고 무엇을 물어보는가.
+2. **Goal / Rules**: 이번 slice가 끝났다고 말할 목표와 지켜야 할 경계는 무엇인가.
+3. **Non-goals**: 중요하지 않아서가 아니라, 이번 slice를 작게 유지하기 위해 의도적으로 빼는 것은 무엇인가.
+4. **상태 언어**: 사용자가 화면에서 보게 될 말. 내부 타입명은 그 뒤에 본다.
+5. **이번 확인 기준**: 지금 작업에서 실제로 확인할 1-3개의 제품 동작은 무엇인가.
+6. **확인 방법**: 선택한 기준이 통과했는지 어떻게 관찰할 것인가.
+
+용어는 이렇게 쓴다.
+
+| 용어 | 뜻 |
+| --- | --- |
+| product slice | 전체 제품 중 한 사용자 장면을 끝까지 통과시키는 작은 단위 |
+| user scene | 사용자가 실제로 처한 상황, 입력 자료, 질문 |
+| selected acceptance | 이번 확인 기준. 지금 작업에서 실제로 확인할 제품 동작 1-3개 |
+| observation case | 관찰 케이스. 나중에 acceptance를 확인할 때 꺼내는 대표 상황. 작업 순서표가 아니다. |
+| check method | 테스트, 수동 확인, 화면 관찰처럼 완료를 확인하는 방법 |
+
+## 문서 경계
+
+spec에는 현재 repo에서 확인 가능한 목표, 제약, 결정, 열린 질문, 검증 후보만 남긴다.
+
+아직 없는 product flow, eval run, before/after, metric, public case study를 완료된 proof처럼 쓰지 않는다. repo 밖 개인 자료, 공고/포트폴리오 맥락, 대화 원문, 도구 이름도 product 근거처럼 남기지 않는다.
+
+TripProof의 기본 방향은 product-first다. eval은 product behavior를 호출하고 관찰한다. product code가 eval fixture, run artifact, metric output에 의존하게 만들지 않는다.
+
+지금 만들지 않을 문서 예시:
+
+- 실제 run 없는 eval 결과표
+- metric threshold 확정 문서
+- 증거 없는 public before/after case study
+- 작업량 메타를 product proof처럼 보이게 하는 운영 로그
 
 ## Light spec-driven loop
 
@@ -11,11 +51,11 @@ TripProof의 spec-driven은 문서 gate가 아니라 큰 slice를 작게 잡기 
 큰 slice이면 작업 시작 전에 5줄 정도의 brief를 둔다.
 
 ```text
-why-now:
-의도:
-가설/위험:
-selected acceptance:
-열린 질문 또는 사람 판단 결과:
+왜 지금:
+사용자 장면:
+이번 확인 기준(selected acceptance):
+주의할 점:
+남은 판단:
 ```
 
 큰 slice의 기준은 실패했을 때 원인과 판단이 흐려지는가다. 사용자 flow가 바뀌거나, AI 위임 범위가 크거나, acceptance가 애매하거나, 실패 유형 분해가 필요하거나, 다음 세션이 이어받아야 하면 큰 slice로 본다.
@@ -24,22 +64,68 @@ selected acceptance:
 
 `selected acceptance`는 기본 1-3개로 제한한다. spec은 작업을 만들지 않고, 이미 선택한 사용자 장면을 좁히는 데만 쓴다.
 
-새 spec 파일은 여러 세션으로 이어지는 product behavior 기준이 필요하거나, acceptance drift가 반복되거나, 사용자-facing 실패 유형을 분리해야 할 때만 만든다.
+새 spec 파일은 여러 세션으로 이어지는 제품 동작 기준이 필요하거나, acceptance drift가 반복되거나, 사용자-facing 실패 유형을 분리해야 할 때만 만든다.
 
 권장 형식:
 
 ```md
 # Slice 이름
 
-## 목표
+이 문서는 전체 작업 목록이 아니라, 사용자 장면과 경계, 확인 기준을 맞추기 위한 제품 동작 기준이다.
 
-## 입력과 출력
+## 한눈에 보기
 
-## 동작 기준
+### 사용자 장면
 
-## 결정
+### Goal
 
-## 남은 쟁점
+### Rules
 
-## 검증 후보
+### Non-goals
+
+### 상태 언어
+
+### 이번 확인 기준(selected acceptance)
+
+### 확인 방법
+
+## 상세 기준
+
+### Flow
+
+### Data / State
+
+### Tests / 관찰 케이스
+
+### 보류 질문
 ```
+
+이 형식은 빈칸을 모두 채우라는 템플릿이 아니다. 각 항목은 다음 판단을 보정하기 위한 calibration sample처럼 읽는다.
+
+| 항목 | 관통 개념 | 좋음 | 나쁨 |
+| --- | --- | --- | --- |
+| 사용자 장면 | 기능명이 아니라 실제 사용 순간을 잡는다. | 예약 확인서와 호스트 안내를 넣고 체크인 시간과 늦은 도착 조건을 묻는다. | 숙소 정보 추출 기능을 만든다. |
+| Goal | 끝났다고 말할 핵심 결과를 좁힌다. | 체크인 시작 시간은 근거와 함께 답하고, 늦은 도착 조건이 없으면 멈춘다. | 숙소 체크인 AI를 완성한다. |
+| Rules | AI와 화면이 넘지 말아야 할 경계를 둔다. | 자료 밖 일반 지식으로 답을 보충하지 않는다. | 가능하면 친절하고 자세하게 답한다. |
+| Non-goals | 중요하지 않아서가 아니라 이번 slice를 작게 유지하기 위해 뺀다. | 실제 PDF/OCR ingestion은 이번 기준 밖이다. | 나중에 할 일: OCR, LLM, eval dashboard. |
+| 이번 확인 기준 | 전체 spec이 아니라 이번 작업에서 볼 1-3개 동작을 고른다. | 체크인 시간 `근거 있음`, 늦은 도착 조건 `근거 부족`, 직접 확인 카드 경계. | 체크인 slice 전체 구현, 모든 관찰 케이스 처리. |
+| 관찰 케이스 | 나중에 확인할 대표 상황이다. 작업 순서표가 아니다. | "늦은 도착 조건이 자료에 없음"을 missing 관찰 케이스로 둔다. | P0-A부터 P0-E까지 순서대로 구현한다. |
+
+작게 남길 때는 아래 5줄만 써도 충분하다.
+
+```text
+왜 지금:
+사용자 장면:
+이번 확인 기준(selected acceptance):
+주의할 점:
+남은 판단:
+```
+
+좋은 spec은 "해야 할 일"을 많이 늘리지 않는다. 대신 이번 사용자 장면에서 무엇을 통과해야 하고, 무엇을 아직 하지 않는지 선명하게 만든다.
+
+slice 문서가 전체 P0 기준을 담고 있어도, 각 구현 작업은 다시 5줄 brief로 `selected acceptance` 1-3개를 고른 뒤 시작한다.
+
+짧은 brief 예시:
+
+- 좋음: "이번 확인 기준은 체크인 시작 시간 `근거 있음`, 늦은 도착 조건 `근거 부족`, 직접 확인 카드 경계다." — 사용자 장면 안에서 확인할 동작을 좁힌다.
+- 나쁨: "체크인 slice 전체 구현, eval 추가, ingestion 개선, 카드 UI 정리, 모든 관찰 케이스 처리." — spec 전체를 작업 목록으로 바꾼다.

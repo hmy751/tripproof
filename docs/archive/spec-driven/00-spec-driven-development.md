@@ -1,4 +1,8 @@
-# Spec-driven development structure
+# Archived: Spec-driven development structure
+
+이 문서는 archive 스냅샷이다. 현재 specs 운영 기준은 `docs/specs/README.md`이며, light loop로 낮춘 배경 결정은 `docs/decisions/2026-06-03-light-spec-driven-loop/`에 있다. 이 문서는 현재 작업 queue, 절차 gate, 승인 기준으로 쓰지 않는다.
+
+---
 
 이 문서는 TripProof 구현을 시작하기 전에 어떤 spec 문서를 만들고, 어떤 문서는 나중으로 미룰지 정리한다.
 

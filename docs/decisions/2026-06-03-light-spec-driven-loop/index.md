@@ -20,7 +20,7 @@ TripProof에는 spec-driven 의도가 남아 있어야 한다. 회사 요구를 
 TripProof의 기본 운영은 light spec-driven loop로 둔다.
 
 - 큰 slice에만 짧은 brief를 둔다.
-- brief는 `why-now`, `의도`, `가설/위험`, `selected acceptance`, `열린 질문 또는 사람 판단 결과` 정도로 제한한다.
+- brief는 `왜 지금`, `사용자 장면`, `이번 확인 기준(selected acceptance)`, `주의할 점`, `남은 판단` 정도로 제한한다.
 - `selected acceptance`는 기본 1-3개로 좁힌다.
 - spec은 작업을 만들지 않고, 이미 선택한 사용자 장면을 좁힌다.
 - product가 먼저이고 eval은 product behavior를 관찰한다.
@@ -33,6 +33,21 @@ TripProof의 기본 운영은 light spec-driven loop로 둔다.
 `docs/specs/README.md`에는 작업자가 바로 쓸 짧은 운영 규칙을 남긴다. 이 decision note는 왜 그 방식을 택했는지와 무엇을 기각/보류했는지를 보존한다.
 
 `tripproof-spec-driven`은 이 repo 전용 skill로 둔다. 전역 skill이 아니라 `.claude/skills/tripproof-spec-driven`에 두고, Codex 호환은 `.codex/skills/tripproof-spec-driven` symlink로 연결한다.
+
+## 2026-06-04 보강
+
+spec-driven의 상단 원칙은 "구현 전에 사용자 장면, 경계, 확인 기준을 짧게 맞춰 사람과 AI가 같은 완료 조건을 보게 하는 것"으로 정리한다. 문서가 먼저 커지지 않도록, `docs/specs/README.md`와 `tripproof-spec-driven` skill은 실행용 gate가 아니라 범위 감각을 맞추는 reference로 둔다.
+
+`docs/specs/README.md`의 권장 형식은 `한눈에 보기`와 `상세 기준`으로 나눈다.
+
+- `한눈에 보기`: 사용자 장면, Goal, Rules, Non-goals, 상태 언어, 이번 확인 기준, 확인 방법.
+- `상세 기준`: Flow, Data / State, Tests / 관찰 케이스, 보류 질문.
+
+각 항목은 빈칸을 모두 채우는 템플릿이 아니라 다음 판단을 보정하기 위한 calibration sample로 읽는다. 예시는 "정답 양식"이 아니라 좋은/나쁜 범위 감각을 보여주는 용도다.
+
+기존 accommodation check-in slice 문서는 현재 삭제하고, 나중에 새 권장 형식으로 다시 만든다. 이 삭제는 product flow나 첫 slice 의도를 폐기했다는 뜻이 아니라, 과거의 무거운 slice 문서가 새 light loop의 예시처럼 읽히지 않도록 비운 것이다.
+
+`docs/specs/`의 현역 기준은 `README.md` 하나로 모은다. 과거 `00-spec-driven-development.md`는 필요한 문서 경계 원칙을 README에 얇게 흡수한 뒤 `docs/archive/spec-driven/`에 스냅샷으로 보관한다. 이는 과거 구조 판단을 삭제하려는 것이 아니라, specs 폴더 안에 두 개의 현역 기준 문서가 남아 다음 작업자나 AI가 다시 gate/queue처럼 읽는 일을 막기 위한 정리다.
 
 ## 기각 또는 보류
 

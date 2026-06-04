@@ -395,10 +395,10 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 
 확장 후보(현재 타입과 어긋나는 지점, 구현 전 별도 판단. 코드는 이번 통합에서 바꾸지 않음):
 
-- `TripFact.value`는 현재 `string`이다. `missing`/`conflict` 후보를 값 없이 표현하려면 `string | null` 확장이 필요할 수 있다(slice spec `docs/specs/accommodation-checkin.md`도 이미 지적).
+- `TripFact.value`는 현재 `string`이다. `missing`/`conflict` 후보를 값 없이 표현하려면 `string | null` 확장이 필요할 수 있다. 숙소 체크인 장면을 새 slice spec으로 다시 열면 이 지점을 확인 기준에 포함할 수 있다.
 - `TripFact`에 `category` 필드가 없다. 대시보드의 카테고리(숙소·투어·렌터카·결제) 2차 분류축을 계약으로 올리려면 추가 후보다.
 - 결정 축(카드 출처)을 서버나 eval이 읽어야 하면 `ReviewDecision` 또는 카드 출처 필드를 공유 타입으로 승격하는 것이 후보다. 현재는 `src/client/`의 local state로 둔다.
-- conflict 표현을 위한 `conflictGroupId`, `conflictCandidates`, fact의 `reason`은 현재 공유 타입에 없다. P0 출력 계약에서 필요해지면 작게 확장한다(slice spec 참조).
+- conflict 표현을 위한 `conflictGroupId`, `conflictCandidates`, fact의 `reason`은 현재 공유 타입에 없다. P0 출력 계약에서 필요해지면 작게 확장한다.
 - `TripFact.confidence: number`가 코드에 있으나 이 PRD는 사용자 언어로 쓰지 않는다(아래 정직성 원칙). 필드 자체를 둘지/뺄지는 코드 드리프트(drift, 코드와 문서가 벌어진 지점) follow-up으로 둔다.
 
 ### 정직성 원칙

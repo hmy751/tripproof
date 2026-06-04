@@ -13,3 +13,5 @@
   - `prd.md` — chat-first UX PRD. 내용은 `docs/product-model.md`·`docs/prd.md`로 승격됨. (상단에 supersede 배너 있음)
   - `tripproof-preview-c.html` — C안 통합 프리뷰 목업 (확인/대시보드/현장 탭, 오른쪽 rail 후보, 인라인 근거).
   - `tripproof-preview-ux.html` — UX 프리뷰 목업.
+- `spec-driven/` — 과거 spec-driven 구조 문서 스냅샷. 현재 specs 운영 기준은 `docs/specs/README.md`이고, light loop 결정 배경은 `docs/decisions/2026-06-03-light-spec-driven-loop/`다.
+  - `00-spec-driven-development.md` — 초기 spec 운영 원칙과 문서 후보를 담은 archive 문서. 현재 queue나 gate가 아니다.
