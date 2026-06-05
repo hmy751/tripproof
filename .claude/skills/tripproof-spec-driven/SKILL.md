@@ -57,7 +57,7 @@ description: TripProof repo 전용 light spec-driven 작업 루프. TripProof에
 ```text
 왜 지금: 첫 product proof를 숙소 체크인 준비 장면으로 좁혀, 문서/하네스가 아니라 화면 동작으로 확인한다.
 사용자 장면: 사용자가 자료함 전체에 "체크인은 몇 시부터, 늦게 도착하면?"을 묻는다.
-먼저 고를 slice: sanitized seed와 deterministic adapter로 체크인 시작 시간 답변을 채팅 화면과 인라인 근거까지 잇는다.
+먼저 고를 slice: sanitized material text를 grounded extractor에 넣고, 체크인 시작 시간은 quote 기반 `근거 있음`, 늦은 도착 조건은 quote 부재 기반 `근거 부족`으로 채팅 화면과 인라인 근거까지 잇는다.
 이번 AC: 체크인 시작 시간 `근거 있음`; 늦은 도착 조건 `근거 부족` + `직접 확인`; 카드 승격 경계
 주의할 점: 자료에 없는 늦은 도착 조건을 AI가 일반 지식으로 보충하거나, 후보 답변이 confirmed 카드처럼 올라가면 안 된다.
 남은 판단: 늦은 도착 조건과 직접 확인 카드를 같은 구현 턴에 닫을지 다음 slice로 뺄지 작업 brief에서 다시 고른다.
@@ -188,7 +188,7 @@ slice 후보는 그 구현면을 얇게 관통하는 product path다. 예:
 - 근거 부족에서 직접 확인 카드로: 사용자가 직접 채운 값이 대시보드에서 `직접 확인`으로 보인다.
 - 민감정보 자동 카드 제외: 예약번호/출입코드가 자동 카드 후보가 되지 않는다.
 
-먼저 고를 slice는 후보 중 이번 구현에서 화면까지 이을 하나다. 이때 실제로 닫는 면과 stub으로 받치는 면을 함께 적는다. 예: 체크인 시작 시간 답변을 먼저 고르고, sanitized seed와 deterministic adapter로 `자료 -> AI/adapter -> 상태 -> 채팅 답변 -> 인라인 근거`를 잇는다. real ingestion과 real LLM은 기술 충실도로 뒤로 둘 수 있지만, 사용자 장면이 지나갈 최소 경로는 닫지 않는다.
+먼저 고를 slice는 후보 중 이번 구현에서 화면까지 이을 하나다. 이때 실제로 닫는 면과 stub으로 받치는 면을 함께 적는다. 예: 체크인 질문 답변을 먼저 고르고, sanitized material text와 grounded extractor 계약으로 `자료 -> extractor 후보 + evidence quote -> 상태 -> 채팅 답변 -> 인라인 근거`를 잇는다. 실제 Gmail/PDF/OCR ingestion처럼 이번에 깊게 다루지 않는 면은 기술 충실도로 뒤로 둘 수 있다.
 
 - 각 slice는 한 필드, 한 상태, 한 실패 유형을 화면까지 통과시킨다. 여기서 "끝까지"는 화면에 닿는 깊이지, 모든 부품을 완성한다는 뜻이 아니다.
 - 완료 기준은 컴포넌트가 아니라 화면 동작이다.
