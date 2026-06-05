@@ -33,7 +33,8 @@ fixture는 자료 묶음 단위로 둔다. 예를 들어 `fixtures/accommodation
 
 ## Material Handling
 
-- fixture는 실제 자료의 형태와 문장을 가능한 한 유지한 sanitized copy를 우선한다.
+- fixture는 실제 자료의 형태와 문장을 가능한 한 유지한 sanitized copy를 우선한다. 새로 꾸민 synthetic text는 원본 구조를 보존할 수 없을 때만 쓴다.
 - 민감하거나 개인을 식별할 수 있는 값은 무효 placeholder로 바꾼다.
 - 마스킹 전 원본, 실제 식별자, 원본과 sanitized 파일의 상세 매핑표는 commit하지 않는다.
 - `expected/`는 `input/`과 `extracted/`에서 근거를 찾을 수 있는 값만 담는다.
+- 이 기준은 자료 위생 기준이다. fixture 파일이나 expected output만 준비하고 product slice가 통과했다고 말하지 않는다.
