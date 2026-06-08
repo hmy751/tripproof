@@ -25,13 +25,12 @@
 
 ## Rules
 
-- 첫 구현은 TypeScript 해석 함수가 맡는다.
+- 첫 구현은 Python backend의 해석 함수가 맡는다.
 - 결과는 파싱된 PDF 본문에 의존해야 한다. 본문이 바뀌면 후보와 근거도 바뀌어야 한다.
 - 외부 LLM을 붙일 때도 같은 입력과 출력 기준을 유지한다.
 - `EvidenceRef.snippet`은 실제 파싱된 PDF 본문 일부여야 한다.
 - `EvidenceRef.locator`는 처음에는 파일명과 page 정도로 충분하다.
-- `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다.
-- Python baseline을 계속 쓴다면 같은 Agoda PDF 파싱 본문 기준으로 맞춘다.
+- 기존 `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다. Python backend 전환 중 유지하지 않는다.
 
 ## Non-goals
 
@@ -43,10 +42,10 @@
 
 ## 현재 코드에서 볼 곳
 
-- `src/server/trip-facts/extractTripFacts.ts`: 현재 late arrival 값을 고정으로 만든다. 이 장면에서는 PDF 본문에 없는 값을 만들지 않게 바꿔야 한다.
-- `src/server/trip-facts/normalizeTripFacts.ts`: 근거가 없으면 `missing`으로 둘 수 있다.
-- `src/ai/examples/accommodation_checkin.json`: 현재 text fixture 중심이라 PDF 파싱 본문 기준과 다를 수 있다.
-- `src/ai/tests/test_baseline.py`: late arrival 값이 있다고 기대하는 테스트를 PDF-only 기준으로 다시 봐야 한다.
+- 기존 `src/server/trip-facts/extractTripFacts.ts`: 현재 late arrival 값을 고정으로 만든다. 이 장면에서는 PDF 본문에 없는 값을 만들지 않게 Python backend로 대체한다.
+- 기존 `src/server/trip-facts/normalizeTripFacts.ts`: 근거가 없으면 `missing`으로 둘 수 있다. 이 규칙은 Python backend로 옮긴다.
+- 기존 `src/ai/examples/accommodation_checkin.json`: 현재 text fixture 중심이라 PDF 파싱 본문 기준과 다를 수 있다.
+- 기존 `src/ai/tests/test_baseline.py`: late arrival 값이 있다고 기대하는 테스트를 PDF-only 기준으로 다시 본다.
 
 ## 이번 AC
 
@@ -60,4 +59,3 @@
 
 - `근거 부족`을 후보로 직접 만들지, 질문 답변 단계에서 없는 항목으로 다룰지.
 - 민감정보 감지를 extractor에서 할지, 카드 승격 단계에서 막을지.
-- TypeScript 구현과 Python baseline을 같은 작업에서 같이 맞출지.

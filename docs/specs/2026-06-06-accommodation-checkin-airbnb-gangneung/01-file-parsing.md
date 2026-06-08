@@ -28,7 +28,8 @@
 
 ## Rules
 
-- client는 React/Vite 화면에서 PDF 파일을 받는다.
+- client는 React/Vite 화면에서 PDF 파일을 선택하고 backend로 전송한다.
+- PDF text extraction은 Python backend ingest가 맡는다.
 - 첫 제품 입력은 `.pdf` 원본이다. `.txt`나 `.md`로 미리 변환한 파일을 product proof의 입력으로 삼지 않는다.
 - PDF binary 읽기, PDF text extraction, 자료함 item 생성, AI 해석 입력 생성을 분리한다.
 - 처음은 텍스트 추출 가능한 1페이지 PDF를 대상으로 한다.
@@ -52,8 +53,17 @@
 4. AI 해석 입력에는 실제 PDF에서 파싱된 본문이 들어간다.
 5. PDF 파싱 본문에서 체크인 시작 시각이 없으면 `15:00` 같은 값을 임의로 넣지 않는다.
 
+## 구현 메모
+
+이번 구현은 client-side PDF 파싱이 아니라 Python backend ingest 경로로 진행한다.
+
+- client는 PDF 선택, 업로드 요청, 파싱 상태 표시만 맡는다.
+- backend는 PDF binary를 받아 text와 page count를 추출하고, 이후 질문 단계가 읽을 수 있는 material text로 보관한다.
+- 첫 저장소는 in-memory로 둔다. DB, 계정 동기화, 장기 파일 저장은 열지 않는다.
+- 질문 API는 ready material의 파싱 본문이 해석 입력으로 넘어가는지만 01에서 확인한다. 답변 문장, 인라인 근거 UI, 카드 초안은 02 이후에서 다룬다.
+- 기존 TS 중심 `src/server/trip-facts`, `src/shared`, `src/ai` 구조는 Python backend 전환 중 남겨둘 호환용 계층이 아니라 삭제/흡수 대상으로 본다.
+
 ## 남은 판단
 
-- PDF text extraction을 client에서 `pdf.js`로 처리할지, server/helper 모듈로 분리할지.
 - 공개 fixture 파일명은 `agoda-fukuoka-booking-confirmation.pdf`처럼 둘지.
 - 파싱 본문 preview를 자료함에 얼마나 보여줄지.
