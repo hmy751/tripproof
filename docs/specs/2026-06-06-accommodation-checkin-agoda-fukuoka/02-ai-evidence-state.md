@@ -42,9 +42,9 @@
 
 ## 현재 코드에서 볼 곳
 
-- `server/app.py`: 01 slice에서 파싱된 material text가 질문 API context로 전달된다.
-- `server/materials/pdf.py`: PDF 본문 추출 경계.
-- `server/schemas/`: backend API 응답 스키마.
+- `apps/server/app.py`: 01 slice에서 파싱된 material text가 질문 API context로 전달된다.
+- `apps/server/materials/pdf.py`: PDF 본문 추출 경계.
+- `apps/server/schemas/`: backend API 응답 스키마.
 - 삭제된 `src/server/trip-facts`, `src/shared`, `src/ai`의 고정값/fixture 기준은 유지하지 않는다.
 
 ## 이번 AC

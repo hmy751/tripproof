@@ -35,4 +35,9 @@
 ## 2026-06-08 - root client/server 구조와 backend 확장 골격
 
 - 바뀐 것: 실행 단위 기준에 맞춰 React app을 root `client/`로 옮겼고, Python backend를 `api`, `core`, `schemas`, `materials`, `retrieval`, `extraction`, `llm`, `cards` 축으로 나눴다. `retrieval`에는 chunk/search 골격을 두고, 질문 API의 excerpt 선택을 retrieval helper로 옮겼다. `extraction`은 제품 판단, `llm`은 provider 호출 인프라로 분리했다.
-- 남은 관찰: 실제 LLM provider와 extraction 구현은 아직 열지 않았다. 다음 제품 slice에서 `server/extraction/checkin.py`가 parsed material text를 받아 evidence-backed 후보를 만들도록 닫는다.
+- 남은 관찰: 실제 LLM provider와 extraction 구현은 아직 열지 않았다. 다음 제품 slice에서 `apps/server/extraction/checkin.py`가 parsed material text를 받아 evidence-backed 후보를 만들도록 닫는다.
+
+## 2026-06-08 - apps runtime 구조로 client/server 묶음
+
+- 바뀐 것: root에 떨어져 있던 `client/`, `server/`를 `apps/client/`, `apps/server/`로 묶었다. Python import package 이름은 `server.*`를 유지하고, 실행과 테스트에서 `PYTHONPATH=apps`로 위치를 연결한다.
+- 남은 관찰: `apps/`는 실행 단위 묶음이고, `eval/`, `fixtures/`, `docs/`는 product를 관찰하거나 설명하는 바깥 레이어로 root에 남긴다.

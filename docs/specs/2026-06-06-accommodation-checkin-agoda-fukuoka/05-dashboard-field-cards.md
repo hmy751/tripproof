@@ -39,9 +39,9 @@
 
 ## 현재 코드에서 볼 곳
 
-- `client/App.tsx`: board/field 탭은 현재 empty view다.
-- `client/components/StaticEmptyView.tsx`: 실제 카드 리스트로 바꿀 대상이다.
-- `client/components/ViewTabs.tsx`: 확인, 대시보드, 현장 탭 전환은 이미 있다.
+- `apps/client/App.tsx`: board/field 탭은 현재 empty view다.
+- `apps/client/components/StaticEmptyView.tsx`: 실제 카드 리스트로 바꿀 대상이다.
+- `apps/client/components/ViewTabs.tsx`: 확인, 대시보드, 현장 탭 전환은 이미 있다.
 
 ## 이번 AC
 

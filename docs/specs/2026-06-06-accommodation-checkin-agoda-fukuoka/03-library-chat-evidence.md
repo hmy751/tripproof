@@ -27,7 +27,7 @@
 
 ## Rules
 
-- `client/App.tsx`가 materials, parsed body, answer state를 연결한다.
+- `apps/client/App.tsx`가 materials, parsed body, answer state를 연결한다.
 - `ChatWorkspace`는 단순 문자열 답변만이 아니라 항목별 상태와 근거를 표시할 수 있어야 한다.
 - 한 답변 안에서 `근거 있음`과 `근거 부족` 항목을 나눠 보여준다.
 - 답변의 근거 snippet은 02에서 받은 `EvidenceRef`를 사용한다.
@@ -43,9 +43,9 @@
 
 ## 현재 코드에서 볼 곳
 
-- `client/App.tsx`: materials와 질문 상태를 연결한다.
-- `client/components/ChatWorkspace.tsx`: 현재 assistant 메시지는 단순 text 중심이다.
-- `client/types.ts`: 근거와 상태가 붙은 답변을 표현할 수 있을지 확인이 필요하다.
+- `apps/client/App.tsx`: materials와 질문 상태를 연결한다.
+- `apps/client/components/ChatWorkspace.tsx`: 현재 assistant 메시지는 단순 text 중심이다.
+- `apps/client/types.ts`: 근거와 상태가 붙은 답변을 표현할 수 있을지 확인이 필요하다.
 
 ## 이번 AC
 

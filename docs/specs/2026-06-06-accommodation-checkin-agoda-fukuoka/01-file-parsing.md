@@ -65,7 +65,7 @@
 
 ## 구현 상태
 
-- root `server/` Python backend가 `/api/materials`, `/api/questions`를 제공한다.
+- `apps/server/` Python backend가 `/api/materials`, `/api/questions`를 제공한다.
 - `uv`와 `uv.lock`으로 backend 의존성을 고정한다.
 - client는 PDF를 backend로 전송하고 ready/failed 상태를 자료함에 표시한다.
 - 질문 API는 ready material의 파싱 본문을 context로 받는 데까지만 닫았다.

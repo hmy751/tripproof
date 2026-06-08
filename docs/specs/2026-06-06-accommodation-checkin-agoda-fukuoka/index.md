@@ -87,7 +87,7 @@
 
 | 구현 요소 | 이번 장면에서 필요한 이유 | 현재 코드/문서 비교 | 처음 닫을 기준 |
 | --- | --- | --- | --- |
-| PDF 넣기 / 파싱 | 예약 확정 PDF가 제품의 시작점이어야 한다 | 01에서 client 업로드와 root `server/` PDF ingest를 연결했다 | PDF 선택/추가, 텍스트 추출, 자료함 표시, 질문 입력 연결을 닫는다 |
+| PDF 넣기 / 파싱 | 예약 확정 PDF가 제품의 시작점이어야 한다 | 01에서 client 업로드와 `apps/server/` PDF ingest를 연결했다 | PDF 선택/추가, 텍스트 추출, 자료함 표시, 질문 입력 연결을 닫는다 |
 | AI 해석 | PDF 본문에서 확인 가능한 항목과 없는 항목을 나눠야 한다 | 삭제한 `src/server/trip-facts/extractTripFacts.ts`는 late arrival 값을 고정으로 만들었다 | Python backend가 파싱된 본문에서 후보와 근거를 만든다. 본문에 없는 체크인 시작 시각은 만들지 않는다 |
 | 정규화 / 상태 언어 | 후보를 `근거 있음`, `근거 부족`, `확인 필요`로 나눠야 한다 | 삭제한 `src/server/trip-facts/normalizeTripFacts.ts`의 규칙은 02 이후 Python backend schema로 다시 잡는다 | 화면에 보일 상태 언어를 backend response 상태와 맞춘다 |
 | 채팅 답변 | 사용자가 전체 자료함에 묻고 답을 받아야 한다 | client에는 chat workspace shell과 empty draft panel이 있지만 실제 답변 흐름은 아직 닫혀 있지 않다 | 질문, 답변, 상태, 근거 snippet을 한 화면에서 보이게 한다 |
