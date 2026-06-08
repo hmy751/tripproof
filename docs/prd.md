@@ -10,8 +10,6 @@
 
 이 PRD는 `docs/archive/preview/prd.md`와 `docs/archive/preview/tripproof-preview-c.html`의 chat-first 경험을 인터랙션·UX의 1차 기준으로 삼는다. 자료함(Library)에 자료를 넣고 전체 자료함에 직접 묻는 채팅이 입구이며, 사용자가 근거를 보거나 직접 확인한 답변만 카드로 올려 일정 순서의 대시보드와 현장 카드로 정리한다.
 
-현재 repo 구조는 React client `src/client/`와 Python backend `server/`를 기준으로 한다. 이 PRD는 별도 `src/product/` wrapper나 eval artifact를 전제하지 않는다.
-
 | 구분 | 이 PRD에서의 의미 | 적용 방식 |
 | --- | --- | --- |
 | 제품 방향 | 이번 버전에서 지켜야 할 판단 기준 | chat-first 흐름, 근거 중심 확인, 사용자가 이해할 수 있는 상태 언어를 우선한다. |
@@ -100,7 +98,7 @@ Non-goal은 영구 금지가 아니다. 아래 첫 묶음은 **추후 확장할 
 
 MVP는 "여행 자료 확인 도구"의 전체 카탈로그가 아니라, 한 사용자 순간을 chat-first 흐름으로 끝까지 통과시키는 얇은 흐름이다.
 
-slice는 도메인을 좁히는 것이지 인터랙션을 미루는 것이 아니다. 첫 slice는 숙소 체크인이라는 도메인 하나로 범위를 좁히지만, chat-first(전체 자료함 채팅 → 답변 상태·인라인 근거 → 카드 초안 → 대시보드 → 현장 카드)는 MVP의 핵심 인터랙션으로 함께 통과시킨다. 채팅을 나중 기능으로 미루지 않는다.
+MVP는 도메인을 좁히는 것이지 인터랙션을 미루는 것이 아니다. 첫 MVP 장면은 숙소 체크인이라는 도메인 하나로 범위를 좁히지만, chat-first(전체 자료함 채팅 → 답변 상태·인라인 근거 → 카드 초안 → 대시보드 → 현장 카드)는 핵심 인터랙션으로 함께 통과시킨다. 채팅을 나중 기능으로 미루지 않는다.
 
 MVP 시나리오는 숙소 체크인 확인이다. P0에서는 예약 확인서와 호스트 안내 같은 자료를 자료함에 넣고, 전체 자료함에 물어 체크인 시작 시간과 늦은 도착 조건을 확인한다. 예약번호 필요 여부와 출입 방법 전체 추출은 후속 확장으로 둔다.
 
@@ -289,17 +287,17 @@ AI는 다음 입력을 기준으로 동작해야 한다.
 
 ### AI Outputs
 
-AI는 자유 답변보다 검토 가능한 구조를 우선 출력해야 한다. 아래는 제품 요구상 필요한 출력 항목이며, 일부는 현재 backend API schema에 없는 확장 후보다(§9 참조).
+AI는 자유 답변보다 검토 가능한 구조를 우선 출력해야 한다. 아래는 제품 요구상 필요한 출력 항목이다.
 
 답변에 붙는 각 fact 후보 항목은 다음을 포함한다.
 
 - fact 이름(label)
-- fact 값 또는 `null`(value) — `null` 표현은 §9 확장 후보
+- fact 값 또는 값이 없음을 나타내는 상태
 - 근거 상태(evidenceState). 사용자에게는 근거 상태 문구(근거 있음/확인 필요/근거 부족/자료 충돌)로 보인다.
 - 근거 목록(evidence)
-- status reason — fact-level `reason`은 API schema 확장 후보(§9 참조)
+- 왜 해당 상태로 판단했는지 설명하는 짧은 reason
 - sensitive 여부
-- conflict 관계가 있다면 충돌한 후보 목록과 그룹 식별 — `conflictGroupId`/`conflictCandidates`는 API schema 확장 후보(§9·slice 출력 계약 참조)
+- conflict 관계가 있다면 충돌한 후보 목록과 각 후보의 근거
 
 ### Uncertainty Handling
 
@@ -334,24 +332,24 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 
 ## 9. Data / Domain Model
 
-이 섹션은 구현 언어의 확정 타입이 아니라 제품 요구를 설명하기 위한 도메인 모델이다. 객체→구현 경계 매핑과 상태 2축의 단일 정의는 기준 문서(`docs/product-model.md`)를 따르며, 여기서는 PRD에 필요한 만큼만 정리한다.
+이 섹션은 구현 언어의 확정 타입이 아니라 제품 요구를 설명하기 위한 도메인 모델이다. 객체 모델과 상태 2축의 단일 정의는 기준 문서(`docs/product-model.md`)를 따르며, 여기서는 PRD에 필요한 만큼만 정리한다.
 
 ### 객체 모델
 
-| 기준 문서 객체 | 역할 | 현재 구현 경계 |
+| 객체 | 역할 | 제품 요구 |
 | --- | --- | --- |
-| Trip | 확인하려는 하나의 여행 묶음 | UI/preview 개념. 확장 후보. |
-| Artifact | 자료함에 넣은 원본 자료 | `server.models.Material` + `src/client/types.ts` `LibraryItem` |
-| Library (자료함) | Artifact를 모으고 근거의 원천이 되는 장소 | backend in-memory material store + client materials state |
-| Library Chat | 전체 자료함에 묻는 주 인터랙션 | `/api/questions` + `QuestionResponse` |
-| ChatAnswer | 상태와 인라인 근거가 붙은 답변(=카드 후보) | 02 이후 backend response schema 확장 후보 |
-| AICandidate | 자료를 넣자마자 AI가 제안하는 확인 후보 | 02 이후 extractor output 후보. 확정 아님 |
-| CardDraft | 카드가 되기 전 사람이 확인·편집하는 단계 | client local state 확장 후보 |
-| DashboardCard | 사람이 확정해 대시보드에 올린 카드 | 04/05 이후 backend response schema와 client draft state 경계에서 결정 |
-| FieldCard | 현장에서 다시 보기로 저장한 카드(overlay) | DashboardCard의 `현장 저장` 상태 파생. 확장 후보. |
-| Evidence | 답변·후보·카드가 가리키는 원문 근거(인라인) | 02 이후 `artifactId`, `label`, `locator`, `snippet` 형태로 추가 후보 |
-| 일정 (Schedule) | 카드의 시간축 분류(출발 전·Day 1·공통) | 카드/대시보드 slice에서 추가 후보 |
-| 카테고리 (Category) | 카드의 종류 분류(숙소·투어·렌터카·결제) | 카드/대시보드 slice에서 추가 후보 |
+| Trip | 확인하려는 하나의 여행 묶음 | 자료, 질문, 카드, 대시보드가 같은 여행 맥락 안에서 이어져야 한다. |
+| Artifact | 자료함에 넣은 원본 자료 | 답변과 근거가 다시 찾을 수 있는 원천이다. |
+| Library (자료함) | Artifact를 모으고 근거의 원천이 되는 장소 | 사용자는 전체 자료함을 대상으로 묻는다. |
+| Library Chat | 전체 자료함에 묻는 주 인터랙션 | 답변과 카드 후보를 발견하는 주 입구다. |
+| ChatAnswer | 상태와 인라인 근거가 붙은 답변 | 근거 상태, reason, 근거 목록을 함께 가진다. |
+| AICandidate | 자료를 넣자마자 AI가 제안하는 확인 후보 | 확정 정보가 아니라 검토 전 제안이다. |
+| CardDraft | 카드가 되기 전 사람이 확인·편집하는 단계 | 답변이나 후보가 자동 확정되지 않게 막는다. |
+| DashboardCard | 사람이 확정해 대시보드에 올린 카드 | 사람이 확인한 정보만 담는다. |
+| FieldCard | 현장에서 다시 보기로 저장한 카드 | 사용자가 현장 저장한 카드만 모인다. |
+| Evidence | 답변·후보·카드가 가리키는 원문 근거 | 사용자가 원자료에서 다시 찾을 수 있을 만큼 구체적이어야 한다. |
+| 일정 (Schedule) | 카드의 시간축 분류 | 여행 중 언제 봐야 하는 정보인지 정리한다. |
+| 카테고리 (Category) | 카드의 종류 분류 | 숙소·투어·렌터카·결제처럼 서로 다른 업무를 빠르게 스캔하게 한다. |
 
 ### 상태 2축
 
@@ -359,7 +357,7 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 
 #### 근거 축 — EvidenceState (답변 레벨)
 
-제품 상태 이름은 `EvidenceState`이고, 값 4개를 02 이후 backend response schema에 반영한다.
+제품 상태 이름은 `EvidenceState`이고, 답변과 후보에 붙는다.
 
 | EvidenceState | 사용자 문구 | 의미 | 붙는 곳 |
 | --- | --- | --- | --- |
@@ -370,7 +368,7 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 
 #### 결정 축 — ReviewDecision / 카드 출처 (카드 레벨)
 
-결정 축(카드 출처와 supported→직접 확인 전환 규칙 포함)은 아직 01 backend API schema에 없다. client local state와 preview 동작(`docs/archive/preview/tripproof-preview-c.html`의 confirmDraft)에서 출발하고, backend/eval이 읽어야 할 때 API schema로 승격하는 것은 아래 확장 후보다.
+결정 축(카드 출처와 supported→직접 확인 전환 규칙 포함)은 카드 레벨 상태다. 답변의 근거 상태와 섞지 않는다.
 
 | 카드 출처 | 사용자 문구 | 의미 | 붙는 곳 |
 | --- | --- | --- | --- |
@@ -386,20 +384,20 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 - 두 개념을 한 단어로 섞지 않는다. 근거 부족(`missing`) 답변도 사람이 값을 채우면 `직접 확인` 카드로 올라간다.
 - `근거 있음`은 근거 축과 결정 축에 같은 단어로 나타나지만(supported 답변이 수정 없이 카드까지 보존된 경우), 사람이 값·이름을 고치면 `직접 확인`으로 바뀌므로 직교성을 깨지 않는다.
 
-### 도메인 타입 (실제 코드 계약)
+### 도메인 계약
 
 문서의 도메인 이름은 유지한다: `EvidenceState`, `Artifact`, `EvidenceRef`, `TripFact`, `ChatAnswer`.
 
 - `EvidenceRef`는 `artifactId`, `label`, `locator`, `snippet`을 가진다. MVP에서는 자료명과 원문 발췌(snippet)만으로 시작할 수 있고, page/region/bbox는 실제 파일·이미지 인식이 필요해질 때 확장한다.
 - `TripFact`는 `id`, `schedule`, `label`, `value`, `evidenceState`, `evidence`, `sensitive?`를 가진다.
 
-확장 후보(현재 01 구현 밖이며, 구현 전 별도 판단):
+구현 계약으로 옮길 때 지켜야 할 점:
 
-- `TripFact.value`는 `missing`/`conflict` 후보를 값 없이 표현하려면 `string | null`이 필요할 수 있다.
-- 대시보드의 카테고리(숙소·투어·렌터카·결제) 2차 분류축을 계약으로 올리려면 `category` 필드가 필요하다.
-- 결정 축(카드 출처)을 backend나 eval이 읽어야 하면 `ReviewDecision` 또는 카드 출처 필드를 API schema에 추가한다.
-- conflict 표현을 위한 `conflictGroupId`, `conflictCandidates`, fact의 `reason`은 P0 출력 계약에서 필요해지면 작게 확장한다.
-- AI confidence 수치는 사용자 언어로 쓰지 않는다. 필드 자체를 둘지/뺄지는 02 이후 response schema를 만들 때 다시 판단한다.
+- `missing`이나 `conflict`는 값이 없거나 여러 값이 있을 수 있다.
+- 대시보드에서 스캔해야 하는 정보는 일정과 카테고리로 분류할 수 있어야 한다.
+- 결정 축(카드 출처)은 근거 축과 분리해야 한다.
+- conflict는 충돌한 값과 각 근거를 함께 보존해야 한다.
+- AI confidence 수치는 사용자 언어로 쓰지 않는다.
 
 ### 정직성 원칙
 
@@ -417,10 +415,10 @@ AI는 불확실한 정보를 확정값처럼 말하면 안 된다.
 - 실제 자료 입력과 공개 demo 수위가 정해졌을 때, 민감 정보 표시와 기록 기준을 어디까지 둘 것인가?
 - 실제 파일 인식으로 확장할 때 근거 위치에 page/region까지 요구할 것인가?
 - 사용자가 직접 채운 값과 원문 근거가 다를 때 어떤 경고를 보여줄 것인가?
-- 결정 축(카드 출처 / ReviewDecision)을 언제 client local state에서 backend API schema로 승격할 것인가? (서버·eval이 카드 출처를 읽어야 하는 시점)
-- 대시보드 카테고리 축을 계약으로 올리려면 `category`를 언제 추가할 것인가?
-- `TripFact.value`를 `missing`/`conflict` 표현을 위해 `string | null`로 확장할 것인가, 한다면 어느 구현 시점에 할 것인가?
-- AI confidence 필드를 backend response schema에 둘 것인가, 아예 제외할 것인가?
+- 결정 축(카드 출처 / ReviewDecision)을 어느 계층까지 저장하고 평가할 것인가?
+- 대시보드 카테고리 축을 어느 시점부터 제품 계약으로 고정할 것인가?
+- `missing`/`conflict` 값을 화면과 데이터에서 어떤 형태로 표현할 것인가?
+- AI confidence 필드를 내부 진단용으로 둘 것인가, 아예 제외할 것인가?
 - 제품 품질 점검 결과는 어느 시점부터 별도 기록으로 남길 것인가?
 - public demo에 사용할 자료는 synthetic, redacted real sample, 혼합 중 무엇으로 할 것인가?
 - 상태 언어의 최종 사용자 문구는 현재 6개(근거 있음/확인 필요/근거 부족/자료 충돌/직접 확인/현장 저장)로 고정인가?
