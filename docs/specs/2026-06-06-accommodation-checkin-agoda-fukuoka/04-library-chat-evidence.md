@@ -31,7 +31,7 @@
 - `ChatWorkspace`는 단순 문자열 답변만이 아니라 항목별 상태와 근거를 표시할 수 있어야 한다.
 - 한 답변 안에서 `근거 있음`과 `근거 부족` 항목을 나눠 보여준다.
 - 답변의 근거 snippet은 03에서 받은 `EvidenceRef`를 사용한다.
-- chat은 source unit이나 retrieval 후보를 새로 꾸미지 않는다. 02/03에서 만들어진 accepted evidence와 state를 소비한다.
+- chat은 source unit이나 retrieval 후보를 새로 꾸미지 않는다. 03에서 만들어진 accepted evidence와 state를 소비한다.
 - accepted evidence가 없는 값을 말할 때는 현재 등록된 자료에서 근거를 찾지 못했다는 식으로 원본 범위를 드러낸다.
 
 ## Non-goals
