@@ -69,11 +69,11 @@
 
 | 순서 | 문서 | 닫으려는 제품 동작 |
 | --- | --- | --- |
-| 1 | [강릉 숙소 파일 파싱](2026-06-06-accommodation-checkin-airbnb-gangneung-01-file-parsing-gangneung-accommodation.md) | 사용자가 강릉 숙소 파일을 넣고, 제품이 본문을 파싱해 자료함과 AI 해석 입력으로 넘긴다 |
-| 2 | [AI 해석과 근거 상태](2026-06-06-accommodation-checkin-airbnb-gangneung-02-ai-candidates-evidence-state.md) | 파싱된 본문에서 체크인 `15:00`은 `근거 있음`, 늦은 도착 조건은 `근거 부족`으로 나온다 |
-| 3 | [자료함 채팅과 인라인 근거](2026-06-06-accommodation-checkin-airbnb-gangneung-03-library-chat-answer-evidence.md) | 사용자가 물으면 답변과 근거가 채팅 화면에 보인다 |
-| 4 | [카드 초안과 직접 확인](2026-06-06-accommodation-checkin-airbnb-gangneung-04-card-draft-direct-confirm.md) | 답변을 카드 초안으로 올리고, 부족한 값은 사용자가 직접 채운다 |
-| 5 | [대시보드와 현장 카드](2026-06-06-accommodation-checkin-airbnb-gangneung-05-dashboard-field-cards.md) | 확정한 카드만 대시보드에, 현장 저장한 카드만 현장 탭에 보인다 |
+| 1 | [강릉 숙소 파일 파싱](01-file-parsing.md) | 사용자가 강릉 숙소 파일을 넣고, 제품이 본문을 파싱해 자료함과 AI 해석 입력으로 넘긴다 |
+| 2 | [AI 해석과 근거 상태](02-ai-evidence-state.md) | 파싱된 본문에서 체크인 `15:00`은 `근거 있음`, 늦은 도착 조건은 `근거 부족`으로 나온다 |
+| 3 | [자료함 채팅과 인라인 근거](03-library-chat-evidence.md) | 사용자가 물으면 답변과 근거가 채팅 화면에 보인다 |
+| 4 | [카드 초안과 직접 확인](04-card-draft-confirm.md) | 답변을 카드 초안으로 올리고, 부족한 값은 사용자가 직접 채운다 |
+| 5 | [대시보드와 현장 카드](05-dashboard-field-cards.md) | 확정한 카드만 대시보드에, 현장 저장한 카드만 현장 탭에 보인다 |
 
 ## 구현 요소 점검
 

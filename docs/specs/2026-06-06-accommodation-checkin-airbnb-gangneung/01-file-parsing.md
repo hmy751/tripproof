@@ -2,7 +2,7 @@
 
 상태: sub-spec draft.
 
-부모: [숙소 체크인 확인 - Airbnb 강릉 숙소 파일](2026-06-06-accommodation-checkin-airbnb-gangneung.md)
+부모: [숙소 체크인 확인 - Airbnb 강릉 숙소 파일](index.md)
 
 ## 왜 지금
 
