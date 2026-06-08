@@ -2,15 +2,15 @@
 
 작성일: 2026-06-06
 
-상태: feature spec. 이 문서는 Agoda 후쿠오카 예약 확정 PDF를 제품에 넣고, PDF 원본에서 확인 가능한 체크인 준비 정보를 답하고, PDF에 없는 값은 만들지 않는 흐름을 잡는다.
+상태: feature spec. 이 문서는 Agoda 후쿠오카 예약 확정 PDF를 제품에 넣고, accepted source로 확인 가능한 체크인 준비 정보를 답하고, accepted source가 없는 값은 만들지 않는 흐름을 잡는다.
 
 ## 자료 경계
 
-이번 스펙은 Gmail에 있는 Agoda 예약 확정 메일의 PDF 첨부 원본을 기준으로 한다. 공개 스펙에는 Gmail message id, attachment id, 실제 예약 번호, 예약 토큰 URL, 회원 ID, 고객명, 결제 정보, 정확한 숙소 주소, 숙소 연락처를 옮기지 않는다.
+이번 스펙은 사용자가 보유한 Agoda 예약 확정 PDF를 기준으로 한다. 공개 스펙에는 Gmail message id, attachment id, 실제 예약 번호, 예약 토큰 URL, 회원 ID, 고객명, 결제 정보, 정확한 숙소 주소, 숙소 연락처를 옮기지 않는다.
 
 제품 입력으로 먼저 다룰 파일은 Agoda 예약 확정 PDF 하나다. 공개 fixture를 만들 때는 실제 PDF를 그대로 commit하지 않고, 원본 구조를 본뜬 sanitized PDF나 local-only private fixture를 쓴다.
 
-이번 PDF 원본에서 product proof로 다룰 수 있는 내용은 다음이다.
+Agoda 예약 확정 PDF에서 product proof로 다룰 수 있는 내용은 다음이다.
 
 - 예약 확정서 PDF 자체가 체크인 시 제시할 자료라는 점.
 - 체크인 날짜와 체크아웃 날짜.
@@ -18,22 +18,22 @@
 - 도시세가 체크인 시 숙소에 직접 지불될 수 있다는 안내.
 - 체크인 시 신분증과 결제 카드 제시가 필요할 수 있다는 안내.
 
-이번 PDF 원본만으로는 체크인 시작 시각 `15:00`, 체크아웃 시각 `10:00`, 체크인 가능 마감 `01:00 AM`을 `근거 있음`으로 닫지 않는다. 이 값들은 Agoda HTML 메일 본문에 보이는 보조 정보이며, PDF-only slice에서는 별도 파일을 추가하지 않은 한 답변 근거로 쓰지 않는다.
+이번 스펙은 체크인 시작 시각, 체크아웃 시각, 체크인 가능 마감 같은 시간 값의 존재 여부를 문서가 미리 판정하지 않는다. 등록된 source unit에서 accepted source가 잡힌 경우에만 `근거 있음`으로 다루고, 등록되지 않은 companion source의 값을 현재 PDF 근거처럼 섞지 않는다.
 
 ## 짧은 기준
 
 ```text
-왜 지금: 사용자가 실제 PDF 원본을 넣고 제품이 본문을 얻는 흐름을 먼저 닫는다.
+왜 지금: 사용자가 예약 확정 PDF를 넣고 제품이 본문을 얻는 흐름을 먼저 닫는다.
 사용자 장면: 사용자가 Agoda 후쿠오카 예약 확정 PDF를 넣고 "체크인 때 뭘 보여줘야 해? 체크인 시간은 몇 시야?"라고 묻는다.
-먼저 고를 slice: PDF 선택/추가 -> PDF 텍스트 파싱 -> AI 해석 -> 채팅 답변 -> 인라인 근거.
-이번 AC: 예약 확정서 제시는 `근거 있음`, 체크인 시작 시각은 PDF-only 기준 `근거 부족`.
+먼저 고를 slice: PDF 선택/추가 -> PDF 텍스트 파싱 -> source unit/retrieval -> evidence-backed fact -> 채팅 답변 -> 인라인 근거.
+이번 AC: 예약 확정서 제시는 accepted source가 있으면 `근거 있음`, 체크인 시작 시각은 accepted source가 없으면 `근거 부족`.
 주의할 점: HTML 메일 본문이나 일반 호텔 지식의 시각 값을 PDF 근거처럼 섞지 않는다.
-남은 판단: Agoda HTML 메일 본문을 두 번째 companion source로 추가할지, PDF-only proof 뒤에 별도 slice로 열지.
+남은 판단: Agoda HTML 메일 본문을 두 번째 companion source로 추가할지, 현재 source proof 뒤에 별도 slice로 열지.
 ```
 
 ## 사용자 장면
 
-사용자는 숙소 체크인을 앞두고 Agoda 예약 확정 PDF를 제품에 넣는다. 사용자는 PDF를 직접 열어 긴 약관과 안내를 훑지 않고, 체크인 현장에서 무엇을 보여줘야 하는지와 PDF가 말하지 않는 시각 정보가 무엇인지 함께 알고 싶다.
+사용자는 숙소 체크인을 앞두고 Agoda 예약 확정 PDF를 제품에 넣는다. 사용자는 PDF를 직접 열어 긴 약관과 안내를 훑지 않고, 체크인 현장에서 무엇을 보여줘야 하는지와 현재 자료에서 확인 가능한 시각 정보가 무엇인지 함께 알고 싶다.
 
 ```text
 체크인 때 뭘 보여줘야 해? 체크인 시간은 몇 시야?
@@ -41,7 +41,7 @@
 
 ## Goal
 
-사용자는 PDF 원본에 근거해 체크인 시 예약 확정서의 전자 사본 또는 인쇄본을 제시해야 한다는 답을 얻는다. 체크인 시작 시각처럼 PDF 파싱 본문에 없는 값은 AI가 만들지 않고 `근거 부족`으로 멈춘다.
+사용자는 accepted source에 근거해 체크인 시 예약 확정서의 전자 사본 또는 인쇄본을 제시해야 한다는 답을 얻는다. 체크인 시작 시각처럼 accepted source가 없는 값은 AI가 만들지 않고 `근거 부족`으로 멈춘다.
 
 ## Rules
 
@@ -49,7 +49,7 @@
 - PDF 파싱은 1번 하위 스펙의 포함 범위다.
 - 파일 본문 없이 답변하지 않는다.
 - `근거 있음` 답변은 최소 하나의 인라인 근거를 가진다.
-- PDF에 없는 체크인 시작 시각, 체크아웃 시각, 체크인 가능 마감은 Agoda HTML 메일 본문이나 일반 숙소 지식으로 보충하지 않는다.
+- accepted source가 없는 체크인 시작 시각, 체크아웃 시각, 체크인 가능 마감은 등록되지 않은 companion source나 일반 숙소 지식으로 보충하지 않는다.
 - 예약 번호, 고객명, 회원 ID, 결제 카드, 숙소 연락처, 정확한 주소는 자동 카드 후보가 되지 않는다.
 - 사용자가 다른 원본에서 직접 확인한 값을 채워 올리는 흐름은 허용하되, 그 카드는 `직접 확인` 출처로 구분한다.
 
@@ -58,7 +58,7 @@
 - Gmail 계정에서 자동으로 가져오기, attachment id 저장, 원본 PDF 장기 저장은 이번 흐름에서 요구하지 않는다.
 - 모든 PDF 형식을 한 번에 지원하지 않는다. 먼저 텍스트 추출 가능한 Agoda 예약 확정 PDF 한 종류를 안정적으로 읽는다.
 - 스캔 이미지 PDF OCR, 표 레이아웃 완전 복원, QR/바코드 인식은 이번 범위가 아니다.
-- Agoda HTML 메일 본문과 숙소 답변 메일은 companion source 후보지만 이번 PDF-only 기준에는 포함하지 않는다.
+- Agoda HTML 메일 본문과 숙소 답변 메일은 companion source 후보지만 현재 source boundary에는 포함하지 않는다.
 - 실제 예약 PDF, 예약번호, 고객명, 결제정보, 정확한 주소를 공개 fixture나 공개 스펙에 보존하지 않는다.
 
 ## 상태 언어
@@ -67,7 +67,7 @@
 | --- | --- | --- |
 | PDF에서 예약 확정서 제시 안내가 확인됨 | 근거 있음 | 체크인 시 보여줄 자료 답변과 후보가 PDF 본문 근거를 가진다 |
 | PDF에서 체크인 날짜가 확인됨 | 근거 있음 | 날짜는 말할 수 있지만 시작 시각과 혼동하지 않는다 |
-| PDF에서 체크인 시작 시각이 확인되지 않음 | 근거 부족 | `15:00` 같은 값을 만들지 않고 다른 원본 확인 여지를 남긴다 |
+| 체크인 시작 시각 accepted source가 없음 | 근거 부족 | 값을 만들지 않고 다른 원본 확인 여지를 남긴다 |
 | 예약번호, 고객명, 결제 카드 같은 민감 필드가 PDF에 있음 | 확인 필요 | 자동 카드로 올리지 않고 원문 확인 또는 명시 행동 대상으로 둔다 |
 | 사용자가 다른 원본에서 시각을 직접 입력함 | 직접 확인 | AI 근거 카드와 구분되는 카드가 된다 |
 
@@ -77,57 +77,61 @@
 
 | 순서 | 문서 | 닫으려는 제품 동작 |
 | --- | --- | --- |
-| 1 | [Agoda PDF 파일 파싱](01-file-parsing.md) | 사용자가 Agoda 예약 확정 PDF를 넣고, 제품이 본문을 파싱해 자료함과 AI 해석 입력으로 넘긴다 |
-| 2 | [AI 해석과 근거 상태](02-ai-evidence-state.md) | 파싱된 PDF 본문에서 예약 확정서 제시는 `근거 있음`, 체크인 시작 시각은 `근거 부족`으로 나온다 |
-| 3 | [자료함 채팅과 인라인 근거](03-library-chat-evidence.md) | 사용자가 물으면 PDF 근거가 붙은 답변과 PDF에 없는 값의 부족 상태가 채팅 화면에 보인다 |
-| 4 | [카드 초안과 직접 확인](04-card-draft-confirm.md) | 근거 있는 답변을 카드 초안으로 올리고, PDF에 없는 시각 값은 사용자가 직접 채운다 |
-| 5 | [대시보드와 현장 카드](05-dashboard-field-cards.md) | 확정한 카드만 대시보드에, 현장 저장한 카드만 현장 탭에 보인다 |
+| 1 | [Agoda PDF 파일 파싱](01-file-parsing.md) | 사용자가 Agoda 예약 확정 PDF를 넣고, 제품이 본문을 파싱해 자료함과 다음 source/evidence 입력으로 넘긴다 |
+| 2 | [Source unit과 근거 후보 검색](02-source-units-retrieval.md) | 파싱된 PDF 본문을 page/section/source unit으로 나누고, 체크인 질문에 쓸 candidate와 accepted source를 분리한다 |
+| 3 | [Evidence-backed fact와 상태](03-evidence-backed-facts.md) | accepted source에서 예약 확정서 제시는 `근거 있음`, accepted source가 없는 체크인 시작 시각은 `근거 부족` fact로 나온다 |
+| 4 | [자료함 채팅과 인라인 근거](04-library-chat-evidence.md) | 사용자가 물으면 PDF 근거가 붙은 답변과 accepted evidence가 없는 값의 부족 상태가 채팅 화면에 보인다 |
+| 5 | [카드 초안과 직접 확인](05-card-draft-confirm.md) | 근거 있는 답변을 카드 초안으로 올리고, 근거 부족 시각 값은 사용자가 직접 채운다 |
+| 6 | [대시보드와 현장 카드](06-dashboard-field-cards.md) | 확정한 카드만 대시보드에, 현장 저장한 카드만 현장 탭에 보인다 |
 
 ## 구현면 펼치기
 
 | 구현 요소 | 이번 장면에서 필요한 이유 | 현재 코드/문서 비교 | 처음 닫을 기준 |
 | --- | --- | --- | --- |
 | PDF 넣기 / 파싱 | 예약 확정 PDF가 제품의 시작점이어야 한다 | 01에서 client 업로드와 `apps/server/` PDF ingest를 연결했다 | PDF 선택/추가, 텍스트 추출, 자료함 표시, 질문 입력 연결을 닫는다 |
-| AI 해석 | PDF 본문에서 확인 가능한 항목과 없는 항목을 나눠야 한다 | 삭제한 `src/server/trip-facts/extractTripFacts.ts`는 late arrival 값을 고정으로 만들었다 | Python backend가 파싱된 본문에서 후보와 근거를 만든다. 본문에 없는 체크인 시작 시각은 만들지 않는다 |
-| 정규화 / 상태 언어 | 후보를 `근거 있음`, `근거 부족`, `확인 필요`로 나눠야 한다 | 삭제한 `src/server/trip-facts/normalizeTripFacts.ts`의 규칙은 02 이후 Python backend schema로 다시 잡는다 | 화면에 보일 상태 언어를 backend response 상태와 맞춘다 |
+| Source unit / retrieval | PDF 본문 전체가 아니라 어떤 원문 단위가 답의 근거인지 추적해야 한다 | 01은 material text를 저장했고, 아직 candidate와 accepted source 분리는 없다 | page/section/source unit을 만들고 체크인 질문에 대한 candidate와 accepted source를 분리한다 |
+| Evidence-backed fact | accepted source를 사용자-facing 후보와 상태로 바꿔야 한다 | 삭제한 `src/server/trip-facts/extractTripFacts.ts`는 late arrival 값을 고정으로 만들었다 | Python backend가 accepted source에서 `TripFact`와 `EvidenceRef`를 만든다. accepted source 없는 체크인 시작 시각은 만들지 않는다 |
+| 정규화 / 상태 언어 | 후보를 `근거 있음`, `근거 부족`, `확인 필요`로 나눠야 한다 | 삭제한 `src/server/trip-facts/normalizeTripFacts.ts`의 규칙은 03 이후 Python backend schema로 다시 잡는다 | 화면에 보일 상태 언어를 backend response 상태와 맞춘다 |
 | 채팅 답변 | 사용자가 전체 자료함에 묻고 답을 받아야 한다 | client에는 chat workspace shell과 empty draft panel이 있지만 실제 답변 흐름은 아직 닫혀 있지 않다 | 질문, 답변, 상태, 근거 snippet을 한 화면에서 보이게 한다 |
 | 인라인 근거 | `근거 있음` 답변은 PDF 본문 일부를 보여야 한다 | `EvidenceRef`는 artifact, locator, snippet을 가진다 | 처음은 자료명, page, snippet으로 충분하다 |
 | 카드 초안 / 대시보드 | 답변이 자동 확정되지 않고 사람이 검토해야 한다 | preview와 PRD는 CardDraft, DashboardCard 경계를 둔다 | 초안, 직접 확인, 확정, 현장 저장 흐름을 순서대로 잇는다 |
-| 민감정보 guard | PDF에는 예약번호, 고객명, 결제 카드, 주소, 연락처가 있다 | 현재 baseline은 민감정보 카드 제외 기준이 충분하지 않을 수 있다 | 민감 필드는 자동 카드 후보에서 제외하고 원문 확인 대상으로 둔다 |
+| 민감정보 guard | PDF에는 예약번호, 고객명, 결제 카드, 주소, 연락처가 있다 | 현재 baseline은 민감정보 카드 제외 기준이 충분하지 않을 수 있다 | 03에서는 민감 여부를 감지/flag하고, 05/06에서 자동 카드 반영을 막는다 |
 
-주의: 삭제한 `src/server/trip-facts/extractTripFacts.ts`의 고정값 코드는 late arrival 값을 만들었다. Agoda PDF-only 기준 제품 흐름에서는 본문에 없는 값을 근거로 쓰면 안 되며, Python backend 전환 중 유지하지 않는다.
+주의: 삭제한 `src/server/trip-facts/extractTripFacts.ts`의 고정값 코드는 late arrival 값을 만들었다. 현재 제품 흐름에서는 accepted source가 없는 값을 근거로 쓰면 안 되며, Python backend 전환 중 유지하지 않는다.
 
 ## Slice 후보
 
 | slice 후보 | 관통하는 구현면 | 실제로 닫는 product behavior | 범위를 넓힐 때 볼 것 |
 | --- | --- | --- | --- |
-| Agoda PDF에서 체크인 제시물 답변까지 | PDF 넣기 / 파싱 / AI 해석 / 정규화 / 채팅 / 인라인 근거 | 사용자가 PDF를 넣고 질문하면 예약 확정서 제시 안내가 `근거 있음`과 PDF snippet으로 보인다 | 계정 연결, 장기 저장, 더 많은 PDF |
-| 체크인 시작 시각 근거 부족 | PDF 넣기 / 파싱 / AI 해석 / 정규화 / 채팅 | PDF에 시각 값이 없으면 `15:00`을 만들지 않고 `근거 부족`으로 멈춘다 | Agoda HTML 메일 본문 companion source |
-| 민감정보 자동 카드 제외 | PDF 파싱 / AI 해석 / 카드 초안 | 예약번호, 고객명, 결제 카드, 연락처가 자동 카드 후보가 되지 않는다 | 민감정보 원문 확인 UX |
+| Agoda PDF에서 체크인 제시물 답변까지 | PDF 넣기 / 파싱 / source unit / retrieval / evidence-backed fact / 채팅 / 인라인 근거 | 사용자가 PDF를 넣고 질문하면 예약 확정서 제시 안내가 accepted source, `근거 있음`, PDF snippet으로 보인다 | 계정 연결, 장기 저장, 더 많은 PDF |
+| 체크인 시작 시각 accepted source 부재 처리 | PDF 넣기 / 파싱 / source unit / retrieval / evidence-backed fact / 채팅 | 체크인 시작 시각 source가 accepted되지 않으면 값을 만들지 않고 `근거 부족`으로 멈춘다 | Agoda HTML 메일 본문 companion source |
+| 민감정보 자동 카드 제외 | PDF 파싱 / source unit / evidence-backed fact / 카드 초안 | 예약번호, 고객명, 결제 카드, 연락처는 03에서 민감/확인 필요로 감지되고 05에서 자동 초안이 되지 않는다 | 민감정보 원문 확인 UX |
 | 근거 부족에서 직접 확인 카드로 | 채팅 / 카드 초안 / 대시보드 출처 | 사용자가 다른 원본에서 확인한 체크인 시작 시각을 채우면 `직접 확인`으로 오른다 | companion source를 근거로 승격 |
 | 취소/노쇼 정책 확인 | PDF 파싱 / 질문 라우팅 / 답변 | PDF의 취소/노쇼 안내를 별도 질문으로 확인한다 | 결제/환불 영역 전체 |
 
 ## 먼저 고를 slice
 
-먼저 고를 slice는 `Agoda PDF에서 체크인 제시물 답변까지 + 체크인 시작 시각 근거 부족`이다. 하나의 사용자 질문 안에서 `근거 있음`과 `근거 부족`을 같이 확인한다.
+먼저 고를 slice는 `Agoda PDF에서 체크인 제시물 답변까지 + 체크인 시작 시각 accepted source 부재 처리`다. 하나의 사용자 질문 안에서 `근거 있음`과 `근거 부족`을 같이 확인한다.
 
-이번 slice에서 닫는 구현면은 `PDF 선택/추가 -> PDF 텍스트 파싱 -> AI 해석 -> 상태 정규화 -> 채팅 답변 -> 인라인 근거`다. PDF 본문 없이 만든 답변은 이 흐름을 대신할 수 없다.
+이번 slice에서 닫는 구현면은 `PDF 선택/추가 -> PDF 텍스트 파싱 -> source unit/retrieval -> evidence-backed fact -> 상태 정규화 -> 채팅 답변 -> 인라인 근거`다. PDF 본문 없이 만든 답변이나, accepted source 없이 만든 `근거 있음`은 이 흐름을 대신할 수 없다.
 
 ## 이번 AC
 
 1. 사용자가 Agoda 예약 확정 PDF 하나를 넣을 수 있다.
 2. 제품은 PDF 본문을 읽고 자료함에 파싱 완료 상태로 보여준다.
-3. 사용자가 "체크인 때 뭘 보여줘야 해?"라고 물으면 답변은 예약 확정서 전자 사본 또는 인쇄본 제시를 말하고 `근거 있음`과 인라인 근거를 함께 보여준다.
-4. 사용자가 "체크인 시간은 몇 시야?"라고 물으면 PDF-only 기준으로 시작 시각이 없으므로 값을 만들지 않고 `근거 부족`으로 멈춘다.
-5. 예약번호, 고객명, 결제 카드, 숙소 연락처, 정확한 주소는 자동 카드 후보가 되지 않는다.
+3. 제품은 PDF 본문에서 체크인 질문에 관련된 source unit candidate와 accepted source를 구분한다.
+4. 사용자가 "체크인 때 뭘 보여줘야 해?"라고 물으면 답변은 예약 확정서 전자 사본 또는 인쇄본 제시를 말하고 `근거 있음`과 인라인 근거를 함께 보여준다.
+5. 사용자가 "체크인 시간은 몇 시야?"라고 물었을 때 accepted source가 없으면 값을 만들지 않고 `근거 부족`으로 멈춘다.
+6. 예약번호, 고객명, 결제 카드, 숙소 연락처, 정확한 주소는 자동 카드 후보가 되지 않는다.
 
 ## 확인 방법
 
 1. sanitized Agoda 예약 확정 PDF 또는 local-only private PDF를 업로드한다.
 2. 자료함에서 PDF 파싱 완료와 본문 일부를 확인한다.
-3. 채팅에서 "체크인 때 뭘 보여줘야 해? 체크인 시간은 몇 시야?"를 묻는다.
-4. 답변에 예약 확정서 제시 안내의 inline evidence가 붙고, 체크인 시작 시각은 `근거 부족`으로 남는지 본다.
-5. 자동 카드 후보에 예약번호, 고객명, 결제 카드, 숙소 연락처, 정확한 주소가 섞이지 않는지 본다.
+3. source unit과 accepted source가 PDF page/locator/snippet을 보존하는지 확인한다.
+4. 채팅에서 "체크인 때 뭘 보여줘야 해? 체크인 시간은 몇 시야?"를 묻는다.
+5. 답변에 예약 확정서 제시 안내의 inline evidence가 붙고, accepted source가 없는 항목은 `근거 부족`으로 남는지 본다.
+6. 자동 카드 후보에 예약번호, 고객명, 결제 카드, 숙소 연락처, 정확한 주소가 섞이지 않는지 본다.
 
 ## Placeholder 참고
 
@@ -144,5 +148,5 @@
 
 ## 남은 질문
 
-- Agoda HTML 확인 메일 본문을 두 번째 원본으로 추가해 체크인 시작 `15:00`, 체크아웃 `10:00`, 체크인 가능 마감 `01:00 AM`을 `근거 있음`으로 승격할지.
-- 4번 카드 초안과 5번 대시보드를 한 구현 턴에 같이 이을지.
+- Agoda HTML 확인 메일 본문을 두 번째 원본으로 추가해 시간 정보를 별도 source 근거로 다룰지.
+- 5번 카드 초안과 6번 대시보드를 한 구현 턴에 같이 이을지.

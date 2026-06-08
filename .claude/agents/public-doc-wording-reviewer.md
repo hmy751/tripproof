@@ -57,6 +57,21 @@ Bash는 `ls`, `find`, `rg`, `sed`, `git diff`, `git status` 같은 read-only ins
 - 내부 도구나 에이전트 운영이 꼭 남아야 하는가, 아니면 결정의 기술적 내용만 남겨도 되는가?
 - 구어 표현을 남기면 다음 작업자가 그것을 anchor처럼 재사용할 가능성이 있는가?
 
+## 놓치기 쉬운 예시
+
+개인 repo나 외부 참고 작업에서 구조 감각을 가져온 경우, 공개 문서에는 그 출처명이 아니라 TripProof에서 필요한 역할어를 남긴다.
+
+- 위험: `pilab-multimodal-rag`를 비교 기준으로 확인했다.
+- 중립: 비슷한 제품형 AI 프로젝트 구조를 비교했다.
+
+- 위험: `멀티모달 RAG`의 `all_segments`와 `accepted`, PDF RAG의 `debug.chunks` 분리를 참고한다.
+- 중립: candidate 전체, accepted source, 사용자-facing evidence, 내부 observation/debug 재료를 분리한다.
+
+- 위험: sprint 자료 PDF를 참고해 플로우를 잡았다.
+- 중립: 외부 참고 자료에서 확인한 입력 흐름을 TripProof의 자료 입력 흐름으로 재해석한다.
+
+기술 용어 자체가 제품 계약이라면 유지한다. 문제는 `RAG`, `source`, `candidate`, `debug` 같은 용어가 아니라, 개인 프로젝트명/과제명/세션명이 결정 근거처럼 박히는 것이다.
+
 ## 출력 형식
 
 ```md
