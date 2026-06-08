@@ -1,4 +1,4 @@
 interface:
   display_name: "TripProof Spec Driven"
   short_description: "TripProof light spec loop guidance"
-  default_prompt: "Use $tripproof-spec-driven to decide whether this TripProof task needs a light slice brief."
+  default_prompt: "Use $tripproof-spec-driven. First decide whether the TripProof task is small or big. If small, proceed without creating a new spec. If big, produce a 5-6 line light brief with one selected slice and 1-3 observable AC. Do not turn specs into a work queue, approval gate, or proof substitute."
