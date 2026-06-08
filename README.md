@@ -43,16 +43,22 @@ npm install
 uv sync
 ```
 
-backend와 client는 각각 실행한다.
+backend와 client를 함께 실행한다.
 
 ```sh
-npm run backend:dev
 npm run dev
+```
+
+각각 따로 띄울 수도 있다.
+
+```sh
+npm run server:dev
+npm run client:dev
 ```
 
 검증:
 
 ```sh
-npm run build
-npm run backend:test
+npm run client:build
+npm run server:test
 ```

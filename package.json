@@ -7,12 +7,17 @@
     "node": ">=24.16.0 <25"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "backend:dev": "PYTHONPATH=apps uv run uvicorn server.app:app --reload --reload-dir apps/server --host 127.0.0.1 --port 8000",
-    "backend:test": "uv run pytest",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
-    "preview": "vite preview --host 127.0.0.1"
+    "dev": "concurrently --kill-others-on-fail -n server,client -c blue,green \"npm:server:dev\" \"npm:client:dev\"",
+    "build": "npm run client:build",
+    "test": "npm run server:test",
+    "typecheck": "npm run client:typecheck",
+    "preview": "npm run client:preview",
+    "client:dev": "vite --host 127.0.0.1",
+    "client:build": "npm run client:typecheck && vite build",
+    "client:typecheck": "tsc --noEmit",
+    "client:preview": "vite preview --host 127.0.0.1",
+    "server:dev": "PYTHONPATH=apps uv run uvicorn server.app:app --reload --reload-dir apps/server --host 127.0.0.1 --port 8000",
+    "server:test": "uv run pytest"
   },
   "dependencies": {
     "lucide-react": "^0.560.0",
@@ -25,6 +30,7 @@
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^10.0.3",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"

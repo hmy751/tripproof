@@ -31,7 +31,8 @@ Agoda PDF 파일 파싱 slice에서 client-side PDF 파싱, TS normalizer, Pytho
 
 - `uv sync --frozen`
 - `uv run pytest`
-- `npm run build`
+- `npm run client:build`
+- `npm run server:test`
 
 ## 이번 결정 밖
 
