@@ -6,7 +6,7 @@
 
 ## 왜 지금
 
-02에서 source unit과 RAG index boundary가 준비되어도, 그것만으로 제품 답변이 되지는 않는다. 이번 단계는 질문이나 extraction target으로 retrieval candidate를 찾고, source unit 원문으로 grounding한 뒤 `TripFact`, `EvidenceRef`, `EvidenceState`를 만드는 상태 계약을 닫는다.
+02에서 source unit과 RAG search boundary가 준비되어도, 그것만으로 제품 답변이 되지는 않는다. 이번 단계는 질문이나 extraction target으로 retrieval candidate를 찾고, source unit 원문으로 grounding한 뒤 `TripFact`, `EvidenceRef`, `EvidenceState`를 만드는 상태 계약을 닫는다.
 
 Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` fact는 source unit 원문 일부를 `EvidenceRef`로 붙일 수 있을 때만 나온다.
 
@@ -16,7 +16,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 
 ## Goal
 
-- evidence-backed fact 생성 입력은 02의 source unit과 index record, 그리고 질문 또는 extraction target을 받는다.
+- evidence-backed fact 생성 입력은 02의 source unit, embedding record, 그리고 질문 또는 extraction target을 받는다.
 - retrieval은 source unit 후보나 context pack을 만든다.
 - 체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해야 한다는 fact가 나온다.
 - 예약 확정서 제시 fact에는 실제 PDF 본문 일부가 `EvidenceRef`로 붙는다.
@@ -51,9 +51,9 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 
 ## 현재 코드에서 볼 곳
 
-- `apps/server/api/routes/questions.py`: 01 slice에서 파싱된 material text가 질문 API context로 전달된다.
+- `apps/server/api/routes/questions.py`: 02 slice에서 source unit 기반 excerpt와 locator/source unit id를 반환하는 smoke 경로가 있다. 03에서는 이 결과를 accepted evidence로 바로 쓰지 않는다.
 - `apps/server/materials/pdf.py`: PDF 본문 추출 경계.
-- `apps/server/retrieval/`: 02 source unit과 RAG index boundary, 03 retrieval 후보 경계가 들어갈 자리.
+- `apps/server/retrieval/`: 02 source unit과 RAG search boundary가 있다. 03에서는 retrieval 후보/context pack과 grounding 경계를 추가한다.
 - `apps/server/extraction/checkin.py`: 체크인 fact 생성이 들어갈 자리.
 - `apps/server/extraction/evidence.py`: `EvidenceRef` helper가 들어갈 자리.
 - `apps/server/extraction/sensitive.py`: 민감정보 감지/flag가 들어갈 자리.
@@ -63,7 +63,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 ## 기본 흐름
 
 ```text
-SourceUnit[] / IndexRecord[] / question or extraction target
+SourceUnit[] / EmbeddingRecord[] / question or extraction target
 -> RetrievalCandidate[] / ContextPack
 -> grounding against SourceUnit.text
 -> TripFact(label, value, evidenceState, evidence, sensitive?)

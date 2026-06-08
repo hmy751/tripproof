@@ -41,3 +41,8 @@
 
 - 바뀐 것: root에 떨어져 있던 `client/`, `server/`를 `apps/client/`, `apps/server/`로 묶었다. Python import package 이름은 `server.*`를 유지하고, 실행과 테스트에서 `PYTHONPATH=apps`로 위치를 연결한다.
 - 남은 관찰: `apps/`는 실행 단위 묶음이고, `eval/`, `fixtures/`, `docs/`는 product를 관찰하거나 설명하는 바깥 레이어로 root에 남긴다.
+
+## 2026-06-09 - 02 source unit / embedding boundary
+
+- 바뀐 것: ready material 생성 시 `[page N]` 마커를 page locator가 있는 `SourceUnit`으로 나누고, 각 source unit에 pending `EmbeddingRecord`를 붙인다. `IndexRecord`는 두지 않고 lexical 검색용 text는 `SourceUnit.searchText`로 둔다. local Ollama profile(`nomic-embed-text-v2-moe`, 768 dimensions)은 기본값으로 잡되, 실제 vector 생성은 `TRIPPROOF_EMBEDDING_AUTO_GENERATE=1`일 때만 수행한다. 질문 API smoke 경로는 `excerpt`, `excerptLocator`, `excerptSourceUnitId`를 반환한다.
+- 남은 관찰: Supabase adapter/schema, stable source unit id, 실제 Ollama 호출 검증, 03의 `RetrievalCandidate`/`EvidenceRef`/`TripFact` 경계를 다음에 닫아야 한다. 02 검색 결과는 accepted evidence가 아니다.
