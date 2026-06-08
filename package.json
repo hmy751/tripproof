@@ -8,11 +8,11 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "backend:dev": "uv run uvicorn server.app:app --reload --host 127.0.0.1 --port 8000",
+    "backend:test": "uv run pytest",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview --host 127.0.0.1",
-    "ai:demo": "PYTHONPATH=src/ai python3 -m tripproof_ai < src/ai/examples/accommodation_checkin.json",
-    "ai:test": "PYTHONPATH=src/ai python3 -m unittest discover -s src/ai/tests"
+    "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
     "lucide-react": "^0.560.0",

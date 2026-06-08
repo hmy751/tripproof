@@ -1,5 +1,7 @@
 # React client와 Python AI 경계
 
+> 상태: 2026-06-08 `docs/decisions/2026-06-08-python-backend-uv-ingest-boundary.md` 결정으로 대체됨. 현재 구현은 root `server/` Python backend와 `uv` lockfile을 기준으로 하며, `src/ai`, `src/server/trip-facts`, `src/shared`는 삭제했다.
+
 ## 결정
 
 client는 React/Vite web app으로 전환한다. 기존 정적 화면의 상단 상태, 자료함 sidebar, 확인 탭, 원문 근거 표, 저장 카드 흐름은 버리지 않고 React state로 옮긴다.

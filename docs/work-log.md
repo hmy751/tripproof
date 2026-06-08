@@ -26,3 +26,8 @@
 
 - 바뀐 것: active client entry를 `src/client/App.tsx`로 정리하고, 상단바·자료함 rail·확인 채팅·카드 초안·후보 rail·대시보드·현장 카드를 `src/client/components/`로 분리했다. Tailwind v4 Vite plugin과 CSS entry를 연결했고, 기존 대형 `styles.css`는 Tailwind import와 최소 base만 남겼다. 연결되지 않던 vanilla DOM `src/client/app.js`, 단일 파일 `TripProofApp.tsx`, mock 이름의 `demoTrip.ts`는 제거했다.
 - 남은 관찰: in-app Browser backend는 비어 있어 자동 클릭 검증은 대체 수단으로만 시도했다. Vite build와 데스크톱/모바일 Playwright screenshot으로 레이아웃은 확인했다. Node 20.18.1에서는 Vite가 20.19+ 또는 22.12+ 필요 경고를 내지만 build는 완료됐다.
+
+## 2026-06-08 - Agoda PDF 01 backend ingest / uv 전환
+
+- 바뀐 것: Python backend를 root `server/`로 두고 `uv`/`uv.lock` 기준으로 전환했다. `/api/materials`는 PDF를 받아 `pypdf`로 텍스트와 page count를 추출해 in-memory material로 저장하고, `/api/questions`는 ready material의 파싱 본문을 질문 context로 받는다. client는 PDF 선택/업로드/status 표시와 질문 API 호출을 맡는다. 기존 `src/ai`, `src/server/trip-facts`, `src/shared`는 호환층으로 남기지 않고 삭제했다. 관련 결정은 `docs/decisions/2026-06-08-python-backend-uv-ingest-boundary.md`.
+- 남은 관찰: 01은 답변 생성이 아니라 파싱 본문이 질문 입력으로 들어가는 데까지만 닫았다. 02에서 evidence state, 후보 생성, 민감정보 guard를 Python backend schema로 새로 잡아야 한다.

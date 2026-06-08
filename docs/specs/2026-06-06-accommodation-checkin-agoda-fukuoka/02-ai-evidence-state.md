@@ -30,7 +30,7 @@
 - 외부 LLM을 붙일 때도 같은 입력과 출력 기준을 유지한다.
 - `EvidenceRef.snippet`은 실제 파싱된 PDF 본문 일부여야 한다.
 - `EvidenceRef.locator`는 처음에는 파일명과 page 정도로 충분하다.
-- 기존 `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다. Python backend 전환 중 유지하지 않는다.
+- 삭제한 `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다. Python backend 전환 중 유지하지 않는다.
 
 ## Non-goals
 
@@ -42,10 +42,10 @@
 
 ## 현재 코드에서 볼 곳
 
-- 기존 `src/server/trip-facts/extractTripFacts.ts`: 현재 late arrival 값을 고정으로 만든다. 이 장면에서는 PDF 본문에 없는 값을 만들지 않게 Python backend로 대체한다.
-- 기존 `src/server/trip-facts/normalizeTripFacts.ts`: 근거가 없으면 `missing`으로 둘 수 있다. 이 규칙은 Python backend로 옮긴다.
-- 기존 `src/ai/examples/accommodation_checkin.json`: 현재 text fixture 중심이라 PDF 파싱 본문 기준과 다를 수 있다.
-- 기존 `src/ai/tests/test_baseline.py`: late arrival 값이 있다고 기대하는 테스트를 PDF-only 기준으로 다시 본다.
+- `server/app.py`: 01 slice에서 파싱된 material text가 질문 API context로 전달된다.
+- `server/ingest/pdf.py`: PDF 본문 추출 경계.
+- `server/models.py`: backend API 응답 스키마.
+- 삭제된 `src/server/trip-facts`, `src/shared`, `src/ai`의 고정값/fixture 기준은 유지하지 않는다.
 
 ## 이번 AC
 

@@ -1,6 +1,6 @@
 # 2026-05-29 - Product와 AI 디렉토리 경계
 
-> 상태: 2026-06-03 `docs/decisions/2026-06-03-react-client-python-ai-boundary.md` 결정으로 대체됨. 현재 구조는 Python 후보 생성 `src/ai/`, TS product 정규화 `src/server/trip-facts/`, 공유 계약 `src/shared/`를 기준으로 한다.
+> 상태: 2026-06-08 `docs/decisions/2026-06-08-python-backend-uv-ingest-boundary.md` 결정으로 대체됨. 현재 구조는 React client `src/client/`와 Python backend `server/`를 기준으로 한다.
 
 ## 맥락
 

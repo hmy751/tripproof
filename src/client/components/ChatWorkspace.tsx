@@ -54,7 +54,13 @@ export function ChatWorkspace({
                     : "border-slate-200 bg-white text-slate-700",
                 )}
               >
-                {message.text}
+                <div>{message.text}</div>
+                {message.meta ? <div className="mt-2 text-xs font-medium text-slate-500">{message.meta}</div> : null}
+                {message.excerpt ? (
+                  <blockquote className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                    {message.excerpt}
+                  </blockquote>
+                ) : null}
               </div>
             </div>
           ),
