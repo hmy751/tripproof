@@ -1,6 +1,6 @@
 # React client와 Python AI 경계
 
-> 상태: 2026-06-08 `docs/decisions/2026-06-08-python-backend-uv-ingest-boundary.md` 결정으로 대체됨. 현재 구현은 root `server/` Python backend와 `uv` lockfile을 기준으로 하며, `src/ai`, `src/server/trip-facts`, `src/shared`는 삭제했다.
+> 상태: 2026-06-08 `docs/decisions/2026-06-08-python-backend-uv-ingest-boundary.md` 결정으로 대체됨. 현재 구현은 root `client/`, root `server/`, `uv` lockfile을 기준으로 하며, `src/ai`, `src/server/trip-facts`, `src/shared`는 삭제했다.
 
 ## 결정
 

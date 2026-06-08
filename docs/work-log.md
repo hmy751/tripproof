@@ -31,3 +31,8 @@
 
 - 바뀐 것: Python backend를 root `server/`로 두고 `uv`/`uv.lock` 기준으로 전환했다. `/api/materials`는 PDF를 받아 `pypdf`로 텍스트와 page count를 추출해 in-memory material로 저장하고, `/api/questions`는 ready material의 파싱 본문을 질문 context로 받는다. client는 PDF 선택/업로드/status 표시와 질문 API 호출을 맡는다. 기존 `src/ai`, `src/server/trip-facts`, `src/shared`는 호환층으로 남기지 않고 삭제했다. 관련 결정은 `docs/decisions/2026-06-08-python-backend-uv-ingest-boundary.md`.
 - 남은 관찰: 01은 답변 생성이 아니라 파싱 본문이 질문 입력으로 들어가는 데까지만 닫았다. 02에서 evidence state, 후보 생성, 민감정보 guard를 Python backend schema로 새로 잡아야 한다.
+
+## 2026-06-08 - root client/server 구조와 backend 확장 골격
+
+- 바뀐 것: 실행 단위 기준에 맞춰 React app을 root `client/`로 옮겼고, Python backend를 `api`, `core`, `schemas`, `materials`, `retrieval`, `extraction`, `llm`, `cards` 축으로 나눴다. `retrieval`에는 chunk/search 골격을 두고, 질문 API의 excerpt 선택을 retrieval helper로 옮겼다. `extraction`은 제품 판단, `llm`은 provider 호출 인프라로 분리했다.
+- 남은 관찰: 실제 LLM provider와 extraction 구현은 아직 열지 않았다. 다음 제품 slice에서 `server/extraction/checkin.py`가 parsed material text를 받아 evidence-backed 후보를 만들도록 닫는다.
