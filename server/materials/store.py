@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
-from server.models import Material, MaterialStatus
+from server.schemas.materials import Material, MaterialStatus
 
 
 @dataclass(frozen=True)
