@@ -3,15 +3,15 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: "client",
+  root: "apps/client",
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:8000",
+      "^/api/(health|materials|questions)(/.*)?$": "http://127.0.0.1:8000",
     },
   },
   build: {
-    outDir: "../dist/client",
+    outDir: "../../dist/client",
     emptyOutDir: true,
   },
 });

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "backend:dev": "uv run uvicorn server.app:app --reload --host 127.0.0.1 --port 8000",
+    "backend:dev": "PYTHONPATH=apps uv run uvicorn server.app:app --reload --reload-dir apps/server --host 127.0.0.1 --port 8000",
     "backend:test": "uv run pytest",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
