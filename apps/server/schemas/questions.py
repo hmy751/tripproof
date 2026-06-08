@@ -22,3 +22,5 @@ class QuestionResponse(ApiModel):
     page_count: int = Field(alias="pageCount")
     char_count: int = Field(alias="charCount")
     excerpt: str | None = None
+    excerpt_locator: str | None = Field(default=None, alias="excerptLocator")
+    excerpt_source_unit_id: str | None = Field(default=None, alias="excerptSourceUnitId")

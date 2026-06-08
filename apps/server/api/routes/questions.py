@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from server.api.deps import get_material_store
 from server.materials.store import MaterialStore
-from server.retrieval.search import select_excerpt
+from server.retrieval.search import select_source_excerpt
 from server.schemas.questions import QuestionRequest, QuestionResponse
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
@@ -31,11 +31,19 @@ def ask_question(
             page_count=0,
             char_count=0,
             excerpt=None,
+            excerpt_locator=None,
+            excerpt_source_unit_id=None,
         )
 
     page_count = sum(material.page_count for material in ready_materials)
     char_count = sum(len(material.text) for material in ready_materials)
-    excerpt = select_excerpt([material.text for material in ready_materials], question)
+    retrieval_records = store.retrieval_records(payload.material_ids)
+    excerpt_match = select_source_excerpt(
+        source_units=retrieval_records.source_units,
+        embedding_records=retrieval_records.embedding_records,
+        query=question,
+        embedding_provider=store.embedding_provider,
+    )
 
     return QuestionResponse(
         status="accepted",
@@ -44,5 +52,7 @@ def ask_question(
         material_count=len(ready_materials),
         page_count=page_count,
         char_count=char_count,
-        excerpt=excerpt,
+        excerpt=excerpt_match.excerpt if excerpt_match else None,
+        excerpt_locator=excerpt_match.source_unit.locator if excerpt_match else None,
+        excerpt_source_unit_id=excerpt_match.source_unit.id if excerpt_match else None,
     )

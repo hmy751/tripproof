@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
+from server.retrieval.chunking import build_source_units
+from server.retrieval.embeddings import (
+    EmbeddingProfile,
+    EmbeddingProvider,
+    build_embedding_records,
+    default_embedding_profile,
+)
+from server.retrieval.models import EmbeddingRecord, SourceUnit
+from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords, RetrievalRepository
 from server.schemas.materials import Material, MaterialStatus
 
 
@@ -17,6 +26,8 @@ class StoredMaterial:
     text: str
     preview: str | None
     error: str | None
+    source_units: list[SourceUnit]
+    embedding_records: list[EmbeddingRecord]
 
     def public(self) -> Material:
         return Material(
@@ -32,8 +43,23 @@ class StoredMaterial:
 
 
 class MaterialStore:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        embedding_provider: EmbeddingProvider | None = None,
+        embedding_profile: EmbeddingProfile | None = None,
+        embedding_auto_generate: bool = False,
+        retrieval_repository: RetrievalRepository | None = None,
+    ) -> None:
         self._materials: dict[str, StoredMaterial] = {}
+        self._embedding_provider = embedding_provider
+        self._embedding_profile = embedding_profile or default_embedding_profile()
+        self._embedding_auto_generate = embedding_auto_generate
+        self._retrieval_repository = retrieval_repository or InMemoryRetrievalRepository()
+
+    @property
+    def embedding_provider(self) -> EmbeddingProvider | None:
+        return self._embedding_provider
 
     def add_ready(
         self,
@@ -45,8 +71,20 @@ class MaterialStore:
         text: str,
         preview: str,
     ) -> Material:
+        material_id = _new_material_id()
+        source_units = build_source_units(material_id=material_id, file_name=file_name, text=text)
+        embedding_records = build_embedding_records(
+            source_units,
+            provider=self._embedding_provider,
+            profile=self._embedding_profile,
+            generate=self._embedding_auto_generate,
+        )
+        retrieval_records = RetrievalRecords(
+            source_units=source_units,
+            embedding_records=embedding_records,
+        )
         material = StoredMaterial(
-            id=_new_material_id(),
+            id=material_id,
             name=name,
             file_name=file_name,
             content_type=content_type,
@@ -55,8 +93,11 @@ class MaterialStore:
             text=text,
             preview=preview,
             error=None,
+            source_units=source_units,
+            embedding_records=embedding_records,
         )
         self._materials[material.id] = material
+        self._retrieval_repository.upsert_material_records(material_id=material.id, records=retrieval_records)
         return material.public()
 
     def add_failed(
@@ -77,6 +118,8 @@ class MaterialStore:
             text="",
             preview=None,
             error=error,
+            source_units=[],
+            embedding_records=[],
         )
         self._materials[material.id] = material
         return material.public()
@@ -92,8 +135,13 @@ class MaterialStore:
             if material.status == "ready" and (not requested or material.id in requested)
         ]
 
+    def retrieval_records(self, material_ids: list[str] | None = None) -> RetrievalRecords:
+        ready_material_ids = [material.id for material in self.ready_materials(material_ids)]
+        return self._retrieval_repository.records_for_materials(ready_material_ids)
+
     def clear(self) -> None:
         self._materials.clear()
+        self._retrieval_repository.clear()
 
 
 def _new_material_id() -> str:

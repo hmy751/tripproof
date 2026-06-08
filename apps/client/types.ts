@@ -28,4 +28,6 @@ export type QuestionResponse = {
   pageCount: number;
   charCount: number;
   excerpt?: string | null;
+  excerptLocator?: string | null;
+  excerptSourceUnitId?: string | null;
 };
