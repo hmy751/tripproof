@@ -236,11 +236,17 @@ def test_question_response_includes_evidence_backed_fact_candidates() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    facts = {fact["id"]: fact for fact in body["facts"]}
-    assert facts[BOOKING_CONFIRMATION_FACT_ID]["evidenceState"] == "supported"
-    assert facts[BOOKING_CONFIRMATION_FACT_ID]["evidence"][0]["snippet"]
-    assert facts[CHECKIN_START_TIME_FACT_ID]["evidenceState"] == "missing"
-    assert facts[CHECKIN_START_TIME_FACT_ID]["value"] is None
+    answer_items = {item["id"]: item for item in body["answer"]["items"]}
+    assert "확인한 내용과 확인되지 않은 항목" in body["answer"]["summary"]
+    assert answer_items[BOOKING_CONFIRMATION_FACT_ID]["evidenceState"] == "supported"
+    assert "예약 확정서" in answer_items[BOOKING_CONFIRMATION_FACT_ID]["body"]
+    assert answer_items[BOOKING_CONFIRMATION_FACT_ID]["evidence"][0]["snippet"]
+    assert answer_items[CHECKIN_START_TIME_FACT_ID]["evidenceState"] == "missing"
+    assert answer_items[CHECKIN_START_TIME_FACT_ID]["value"] is None
+    assert "체크인 시작 시각을 확인하지 못했습니다" in answer_items[CHECKIN_START_TIME_FACT_ID]["body"]
+    assert answer_items[CHECKIN_START_TIME_FACT_ID]["evidence"] == []
+    assert "excerpt" not in body
+    assert "facts" not in body
 
 
 def test_ollama_checkin_proposer_maps_structured_json_to_grounded_fact() -> None:
@@ -269,8 +275,30 @@ def test_ollama_checkin_proposer_maps_structured_json_to_grounded_fact() -> None
     assert fact.evidence[0].snippet in unit.text
 
 
-def test_ollama_checkin_proposer_uses_source_unit_when_booking_snippet_is_paraphrased() -> None:
-    unit = _source_unit("체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해 주세요.")
+def test_ollama_checkin_proposer_repairs_paraphrased_booking_snippet_to_narrow_evidence() -> None:
+    unit = _source_unit(
+        "Booking ID : [BOOKING_ID]\n"
+        "Client : [GUEST_NAME]\n"
+        "Booking Confirmation\n"
+        "체크인\n"
+        "시\n"
+        "고객님의\n"
+        "예약\n"
+        "확정서\n"
+        "(\n"
+        "전자\n"
+        "사본\n"
+        "또는\n"
+        "인쇄본\n"
+        ")\n"
+        "를\n"
+        "제시해\n"
+        "주시기\n"
+        "바랍니다\n"
+        ".\n"
+        "Address : [EXACT_ADDRESS]\n"
+        "Property Contact Number : [PHONE_NUMBER]"
+    )
     context = _context_for_target(target_id=BOOKING_CONFIRMATION_FACT_ID, unit=unit)
     proposer = OllamaCheckinFactProposer(
         client=_FakeJsonClient(
@@ -291,7 +319,12 @@ def test_ollama_checkin_proposer_uses_source_unit_when_booking_snippet_is_paraph
     fact = validate_fact_proposal(target=BOOKING_CONFIRMATION_TARGET, context=context, proposal=proposal)
 
     assert fact.evidence_state == EvidenceState.SUPPORTED
-    assert fact.evidence[0].snippet == unit.text
+    assert fact.evidence[0].snippet != unit.text
+    assert "예약\n확정서" in fact.evidence[0].snippet
+    assert "[BOOKING_ID]" not in fact.evidence[0].snippet
+    assert "[GUEST_NAME]" not in fact.evidence[0].snippet
+    assert "[EXACT_ADDRESS]" not in fact.evidence[0].snippet
+    assert "[PHONE_NUMBER]" not in fact.evidence[0].snippet
 
 
 def test_ollama_checkin_proposer_returns_missing_when_client_fails() -> None:

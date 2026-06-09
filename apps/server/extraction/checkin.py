@@ -250,12 +250,16 @@ def _repair_supported_proposal(
     if target.id != BOOKING_CONFIRMATION_FACT_ID or not source_unit.text.strip():
         return proposal
 
+    narrowed_snippet = _booking_confirmation_evidence_snippet(source_unit.text)
+    if narrowed_snippet is None:
+        return proposal
+
     return FactProposal(
         target_id=proposal.target_id,
         label=proposal.label,
         value=proposal.value,
         evidence_state=proposal.evidence_state,
-        evidence_snippet=source_unit.text.strip(),
+        evidence_snippet=narrowed_snippet,
         source_unit_id=proposal.source_unit_id,
         sensitive=proposal.sensitive,
         reason=proposal.reason,
@@ -267,6 +271,114 @@ def _source_unit_by_id(*, context: ContextPack, source_unit_id: str) -> SourceUn
         if candidate.source_unit.id == source_unit_id:
             return candidate.source_unit
     return None
+
+
+def _booking_confirmation_evidence_snippet(source_text: str) -> str | None:
+    normalized_source, source_positions = _normalize_with_positions(source_text)
+    if not normalized_source:
+        return None
+
+    anchor_start = _first_phrase_index(
+        normalized_source,
+        (
+            "예약 확정서",
+            "booking confirmation",
+            "reservation confirmation",
+        ),
+    )
+    if anchor_start < 0:
+        return None
+
+    snippet_start = _nearest_phrase_index_before(
+        normalized_source,
+        anchor_start,
+        (
+            "체크인 시",
+            "check-in",
+            "check in",
+        ),
+        max_distance=120,
+    )
+    if snippet_start < 0:
+        snippet_start = anchor_start
+
+    snippet_end = _first_phrase_end_after(
+        normalized_source,
+        anchor_start,
+        (
+            "바랍니다",
+            "주세요",
+            ".",
+        ),
+    )
+    if snippet_end < 0:
+        snippet_end = min(len(normalized_source), anchor_start + 180)
+
+    if snippet_start >= snippet_end:
+        return None
+
+    original_start = source_positions[snippet_start]
+    original_end = source_positions[snippet_end - 1] + 1
+    return source_text[original_start:original_end].strip()
+
+
+def _first_phrase_index(value: str, phrases: tuple[str, ...]) -> int:
+    lowered = value.lower()
+    for phrase in phrases:
+        index = lowered.find(phrase.lower())
+        if index >= 0:
+            return index
+    return -1
+
+
+def _nearest_phrase_index_before(
+    value: str,
+    anchor_start: int,
+    phrases: tuple[str, ...],
+    *,
+    max_distance: int,
+) -> int:
+    lowered = value.lower()
+    nearest = -1
+    for phrase in phrases:
+        index = lowered.rfind(phrase.lower(), 0, anchor_start + 1)
+        if index >= 0 and anchor_start - index <= max_distance and index > nearest:
+            nearest = index
+    return nearest
+
+
+def _first_phrase_end_after(value: str, anchor_start: int, phrases: tuple[str, ...]) -> int:
+    lowered = value.lower()
+    ends = [
+        index + len(phrase)
+        for phrase in phrases
+        if (index := lowered.find(phrase.lower(), anchor_start)) >= 0
+    ]
+    return min(ends) if ends else -1
+
+
+def _normalize_with_positions(value: str) -> tuple[str, list[int]]:
+    chars: list[str] = []
+    positions: list[int] = []
+    previous_was_space = False
+
+    for index, char in enumerate(value):
+        if char.isspace():
+            if chars and not previous_was_space:
+                chars.append(" ")
+                positions.append(index)
+            previous_was_space = True
+            continue
+
+        chars.append(char)
+        positions.append(index)
+        previous_was_space = False
+
+    if chars and chars[-1] == " ":
+        chars.pop()
+        positions.pop()
+
+    return "".join(chars), positions
 
 
 def _evidence_state_from_value(value: object) -> EvidenceState | None:

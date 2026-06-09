@@ -67,3 +67,8 @@
 
 - 바뀐 것: `.claude/skills/spec-driven/SKILL.md`를 runtime core로 줄이고, 자세한 읽기 순서와 calibration은 `docs/specs/README.md`가 소유하도록 정리했다. 배경, 보존한 guardrail, 복구 기준은 `docs/implementation-notes/2026-06-09-spec-driven-skill-readme-refactor/`에 남겼다.
 - 남은 관찰: 이 개편이 실제 작업에서 제품 흐름 손실, fixture/seed 값 맞추기, raw output을 product result로 보는 drift, 또는 새로운 gate화를 만들면 먼저 작업 전 기준(`6adc709`)의 skill / README 복구를 검토한다.
+
+## 2026-06-09 - 04 library chat ChatAnswer 연결
+
+- 바뀐 것: `/api/questions`의 기본 product 응답을 `ChatAnswer` 중심으로 정리하고, client 채팅이 답변 항목별 `근거 있음`/`근거 부족` 상태와 inline evidence snippet을 보여주도록 연결했다. retrieval smoke용 excerpt, raw fact candidate, proposer reason은 기본 응답에서 제거했다.
+- 남은 관찰: 현재 Agoda PDF는 체크인 날짜만 담고 체크인 시작 시각은 담지 않아 `근거 부족`이 맞다. companion source가 추가되면 같은 answer 계약 안에서 체크인 시작 시각을 `근거 있음`으로 바꿀 수 있다. evidence snippet fallback은 source unit 전체가 아니라 해당 근거 주변으로 좁혀야 한다.

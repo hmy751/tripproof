@@ -78,8 +78,7 @@ export function App() {
             response.status === "accepted"
               ? `자료 ${response.materialCount}개 · ${response.pageCount}쪽 · ${response.charCount.toLocaleString()}자`
               : undefined,
-          excerpt: response.excerpt,
-          facts: response.facts,
+          answer: response.answer,
           tone: response.status === "blocked" ? "blocked" : "neutral",
         },
       ]);

@@ -1,6 +1,6 @@
 # 숙소 체크인 04 - 자료함 채팅과 인라인 근거
 
-상태: sub-spec draft.
+상태: `ChatAnswer` 응답 계약과 채팅 인라인 근거 렌더링을 연결함.
 
 부모: [숙소 체크인 확인 - Agoda 후쿠오카 예약 PDF](index.md)
 
@@ -27,12 +27,13 @@
 
 ## Rules
 
-- `apps/client/App.tsx`가 materials, parsed body, answer state를 연결한다.
+- `apps/client/App.tsx`는 ready material id와 질문을 보내고, 서버가 만든 answer state를 채팅 메시지에 연결한다.
 - `ChatWorkspace`는 단순 문자열 답변만이 아니라 항목별 상태와 근거를 표시할 수 있어야 한다.
 - 한 답변 안에서 `근거 있음`과 `근거 부족` 항목을 나눠 보여준다.
 - 답변의 근거 snippet은 03에서 받은 `EvidenceRef`를 사용한다.
 - chat은 source unit이나 retrieval 후보를 새로 꾸미지 않는다. 03에서 만들어진 accepted evidence와 state를 소비한다.
 - accepted evidence가 없는 값을 말할 때는 현재 등록된 자료에서 근거를 찾지 못했다는 식으로 원본 범위를 드러낸다.
+- `/api/questions`의 기본 product 응답은 `answer`를 중심으로 둔다. retrieval smoke용 excerpt나 raw fact candidate/debug reason을 사용자-facing 응답처럼 함께 노출하지 않는다.
 
 ## Non-goals
 
@@ -44,9 +45,20 @@
 
 ## 현재 코드에서 볼 곳
 
-- `apps/client/App.tsx`: materials와 질문 상태를 연결한다.
-- `apps/client/components/ChatWorkspace.tsx`: 현재 assistant 메시지는 단순 text 중심이다.
-- `apps/client/types.ts`: 근거와 상태가 붙은 답변을 표현할 수 있을지 확인이 필요하다.
+- `apps/server/schemas/answers.py`: `ChatAnswer`와 항목별 상태/근거 응답 계약.
+- `apps/server/answers/checkin.py`: 03의 fact candidate를 사용자-facing answer item으로 바꾼다.
+- `apps/server/api/routes/questions.py`: `/api/questions`가 ready material, fact candidate, `ChatAnswer`를 연결한다.
+- `apps/client/App.tsx`: 질문 응답의 `answer`를 assistant message에 싣는다.
+- `apps/client/components/ChatWorkspace.tsx`: 답변 항목, 상태 pill, inline evidence snippet을 렌더링한다.
+- `apps/client/types.ts`: client의 `QuestionResponse`와 `ChatAnswer` 타입.
+
+## 현재 구현 관찰
+
+- 예약 확정서 제시 fact가 `supported`이면 답변 항목은 `근거 있음`과 함께 source unit 원문에서 좁힌 evidence snippet을 보여준다.
+- 체크인 시작 시각 fact가 `missing`이면 값을 만들지 않고 현재 등록된 자료에서 확인하지 못했다고 표현한다.
+- LLM/proposer가 예약 확정서 근거 문장을 의역해도 source unit 전체를 evidence로 보여주지 않고, 예약 확정서 제시 주변 문장으로 좁힌다.
+- 현재 PDF에는 체크인 날짜는 있지만 체크인 시작 시각은 없어 `근거 부족`이 맞다. companion source가 추가되면 같은 `ChatAnswer` 계약 안에서 `근거 있음`으로 바뀔 수 있다.
+- 기본 `/api/questions` 응답은 `answer` 중심이고, 02의 `excerpt`와 03의 raw `facts`는 product 응답에 함께 싣지 않는다.
 
 ## 이번 AC
 
@@ -60,4 +72,4 @@
 
 - 근거를 항상 펼쳐 보일지, 접었다 펼치는 UI로 둘지.
 - 한 질문 안에서 두 항목을 한 답변 카드로 보여줄지, 항목별 작은 블록으로 나눌지.
-- 현재 source 범위를 사용자에게 얼마나 짧게 표시할지.
+- `facts[]`, retrieval excerpt, proposer reason 같은 debug/raw 응답을 별도 개발자용 endpoint나 mode로 다시 열지 여부.

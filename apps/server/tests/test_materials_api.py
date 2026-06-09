@@ -47,7 +47,7 @@ def test_upload_blank_pdf_returns_failed_material() -> None:
     assert material["error"] == "텍스트를 추출할 수 없는 PDF입니다."
 
 
-def test_question_uses_ready_material_text_context() -> None:
+def test_question_returns_chat_answer_for_ready_materials() -> None:
     client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
     upload = client.post(
         "/api/materials",
@@ -69,9 +69,13 @@ def test_question_uses_ready_material_text_context() -> None:
     assert body["materialIds"] == [material_id]
     assert body["materialCount"] == 1
     assert body["pageCount"] == 1
-    assert "Check-in starts at 15:00" in body["excerpt"]
-    assert body["excerptLocator"] == "booking.pdf p.1 u.1"
-    assert body["excerptSourceUnitId"].startswith("su_")
+    assert body["answer"]["summary"]
+    assert {item["id"] for item in body["answer"]["items"]} == {
+        "checkin_booking_confirmation",
+        "checkin_start_time",
+    }
+    assert "excerpt" not in body
+    assert "facts" not in body
 
 
 def test_ready_material_builds_source_units_and_pending_embeddings() -> None:

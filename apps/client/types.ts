@@ -16,8 +16,7 @@ export type ChatMessage = {
   role: "user" | "assistant";
   text: string;
   meta?: string;
-  excerpt?: string | null;
-  facts?: FactCandidate[];
+  answer?: ChatAnswer;
   tone?: "neutral" | "blocked";
 };
 
@@ -31,25 +30,26 @@ export type EvidenceRef = {
   snippet: string;
 };
 
-export type FactCandidate = {
+export type ChatAnswerItem = {
   id: string;
   label: string;
-  value?: string | null;
+  body: string;
   evidenceState: EvidenceState;
+  value?: string | null;
   evidence: EvidenceRef[];
-  sensitive: boolean;
-  reason?: string | null;
+};
+
+export type ChatAnswer = {
+  summary: string;
+  items: ChatAnswerItem[];
 };
 
 export type QuestionResponse = {
   status: "accepted" | "blocked";
   message: string;
+  answer: ChatAnswer;
   materialIds: string[];
   materialCount: number;
   pageCount: number;
   charCount: number;
-  excerpt?: string | null;
-  excerptLocator?: string | null;
-  excerptSourceUnitId?: string | null;
-  facts?: FactCandidate[];
 };

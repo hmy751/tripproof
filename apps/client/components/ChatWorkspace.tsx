@@ -1,6 +1,6 @@
-import { FileText, Send } from "lucide-react";
-import type { ChatMessage } from "../types";
-import { Button, Panel, PanelHeader, cx } from "./ui";
+import { AlertTriangle, CheckCircle2, FileText, HelpCircle, Send } from "lucide-react";
+import type { ChatAnswerItem, ChatMessage, EvidenceRef, EvidenceState } from "../types";
+import { Button, Panel, PanelHeader, Pill, cx } from "./ui";
 
 export function ChatWorkspace({
   materialCount,
@@ -55,12 +55,14 @@ export function ChatWorkspace({
                 )}
               >
                 <div>{message.text}</div>
-                {message.meta ? <div className="mt-2 text-xs font-medium text-slate-500">{message.meta}</div> : null}
-                {message.excerpt ? (
-                  <blockquote className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-                    {message.excerpt}
-                  </blockquote>
+                {message.answer?.items.length ? (
+                  <div className="mt-4 grid gap-4">
+                    {message.answer.items.map((item) => (
+                      <AnswerItem item={item} key={item.id} />
+                    ))}
+                  </div>
                 ) : null}
+                {message.meta ? <div className="mt-2 text-xs font-medium text-slate-500">{message.meta}</div> : null}
               </div>
             </div>
           ),
@@ -93,6 +95,45 @@ export function ChatWorkspace({
   );
 }
 
+function AnswerItem({ item }: { item: ChatAnswerItem }) {
+  return (
+    <article className="border-l-2 border-slate-200 pl-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <strong className="text-sm text-slate-950">{item.label}</strong>
+        <StatePill state={item.evidenceState} />
+      </div>
+      <p className="mt-1 text-sm leading-6 text-slate-700">{item.body}</p>
+      {item.evidence.length ? (
+        <div className="mt-3 grid gap-2">
+          {item.evidence.map((evidence) => (
+            <EvidenceQuote evidence={evidence} key={`${item.id}-${evidence.sourceUnitId}-${evidence.locator}`} />
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function StatePill({ state }: { state: EvidenceState }) {
+  const Icon = stateIcon(state);
+
+  return (
+    <Pill className={statePillClass(state)}>
+      <Icon size={13} />
+      {stateLabel(state)}
+    </Pill>
+  );
+}
+
+function EvidenceQuote({ evidence }: { evidence: EvidenceRef }) {
+  return (
+    <blockquote className="border-l-2 border-blue-200 bg-blue-50/60 px-3 py-2 text-xs leading-5 text-slate-700">
+      <div className="mb-1 font-semibold text-blue-800">{evidence.locator || evidence.label}</div>
+      <p>{formatEvidenceSnippet(evidence.snippet)}</p>
+    </blockquote>
+  );
+}
+
 function EmptyLibraryState() {
   return (
     <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-12 text-center">
@@ -103,4 +144,46 @@ function EmptyLibraryState() {
       </p>
     </div>
   );
+}
+
+function stateLabel(state: EvidenceState) {
+  switch (state) {
+    case "supported":
+      return "근거 있음";
+    case "needs_review":
+      return "확인 필요";
+    case "missing":
+      return "근거 부족";
+    case "conflict":
+      return "자료 충돌";
+  }
+}
+
+function statePillClass(state: EvidenceState) {
+  switch (state) {
+    case "supported":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "needs_review":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "missing":
+      return "border-slate-200 bg-slate-50 text-slate-600";
+    case "conflict":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+}
+
+function stateIcon(state: EvidenceState) {
+  switch (state) {
+    case "supported":
+      return CheckCircle2;
+    case "needs_review":
+    case "conflict":
+      return AlertTriangle;
+    case "missing":
+      return HelpCircle;
+  }
+}
+
+function formatEvidenceSnippet(snippet: string) {
+  return snippet.replace(/\s+/g, " ").trim();
 }
