@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from server.retrieval.models import SourceUnit
@@ -31,9 +30,6 @@ def chunk_text(text: str, *, chunk_size: int = 1200, overlap: int = 160) -> list
             break
         start = end - overlap
     return chunks
-
-
-_PAGE_MARKER_RE = re.compile(r"(?m)^\[page (?P<page>\d+)\]\s*$")
 
 
 def build_source_units(
@@ -75,19 +71,31 @@ def _iter_page_texts(text: str) -> list[tuple[int, str]]:
     if not stripped:
         return []
 
-    markers = list(_PAGE_MARKER_RE.finditer(stripped))
+    lines = stripped.splitlines()
+    markers = [
+        (index, page)
+        for index, line in enumerate(lines)
+        if (page := _page_marker_number(line)) is not None
+    ]
     if not markers:
         return [(1, stripped)]
 
     pages: list[tuple[int, str]] = []
-    for index, marker in enumerate(markers):
-        page = int(marker.group("page"))
-        body_start = marker.end()
-        body_end = markers[index + 1].start() if index + 1 < len(markers) else len(stripped)
-        page_text = stripped[body_start:body_end].strip()
+    for index, (line_index, page) in enumerate(markers):
+        body_start = line_index + 1
+        body_end = markers[index + 1][0] if index + 1 < len(markers) else len(lines)
+        page_text = "\n".join(lines[body_start:body_end]).strip()
         if page_text:
             pages.append((page, page_text))
     return pages
+
+
+def _page_marker_number(line: str) -> int | None:
+    stripped = line.strip()
+    if not stripped.startswith("[page ") or not stripped.endswith("]"):
+        return None
+    value = stripped.removeprefix("[page ").removesuffix("]").strip()
+    return int(value) if value.isdigit() else None
 
 
 def _locator(*, file_name: str, page: int, unit_index: int) -> str:
@@ -95,4 +103,4 @@ def _locator(*, file_name: str, page: int, unit_index: int) -> str:
 
 
 def _normalize_search_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    return " ".join(text.split())

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import sqrt
-import re
 from collections.abc import Iterable
 
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
@@ -30,11 +29,11 @@ class SourceUnitExcerpt:
 
 
 def select_excerpt(texts: Iterable[str], query: str, *, max_chars: int = 420) -> str | None:
-    normalized = re.sub(r"\s+", " ", "\n\n".join(texts)).strip()
+    normalized = _collapse_whitespace("\n\n".join(texts))
     if not normalized:
         return None
 
-    terms = [term.lower() for term in re.findall(r"[\w가-힣]+", query) if len(term) >= 2]
+    terms = _query_terms(query)
     chunks = chunk_text(normalized, chunk_size=max(max_chars, 800), overlap=120)
     if not chunks:
         return None
@@ -241,7 +240,26 @@ def _score_text(text: str, terms: list[str]) -> int:
 
 
 def _query_terms(query: str) -> list[str]:
-    return [term.lower() for term in re.findall(r"[\w가-힣]+", query) if len(term) >= 2]
+    terms: list[str] = []
+    current: list[str] = []
+    for char in query.lower():
+        if char.isalnum() or char == "_":
+            current.append(char)
+            continue
+        if current:
+            term = "".join(current)
+            if len(term) >= 2:
+                terms.append(term)
+            current = []
+    if current:
+        term = "".join(current)
+        if len(term) >= 2:
+            terms.append(term)
+    return terms
+
+
+def _collapse_whitespace(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _query_vector(

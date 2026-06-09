@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from enum import StrEnum
 from collections.abc import Iterable
@@ -25,14 +24,14 @@ class SensitiveFinding:
     locator: str
 
 
-_SENSITIVE_PATTERNS: tuple[tuple[SensitiveKind, re.Pattern[str]], ...] = (
-    (SensitiveKind.BOOKING_ID, re.compile(r"\bbooking\s*id\b|예약\s*번호", re.IGNORECASE)),
-    (SensitiveKind.BOOKING_REFERENCE, re.compile(r"\bbooking\s*reference\b|예약\s*참조", re.IGNORECASE)),
-    (SensitiveKind.GUEST_NAME, re.compile(r"\b(client|guest)\b|고객명|투숙객", re.IGNORECASE)),
-    (SensitiveKind.MEMBER_ID, re.compile(r"\bmember\s*id\b|회원\s*id", re.IGNORECASE)),
-    (SensitiveKind.PAYMENT_CARD, re.compile(r"\b(mastercard|visa|card)\b|신용\s*카드|카드\s*번호", re.IGNORECASE)),
-    (SensitiveKind.PROPERTY_CONTACT, re.compile(r"\b(contact|phone)\b|연락처", re.IGNORECASE)),
-    (SensitiveKind.EXACT_ADDRESS, re.compile(r"\baddress\b|주소", re.IGNORECASE)),
+_SENSITIVE_RULES: tuple[tuple[SensitiveKind, tuple[tuple[str, ...], ...], tuple[str, ...]], ...] = (
+    (SensitiveKind.BOOKING_ID, (("booking", "id"),), ("예약번호",)),
+    (SensitiveKind.BOOKING_REFERENCE, (("booking", "reference"),), ("예약참조",)),
+    (SensitiveKind.GUEST_NAME, (("client",), ("guest",)), ("고객명", "투숙객")),
+    (SensitiveKind.MEMBER_ID, (("member", "id"),), ("회원id",)),
+    (SensitiveKind.PAYMENT_CARD, (("mastercard",), ("visa",), ("card",)), ("신용카드", "카드번호")),
+    (SensitiveKind.PROPERTY_CONTACT, (("contact",), ("phone",)), ("연락처",)),
+    (SensitiveKind.EXACT_ADDRESS, (("address",),), ("주소",)),
 )
 
 
@@ -41,8 +40,15 @@ def detect_sensitive_findings(source_units: Iterable[SourceUnit]) -> list[Sensit
     seen: set[tuple[SensitiveKind, str]] = set()
 
     for unit in source_units:
-        for kind, pattern in _SENSITIVE_PATTERNS:
-            if not pattern.search(unit.text):
+        normalized = _normalize_text(unit.text)
+        tokens = _ascii_word_tokens(unit.text)
+        for kind, token_sequences, compact_phrases in _SENSITIVE_RULES:
+            if not _contains_sensitive_marker(
+                normalized=normalized,
+                tokens=tokens,
+                token_sequences=token_sequences,
+                compact_phrases=compact_phrases,
+            ):
                 continue
             key = (kind, unit.id)
             if key in seen:
@@ -57,3 +63,40 @@ def detect_sensitive_findings(source_units: Iterable[SourceUnit]) -> list[Sensit
             )
 
     return findings
+
+
+def _contains_sensitive_marker(
+    *,
+    normalized: str,
+    tokens: list[str],
+    token_sequences: tuple[tuple[str, ...], ...],
+    compact_phrases: tuple[str, ...],
+) -> bool:
+    return any(phrase in normalized for phrase in compact_phrases) or any(
+        _contains_token_sequence(tokens=tokens, sequence=sequence) for sequence in token_sequences
+    )
+
+
+def _normalize_text(value: str) -> str:
+    return "".join(value.lower().split())
+
+
+def _ascii_word_tokens(value: str) -> list[str]:
+    tokens: list[str] = []
+    current: list[str] = []
+    for char in value.lower():
+        if char.isascii() and char.isalnum():
+            current.append(char)
+            continue
+        if current:
+            tokens.append("".join(current))
+            current = []
+    if current:
+        tokens.append("".join(current))
+    return tokens
+
+
+def _contains_token_sequence(*, tokens: list[str], sequence: tuple[str, ...]) -> bool:
+    if not sequence or len(sequence) > len(tokens):
+        return False
+    return any(tokens[index : index + len(sequence)] == list(sequence) for index in range(len(tokens)))

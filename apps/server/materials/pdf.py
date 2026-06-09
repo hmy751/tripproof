@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -54,10 +53,10 @@ def parse_pdf(raw: bytes) -> ParsedPdf:
 
 
 def _clean_text(text: str) -> str:
-    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in text.splitlines()]
+    lines = [" ".join(line.split()) for line in text.splitlines()]
     return "\n".join(line for line in lines if line).strip()
 
 
 def _preview(text: str) -> str:
-    single_line = re.sub(r"\s+", " ", text).strip()
+    single_line = " ".join(text.split())
     return single_line[:360]
