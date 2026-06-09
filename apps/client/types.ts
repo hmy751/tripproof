@@ -57,6 +57,22 @@ export type CardDraft = {
   evidence: EvidenceRef[];
 };
 
+export type DashboardCardSourceKind = CardDraftSourceKind;
+
+export type DashboardCard = {
+  id: string;
+  draftId: string;
+  answerItemId: string;
+  schedule: string;
+  category: string;
+  title: string;
+  value: string;
+  sourceKind: DashboardCardSourceKind;
+  evidenceState: EvidenceState;
+  evidence: EvidenceRef[];
+  fieldSavedAt?: string | null;
+};
+
 export type QuestionResponse = {
   status: "accepted" | "blocked";
   message: string;

@@ -2,26 +2,29 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "./api/http";
 import { fetchMaterials, uploadMaterial } from "./api/materials";
 import { askQuestion } from "./api/questions";
+import { canConfirmDraft, createDashboardCardFromDraft, markCardForField } from "./cards";
 import { createDraftFromAnswerItem, markDraftAsManual } from "./drafts";
 import { AppHeader } from "./components/AppHeader";
+import { CardCollectionPanel } from "./components/CardCollectionPanel";
 import { ChatWorkspace } from "./components/ChatWorkspace";
 import { DraftListPanel } from "./components/DraftListPanel";
 import { LeftRail } from "./components/LeftRail";
 import { RecommendationRail } from "./components/RecommendationRail";
-import { StaticEmptyView } from "./components/StaticEmptyView";
 import { ViewTabs } from "./components/ViewTabs";
-import type { CardDraft, ChatAnswerItem, ChatMessage, LibraryItem, View } from "./types";
+import type { CardDraft, ChatAnswerItem, ChatMessage, DashboardCard, LibraryItem, View } from "./types";
 
 export function App() {
   const [materials, setMaterials] = useState<LibraryItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [drafts, setDrafts] = useState<CardDraft[]>([]);
+  const [dashboardCards, setDashboardCards] = useState<DashboardCard[]>([]);
   const [activeView, setActiveView] = useState<View>("ask");
   const [question, setQuestion] = useState("");
   const [toast, setToast] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
   const readyMaterials = useMemo(() => materials.filter((material) => material.status === "ready"), [materials]);
+  const fieldCards = useMemo(() => dashboardCards.filter((card) => card.fieldSavedAt), [dashboardCards]);
 
   useEffect(() => {
     fetchMaterials()
@@ -122,6 +125,29 @@ export function App() {
     setDrafts((current) => current.filter((draft) => draft.id !== id));
   }
 
+  function confirmDraft(id: string) {
+    const draft = drafts.find((candidate) => candidate.id === id);
+    if (!draft) return;
+
+    if (!canConfirmDraft(draft)) {
+      flash("이름과 값을 입력해야 대시보드에 올릴 수 있습니다.");
+      return;
+    }
+
+    const card = createDashboardCardFromDraft({ draft, id: `card-${draft.id}` });
+    setDashboardCards((current) => {
+      if (current.some((candidate) => candidate.draftId === draft.id)) return current;
+      return [...current, card];
+    });
+    setDrafts((current) => current.filter((candidate) => candidate.id !== draft.id));
+    flash("대시보드에 올렸습니다.");
+  }
+
+  function saveCardForField(id: string) {
+    setDashboardCards((current) => current.map((card) => (card.id === id ? markCardForField(card) : card)));
+    flash("현장 카드에 저장했습니다.");
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 antialiased">
       <AppHeader materialCount={materials.length} />
@@ -149,6 +175,7 @@ export function App() {
               <DraftListPanel
                 drafts={drafts}
                 onClearDrafts={() => setDrafts([])}
+                onConfirmDraft={confirmDraft}
                 onRemoveDraft={removeDraft}
                 onUpdateDraft={updateDraft}
               />
@@ -156,17 +183,11 @@ export function App() {
           ) : null}
 
           {activeView === "board" ? (
-            <StaticEmptyView
-              description="원문에서 확인한 정보가 카드로 정리되면 여기에 모입니다."
-              title="대시보드가 비어 있습니다"
-            />
+            <CardCollectionPanel cards={dashboardCards} onSaveForField={saveCardForField} view="board" />
           ) : null}
 
           {activeView === "field" ? (
-            <StaticEmptyView
-              description="현장에서 다시 볼 정보만 따로 저장하면 여기에 모입니다."
-              title="현장 카드가 비어 있습니다"
-            />
+            <CardCollectionPanel cards={fieldCards} view="field" />
           ) : null}
         </section>
 

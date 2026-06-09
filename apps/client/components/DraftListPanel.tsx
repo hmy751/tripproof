@@ -1,15 +1,18 @@
-import { ClipboardList, FileCheck2, PencilLine, Trash2 } from "lucide-react";
+import { ClipboardList, FileCheck2, LayoutDashboard, PencilLine, Trash2 } from "lucide-react";
+import { canConfirmDraft } from "../cards";
 import type { CardDraft, EvidenceRef } from "../types";
 import { Button, Panel, PanelHeader, Pill } from "./ui";
 
 export function DraftListPanel({
   drafts,
   onClearDrafts,
+  onConfirmDraft,
   onRemoveDraft,
   onUpdateDraft,
 }: {
   drafts: CardDraft[];
   onClearDrafts: () => void;
+  onConfirmDraft: (id: string) => void;
   onRemoveDraft: (id: string) => void;
   onUpdateDraft: (id: string, field: "schedule" | "title" | "value", value: string) => void;
 }) {
@@ -39,6 +42,7 @@ export function DraftListPanel({
               <DraftCard
                 draft={draft}
                 key={draft.id}
+                onConfirm={() => onConfirmDraft(draft.id)}
                 onRemove={() => onRemoveDraft(draft.id)}
                 onUpdate={(field, value) => onUpdateDraft(draft.id, field, value)}
               />
@@ -57,21 +61,37 @@ export function DraftListPanel({
 
 function DraftCard({
   draft,
+  onConfirm,
   onRemove,
   onUpdate,
 }: {
   draft: CardDraft;
+  onConfirm: () => void;
   onRemove: () => void;
   onUpdate: (field: "schedule" | "title" | "value", value: string) => void;
 }) {
+  const canConfirm = canConfirmDraft(draft);
+
   return (
     <article className="rounded-md border border-slate-200 bg-white p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <SourcePill draft={draft} />
-        <Button aria-label="초안 삭제" onClick={onRemove} size="sm" variant="ghost">
-          <Trash2 size={15} />
-          삭제
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            disabled={!canConfirm}
+            onClick={onConfirm}
+            size="sm"
+            title={canConfirm ? undefined : "이름과 값을 입력하면 대시보드에 올릴 수 있습니다"}
+            variant="primary"
+          >
+            <LayoutDashboard size={15} />
+            대시보드에 올리기
+          </Button>
+          <Button aria-label="초안 삭제" onClick={onRemove} size="sm" variant="ghost">
+            <Trash2 size={15} />
+            삭제
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-[minmax(0,0.75fr)_minmax(0,0.9fr)_minmax(0,1.2fr)]">
