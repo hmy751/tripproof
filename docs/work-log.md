@@ -76,5 +76,16 @@
 ## 2026-06-09 - 04 library chat fixed target 제거
 
 - 바뀐 것: `/api/questions`가 더 이상 check-in fact target checklist를 채팅 답변처럼 돌리지 않고, 사용자 질문 자체를 retrieval query로 사용한 뒤 `LibraryChatAnswerComposer`가 source unit 후보에서 답변과 근거를 만들게 바꿨다. 03의 fact candidate 흐름은 카드/정형 후보로 이어질 수 있는 내부 재료로 남기고, 채팅의 사용자-facing 앞면에서는 제거했다.
-- 실행 관찰: 확인용 Agoda 예약 PDF를 실제 API에 넣어 확인했을 때, `체크인 날짜가 어떻게 돼?`는 `2025년 3월 9일`을 `근거 있음`으로 답하고, `체크인 시작 시각은 몇 시야?`는 날짜를 시간으로 승격하지 않고 `근거 부족`으로 답했다.
+- 실행 관찰: 확인용 Agoda 예약 PDF를 실제 API에 넣어 확인했을 때, 체크인 날짜 질문에는 PDF 원문에 있는 체크인 날짜를 `근거 있음`으로 답하고, 체크인 시작 시각 질문은 날짜를 시간으로 승격하지 않고 `근거 부족`으로 답했다.
 - 남은 관찰: 현재 answer composer는 grounding 실패 시 supported 답변을 내리지 않도록 막지만, 더 넓은 질문군에서는 답변 문장 품질과 source unit reranking을 계속 제품 화면 기준으로 봐야 한다.
+
+## 2026-06-09 - 05 카드 초안과 직접 확인
+
+- 바뀐 것: 채팅 답변 항목에서 `CardDraft`를 만들고, 확인 탭 아래에서 일정·이름·값을 편집할 수 있게 했다. `supported`이고 evidence가 있는 항목은 `근거 있음` 초안으로 값과 snippet을 보존하고, `missing`/`needs_review`/`conflict` 항목은 사용자가 `직접 확인으로 남기기`를 눌러 빈 값 초안으로 만든다. 초안의 일정·이름·값을 수정하면 출처가 `직접 확인`으로 바뀌고 evidence snippet은 제거된다.
+- 남은 관찰: 카드 초안은 대시보드에 자동 반영되지 않는다. 확정 카드와 현장 저장 흐름은 06에서 client state 기준으로 연결했다.
+
+## 2026-06-09 - 06 대시보드와 현장 카드
+
+- 바뀐 것: 초안에서 `대시보드에 올리기`를 눌렀을 때만 `DashboardCard`로 복사하고, 확정된 초안은 draft 목록에서 제거한다. 대시보드 카드는 `근거 있음`과 `직접 확인` 출처를 구분해 보여주며, `현장 저장`을 누른 카드만 현장 탭에 모인다.
+- 실행 확인: `npm run client:typecheck`, `npm run build`, `npm test`를 통과했다.
+- 남은 관찰: 현재는 client state MVP다. 서버 저장/동기화, 여러 일정·카테고리 편집, 오프라인 현장 패키지는 후속 제품 계약으로 남긴다.
