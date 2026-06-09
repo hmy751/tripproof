@@ -1,6 +1,6 @@
 # 숙소 체크인 03 - Retrieval과 Evidence-backed fact candidate
 
-상태: retrieval context 입력 경계 일부 구현, LLM fact proposer 전환 전.
+상태: Supabase vector retrieval context와 Ollama LLM fact proposer를 질문 route의 check-in candidate 생성 경로에 연결함.
 
 부모: [숙소 체크인 확인 - Agoda 후쿠오카 예약 PDF](index.md)
 
@@ -56,12 +56,12 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 - Agoda HTML 메일 본문 companion source 병합.
 - 카드 초안 생성이나 대시보드 반영.
 
-## 현재 코드에서 볼 곳
+## 관련 코드 위치
 
-- `apps/server/api/routes/questions.py`: source unit 기반 excerpt와 locator/source unit id를 반환하고, check-in fact candidate 생성을 호출한다. excerpt smoke 결과를 accepted evidence로 바로 쓰지 않는다.
+- `apps/server/api/routes/questions.py`: source unit 기반 excerpt와 locator/source unit id를 반환하고, check-in fact candidate 생성을 호출한다. excerpt 경로의 결과를 accepted evidence로 바로 쓰지 않는다.
 - `apps/server/materials/pdf.py`: PDF 본문 추출 경계.
 - `apps/server/retrieval/`: source unit, embedding record, retrieval repository, Supabase vector match, lexical fallback으로 `ContextPack` 후보를 만든다.
-- `apps/server/extraction/checkin.py`: 현재 check-in fact candidate 생성 경로가 있다. retrieval repository를 통해 context 후보를 받지만, fact proposal 자체는 아직 local proposer 기반이다.
+- `apps/server/extraction/checkin.py`: check-in fact candidate 생성 경로가 있다. retrieval repository를 통해 context 후보를 받고, Ollama JSON proposer가 fact proposal을 만든 뒤 validator가 grounding한다. 테스트에서는 deterministic proposer를 주입한다.
 - `apps/server/extraction/evidence.py`: proposer가 낸 snippet이 source unit 원문에 실제로 포함되는지 validator가 확인한다.
 - `apps/server/extraction/sensitive.py`: 민감정보 감지/flag가 들어갈 자리.
 - `apps/server/schemas/`: backend API 응답 스키마.
@@ -78,12 +78,16 @@ SourceUnit[] / EmbeddingRecord[] / question or extraction target
 -> 04 ChatAnswer 입력
 ```
 
-## 구현 상태
+## 이번 slice의 실행 관찰
 
 - 02의 source unit과 embedding record를 입력으로 받아 target별 `ContextPack`을 만든다.
 - `TRIPPROOF_RETRIEVAL_BACKEND=supabase`에서는 ready vector가 있으면 Supabase `match_tripproof_source_units` RPC 후보를 우선 사용하고, ready vector나 match 결과가 없으면 lexical fallback 후보를 사용한다.
+- `TRIPPROOF_FACT_PROPOSER_BACKEND=ollama`에서는 Ollama chat JSON proposer가 retrieval 후보 source unit만 읽어 fact proposal을 만든다.
 - validator는 fact proposal의 evidence snippet이 source unit 원문에 포함될 때만 `supported` evidence로 받아들인다.
-- 현재 check-in fact proposal은 아직 local proposer 기반이다. 이 구현은 RAG/grounding 계약을 통과시키는 중간 단계이며, 03의 제품 목표인 LLM/extractor proposer 전환은 별도 slice로 남아 있다.
+- LLM이 줄바꿈이나 공백을 정리한 snippet을 반환하면 validator가 source unit 원문 span으로 다시 grounding한다.
+- 예약 확정서 제시 항목은 LLM이 맞는 source unit을 고르되 snippet을 의역한 경우 해당 source unit 원문을 evidence로 사용한다.
+- 체크인 시작 시각은 LLM이 `supported`를 제안해도 실제 시간 형태가 아니면 `missing`으로 낮춘다. 날짜를 시작 시각으로 승격하지 않는다.
+- 해당 slice의 실행 관찰에서는 retrieval 후보가 fact proposer와 validator를 거쳐 예약 확정서 제시 항목은 `supported`, 체크인 시작 시각은 `missing`으로 남는 흐름을 확인했다.
 
 ## 이번 AC
 
@@ -98,4 +102,5 @@ SourceUnit[] / EmbeddingRecord[] / question or extraction target
 - 민감정보를 `needs_review` candidate로 남길지, fact candidate 생성 단계에서 제외하고 debug reason만 남길지.
 - 체크인 날짜/체크아웃 날짜를 03에서 함께 candidate로 만들지, 1차 구현에서는 제시물과 시작 시각만 닫을지.
 - missing candidate의 reason 문구를 backend schema에 둘지, 04 chat wording에서 만들지.
-- local proposer를 LLM/extractor proposer로 바꿀 때 structured output schema, provider 실패 처리, fallback policy를 어디까지 03에서 닫을지.
+- Ollama proposer 실패 시 missing 처리만 둘지, retry/backoff와 사용자-facing 오류 상태를 별도로 둘지.
+- LLM이 맞는 source unit을 골랐지만 snippet을 의역하는 경우 source unit 전체를 evidence로 쓰는 fallback을 다른 fact target에도 허용할지.

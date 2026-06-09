@@ -1,6 +1,6 @@
 # 작업 로그
 
-나중 결정에 영향을 주는 작업만 짧게 남긴다. 이 파일은 과거 기록이지 다음 작업 queue가 아니다. 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 `docs/implementation-notes/`에 따로 둔다. 대화 세션 표현, 판단 과정, AI/subagent 검토 흔적이 섞일 수 있는 entry를 새로 쓰거나 크게 고친 뒤에는 `public-doc-wording-reviewer`를 report-only로 실행한다.
+나중 결정에 영향을 주는 작업만 짧게 남긴다. 이 파일은 과거 기록이지 다음 작업 queue가 아니다. 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 `docs/implementation-notes/`에 따로 둔다. 공개 문서 독립성을 해칠 수 있는 표현은 별도 점검한다.
 
 ## 2026-05-28 - 초기 구조 정리
 
@@ -25,7 +25,7 @@
 ## 2026-06-03 - client Tailwind 컴포넌트화 / app.js 잔재 제거
 
 - 바뀐 것: active client entry를 `src/client/App.tsx`로 정리하고, 상단바·자료함 rail·확인 채팅·카드 초안·후보 rail·대시보드·현장 카드를 `src/client/components/`로 분리했다. Tailwind v4 Vite plugin과 CSS entry를 연결했고, 기존 대형 `styles.css`는 Tailwind import와 최소 base만 남겼다. 연결되지 않던 vanilla DOM `src/client/app.js`, 단일 파일 `TripProofApp.tsx`, mock 이름의 `demoTrip.ts`는 제거했다.
-- 남은 관찰: in-app Browser backend는 비어 있어 자동 클릭 검증은 대체 수단으로만 시도했다. Vite build와 데스크톱/모바일 Playwright screenshot으로 레이아웃은 확인했다. Node 20.18.1에서는 Vite가 20.19+ 또는 22.12+ 필요 경고를 내지만 build는 완료됐다.
+- 남은 관찰: Vite build와 주요 viewport screenshot으로 레이아웃을 확인했다. Node 버전 경고는 별도 환경 정리 항목으로 남았다.
 
 ## 2026-06-08 - Agoda PDF 01 backend ingest / uv 전환
 
@@ -44,15 +44,21 @@
 
 ## 2026-06-09 - 02 source unit / embedding boundary
 
-- 바뀐 것: ready material 생성 시 `[page N]` 마커를 page locator가 있는 `SourceUnit`으로 나누고, 각 source unit에 pending `EmbeddingRecord`를 붙인다. `IndexRecord`는 두지 않고 lexical 검색용 text는 `SourceUnit.searchText`로 둔다. local Ollama profile(`nomic-embed-text-v2-moe`, 768 dimensions)은 기본값으로 잡되, 실제 vector 생성은 `TRIPPROOF_EMBEDDING_AUTO_GENERATE=1`일 때만 수행한다. 질문 API smoke 경로는 `excerpt`, `excerptLocator`, `excerptSourceUnitId`를 반환한다.
+- 바뀐 것: ready material 생성 시 `[page N]` 마커를 page locator가 있는 `SourceUnit`으로 나누고, 각 source unit에 pending `EmbeddingRecord`를 붙인다. `IndexRecord`는 두지 않고 lexical 검색용 text는 `SourceUnit.searchText`로 둔다. local Ollama profile(`nomic-embed-text-v2-moe`, 768 dimensions)은 기본값으로 잡되, 실제 vector 생성은 `TRIPPROOF_EMBEDDING_AUTO_GENERATE=1`일 때만 수행한다. 질문 API의 최소 확인 경로는 `excerpt`, `excerptLocator`, `excerptSourceUnitId`를 반환한다.
 - 남은 관찰: Supabase adapter/schema, stable source unit id, 실제 Ollama 호출 검증, 03의 `RetrievalCandidate`/`EvidenceRef`/`TripFact` 경계를 다음에 닫아야 한다. 02 검색 결과는 accepted evidence가 아니다.
 
 ## 2026-06-09 - 03 스펙 구현 참조 맥락 drift 관찰
 
-- 바뀐 것: `03-evidence-backed-facts.md` 구현 중 하위 스펙만 보고 parent feature spec과 02/04 계약을 잃으면 `target -> retrieval candidate -> SourceUnit grounding -> TripFact` 경로가 특정 PDF 문장/값 중심 구현으로 좁아질 수 있음을 확인했다. `spec-driven` skill과 specs README에 `스펙 구현 전 참조 맥락 확인` 기준을 추가했다.
+- 바뀐 것: `03-evidence-backed-facts.md` 구현 중 하위 스펙만 보고 parent feature spec과 02/04 계약을 잃으면 `target -> retrieval candidate -> SourceUnit grounding -> TripFact` 경로가 특정 PDF 문장/값 중심 구현으로 좁아질 수 있음을 확인했다. 스펙 구현 전 참조 맥락 확인 기준을 문서에 추가했다.
 - 남은 관찰: 다음 03/04 작업에서 입력이 앞 단계 product artifact인지, 출력이 뒤 단계 contract인지, deterministic/stub이 같은 계약을 통과시키는 test double인지 관찰한다. 이 기록은 작업 queue가 아니며, 아직 채택/기각한 방법론 결정은 아니므로 decision note는 만들지 않는다.
 
 ## 2026-06-09 - Supabase vector retrieval backend 연결
 
 - 바뀐 것: `RetrievalRepository`에 vector match 계약을 추가하고, Supabase REST adapter와 pgvector migration을 붙였다. product 실행은 `TRIPPROOF_RETRIEVAL_BACKEND=supabase`일 때 `tripproof_source_units` / `tripproof_source_embeddings`를 저장하고 `match_tripproof_source_units` RPC로 후보 source unit을 가져온다. `.env.example`은 Supabase backend 기준으로 정리하되 실제 URL과 service role key는 비워 둔다.
-- 남은 관찰: Supabase 연결과 migration은 확인됐지만, 설치된 Ollama embedding model과 `.env`의 model 이름이 아직 맞지 않아 실제 업로드→ready vector→RAG 응답 관찰은 다음 단계로 남았다. check-in fact proposer는 아직 local regex 기반이며, LLM proposer 전환은 별도 03 slice로 닫아야 한다.
+- 당시 남은 관찰: Supabase 연결과 migration은 확인됐지만, 설치된 Ollama embedding model과 `.env`의 model 이름이 아직 맞지 않아 실제 업로드→ready vector→RAG 응답 관찰은 다음 단계로 남았다. check-in fact proposer는 아직 local proposer 기반이었고, LLM proposer 전환은 별도 03 slice로 남았다.
+
+## 2026-06-09 - 03 LLM fact proposer product route 연결
+
+- 바뀐 것: check-in fact proposer의 product 기본 경로를 local proposer에서 Ollama JSON proposer로 전환했다. 질문 API는 Supabase vector retrieval로 만든 `ContextPack`을 proposer에 넘기고, validator는 source unit 원문으로 grounding된 proposal만 `supported`로 받아들인다. 해당 시점의 실행 관찰에서는 업로드된 예약 PDF가 source unit과 vector retrieval을 거쳐 check-in fact proposer에 전달되고, 예약 확정서 제시는 `supported`, 체크인 시작 시각은 날짜 오인 없이 `missing`으로 남는 흐름을 확인했다.
+- 후속 정리: 민감정보 감지, PDF 공백 정리, retrieval query tokenization, page marker parsing을 문자열/token 기반 처리로 바꿔 서버 active 경로의 코드 내부 패턴 매칭 잔재를 줄였다.
+- 남은 관찰: Ollama proposer 실패는 현재 `missing`으로 낮춘다. retry/backoff, provider 오류의 사용자-facing 상태, LLM이 맞는 source unit을 골랐지만 snippet을 의역하는 경우의 evidence fallback 범위는 다음 03/04 경계에서 다시 판단한다.
