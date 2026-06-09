@@ -4,8 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from server.api.deps import get_material_store
-from server.extraction.checkin import extract_checkin_fact_candidates
+from server.api.deps import get_checkin_fact_proposer, get_material_store
+from server.extraction.checkin import CheckinFactProposer, extract_checkin_fact_candidates
 from server.materials.store import MaterialStore
 from server.retrieval.search import select_source_excerpt
 from server.schemas.facts import FactCandidateResponse
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/questions", tags=["questions"])
 def ask_question(
     payload: QuestionRequest,
     store: Annotated[MaterialStore, Depends(get_material_store)],
+    checkin_fact_proposer: Annotated[CheckinFactProposer, Depends(get_checkin_fact_proposer)],
 ) -> QuestionResponse:
     question = payload.question.strip()
     if not question:
@@ -56,6 +57,7 @@ def ask_question(
         embedding_provider=store.embedding_provider,
         retrieval_repository=store.retrieval_repository,
         material_ids=ready_material_ids,
+        proposer=checkin_fact_proposer,
     )
 
     return QuestionResponse(

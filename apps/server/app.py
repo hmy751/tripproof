@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.routes import health, materials, questions
 from server.core.config import ALLOWED_ORIGINS, EMBEDDING_AUTO_GENERATE, RETRIEVAL_BACKEND
+from server.extraction.checkin import CheckinFactProposer, create_checkin_fact_proposer_from_config
 from server.materials.store import MaterialStore
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
@@ -15,6 +16,8 @@ def create_app(
     *,
     embedding_auto_generate: bool | None = None,
     retrieval_backend: str | None = None,
+    checkin_fact_proposer: CheckinFactProposer | None = None,
+    fact_proposer_backend: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TripProof Backend")
     if store is not None:
@@ -35,6 +38,9 @@ def create_app(
             embedding_auto_generate=active_embedding_auto_generate,
             retrieval_repository=retrieval_repository,
         )
+    app.state.checkin_fact_proposer = checkin_fact_proposer or create_checkin_fact_proposer_from_config(
+        backend=fact_proposer_backend
+    )
 
     app.add_middleware(
         CORSMiddleware,
