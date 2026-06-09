@@ -2,7 +2,7 @@
 
 이 폴더는 이후 구현 방향에 영향을 주는 선택을 남길 때 쓴다.
 
-decision note는 나중에 다시 쓰이거나 도전받을 선택에만 유용하다. 작은 로컬 판단은 가까운 commit, PR 본문, `docs/work-log.md` entry를 우선한다.
+decision note는 나중에 다시 쓰이거나 도전받을 선택에만 유용하다. 작은 로컬 판단은 가까운 commit, PR 본문, `docs/work-log.md` entry를 우선한다. 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 결정으로 승격하지 말고 `docs/implementation-notes/`를 우선한다.
 
 기본은 단일 markdown 파일이다. 다만 배경 재료를 결론과 분리해서 보존해야 하는 결정은 폴더형으로 남긴다.
 

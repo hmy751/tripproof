@@ -31,4 +31,5 @@ eval 쪽은 product를 관찰한다.
 - 작은 구현 판단은 코드, commit, PR 설명 가까이에 둔다.
 - 이후 구조를 바꾸는 선택은 `docs/decisions/`에 둔다.
 - 여러 작업으로 이어지는 설계 맥락만 `docs/specs/`에 남긴다.
+- 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 `docs/implementation-notes/`에 둔다.
 - eval run 기록은 실제 product behavior를 관찰할 수 있을 때 남긴다.
