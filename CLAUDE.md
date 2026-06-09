@@ -19,6 +19,7 @@
 - eval은 product behavior를 관찰한다. product가 eval fixture, run artifact, metric output에 의존하지 않게 둔다.
 - 문서는 필요한 판단만 짧게 남긴다. 작은 구현 판단은 코드, commit, PR 설명 가까이에 둔다.
 - 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 decision이나 work-log로 억지 승격하지 않고 `docs/implementation-notes/`에 둔다.
+- `docs/decisions/`, `docs/implementation-notes/`, `docs/work-log.md`처럼 대화 세션, 판단 과정, AI/subagent 검토 흔적이 들어갈 수 있는 문서를 새로 쓰거나 크게 고친 뒤에는 `public-doc-wording-reviewer`를 report-only로 실행한다. 이 agent는 승인 gate가 아니라 private source 누수와 공개 문서 독립성을 점검하는 마지막 확인이다. 실행하지 않으면 이유를 짧게 남긴다.
 - 하네스와 문서는 실행을 돕는 기준이지 현재 작업 승인권이 아니다. 과거 분석, roadmap, work-log, subagent report를 그대로 다음 명령으로 승격하지 않는다.
 - 삭제, 스택 전환, shared 계약 변경, legacy 제거, commit/stage처럼 되돌리기 비용이 큰 변경은 먼저 사용자에게 알린다. 이미 합의된 slice 안의 작은 UI, 함수, 스타일, 타입 정리는 멈춰 묻기보다 진행하고 결과로 설명한다.
 - subagent와 로컬 agent는 판단 재료를 제공하는 report-only 도구다. 승인/반려 권한은 갖지 않는다.

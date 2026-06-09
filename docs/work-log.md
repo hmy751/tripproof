@@ -1,6 +1,6 @@
 # 작업 로그
 
-나중 결정에 영향을 주는 작업만 짧게 남긴다. 이 파일은 과거 기록이지 다음 작업 queue가 아니다. 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 `docs/implementation-notes/`에 따로 둔다.
+나중 결정에 영향을 주는 작업만 짧게 남긴다. 이 파일은 과거 기록이지 다음 작업 queue가 아니다. 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰은 `docs/implementation-notes/`에 따로 둔다. 대화 세션 표현, 판단 과정, AI/subagent 검토 흔적이 섞일 수 있는 entry를 새로 쓰거나 크게 고친 뒤에는 `public-doc-wording-reviewer`를 report-only로 실행한다.
 
 ## 2026-05-28 - 초기 구조 정리
 

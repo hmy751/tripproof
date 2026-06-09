@@ -46,6 +46,7 @@
 - 원문 대화보다 구현 중 관찰된 문제와 다음에 볼 경계를 남긴다.
 - 한 노트는 한 drift나 한 경계 관찰에 집중한다.
 - 현재 실행 기준이 아니라 calibration sample로 읽히게 둔다.
+- 대화 세션 표현, 판단 과정, AI/subagent 검토 흔적이 섞일 수 있으면 마무리 전에 `public-doc-wording-reviewer`를 report-only로 실행한다.
 
 ## 판단 질문
 
