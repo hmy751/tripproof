@@ -1,6 +1,6 @@
 ---
 name: spec-driven
-description: TripProof repo 전용 light spec-driven 실행 판단 스킬. 큰 작업, AI 위임, AC(acceptance criteria), slice 선택, product-first/eval 경계, spec/decision/work-log 기록 위치를 현재 요청에서 판단해야 할 때 사용한다. Scope를 줄이기 전에 사용자 자료가 근거/후보, 답변/상태, 화면으로 이어지는 제품 흐름을 끊지 않는지 본다. "TripProof spec-driven", "feature spec", "AC를 고르자", "spec으로 작업하자", "이 작업이 큰 작업인가", "문서가 실행을 잡아먹지 않게" 같은 요청에 트리거한다.
+description: TripProof repo 전용 light spec-driven 실행 판단 스킬. 큰 작업, AI 위임, AC(acceptance criteria), slice 선택, product-first/eval 경계, 사용자 흐름·제품 계약·구현 범위를 현재 요청에서 판단해야 할 때 사용한다. Scope를 줄이기 전에 사용자 자료가 근거/후보, 답변/상태, 화면으로 이어지는 제품 흐름을 끊지 않는지 본다. 단순 기록 위치 판단이나 이미 정해진 decision/work-log/implementation-note 문서 보강만으로는 트리거하지 않는다. "TripProof spec-driven", "feature spec", "AC를 고르자", "spec으로 작업하자", "이 작업이 큰 작업인가", "문서가 실행을 잡아먹지 않게" 같은 요청에 트리거한다.
 ---
 
 # Spec-driven
