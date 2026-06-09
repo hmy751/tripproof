@@ -20,7 +20,6 @@
   "evidence_state": "supported | missing | needs_review",
   "source_unit_id": "string or null",
   "evidence_snippet": "string or null",
-  "sensitive": false,
   "reason": "Korean sentence"
 }
 ```

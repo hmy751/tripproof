@@ -35,7 +35,6 @@ class FactProposal:
     evidence_state: EvidenceState
     evidence_snippet: str | None = None
     source_unit_id: str | None = None
-    sensitive: bool = False
     reason: str | None = None
 
 
@@ -46,5 +45,4 @@ class FactCandidate:
     value: str | None
     evidence_state: EvidenceState
     evidence: list[EvidenceRef] = field(default_factory=list)
-    sensitive: bool = False
     reason: str | None = None

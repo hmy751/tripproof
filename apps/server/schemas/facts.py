@@ -30,7 +30,6 @@ class FactCandidateResponse(ApiModel):
     value: str | None = None
     evidence_state: EvidenceState = Field(alias="evidenceState")
     evidence: list[EvidenceRefResponse]
-    sensitive: bool = False
     reason: str | None = None
 
     @classmethod
@@ -41,6 +40,5 @@ class FactCandidateResponse(ApiModel):
             value=fact.value,
             evidence_state=fact.evidence_state,
             evidence=[EvidenceRefResponse.from_domain(evidence_ref) for evidence_ref in fact.evidence],
-            sensitive=fact.sensitive,
             reason=fact.reason,
         )

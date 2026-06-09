@@ -13,7 +13,6 @@ from server.extraction.checkin import (
 from server.extraction.evidence import EvidenceGroundingError, evidence_ref_from_snippet, validate_fact_proposal
 from server.extraction.models import EvidenceState, FactProposal
 from server.llm.ollama import OllamaClientError
-from server.extraction.sensitive import SensitiveKind, detect_sensitive_findings
 from server.retrieval.models import ContextPack, RetrievalCandidate, SourceUnit
 from server.retrieval.search import retrieve_context
 
@@ -170,7 +169,7 @@ def test_evidence_ref_grounds_whitespace_normalized_snippet_to_source_text() -> 
     assert "\n" in evidence.snippet
 
 
-def test_sensitive_fields_are_detected_without_becoming_supported_facts() -> None:
+def test_booking_confirmation_fact_ignores_unrelated_identifier_text() -> None:
     unit = _source_unit(
         "Booking ID : [BOOKING_ID]\n"
         "Client : [GUEST_NAME]\n"
@@ -178,7 +177,6 @@ def test_sensitive_fields_are_detected_without_becoming_supported_facts() -> Non
         "체크인 시 고객님의 예약 확정서(전자 사본 또는 인쇄본)를 제시해 주시기 바랍니다."
     )
 
-    findings = detect_sensitive_findings([unit])
     facts = extract_checkin_fact_candidates(
         source_units=[unit],
         embedding_records=[],
@@ -192,13 +190,9 @@ def test_sensitive_fields_are_detected_without_becoming_supported_facts() -> Non
         ),
     )
 
-    assert {finding.kind for finding in findings} >= {
-        SensitiveKind.BOOKING_ID,
-        SensitiveKind.GUEST_NAME,
-        SensitiveKind.PAYMENT_CARD,
-    }
     assert {fact.id for fact in facts} == {BOOKING_CONFIRMATION_FACT_ID, CHECKIN_START_TIME_FACT_ID}
-    assert all(not fact.sensitive for fact in facts)
+    assert facts[0].evidence_state == EvidenceState.SUPPORTED
+    assert facts[0].evidence[0].snippet == "체크인 시 고객님의 예약 확정서(전자 사본 또는 인쇄본)를 제시해 주시기 바랍니다."
 
 
 def test_ollama_checkin_proposer_maps_structured_json_to_grounded_fact() -> None:
@@ -213,7 +207,6 @@ def test_ollama_checkin_proposer_maps_structured_json_to_grounded_fact() -> None
                 "evidence_state": "supported",
                 "source_unit_id": unit.id,
                 "evidence_snippet": "체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해 주세요.",
-                "sensitive": False,
                 "reason": "원문에 예약 확정서 제시 안내가 있습니다.",
             }
         )
@@ -261,7 +254,6 @@ def test_ollama_checkin_proposer_repairs_paraphrased_booking_snippet_to_narrow_e
                 "evidence_state": "supported",
                 "source_unit_id": unit.id,
                 "evidence_snippet": "예약 확정서를 보여줘야 합니다.",
-                "sensitive": False,
                 "reason": "원문에 예약 확정서 제시 안내가 있습니다.",
             }
         )
@@ -302,7 +294,6 @@ def test_ollama_checkin_proposer_does_not_accept_date_as_checkin_start_time() ->
                 "evidence_state": "supported",
                 "source_unit_id": unit.id,
                 "evidence_snippet": "Arrival : 체크인 : 2025년 3월 09일",
-                "sensitive": False,
                 "reason": "원문에 체크인 날짜가 있습니다.",
             }
         )

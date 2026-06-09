@@ -161,7 +161,6 @@ def _user_prompt(*, target: FactTarget, context: ContextPack) -> str:
         '  "evidence_state": "supported | missing | needs_review",\n'
         '  "source_unit_id": "string or null",\n'
         '  "evidence_snippet": "string or null",\n'
-        '  "sensitive": false,\n'
         '  "reason": "Korean sentence"\n'
         "}\n\n"
         "If evidence_state is supported, source_unit_id must be one of the provided ids and "
@@ -197,7 +196,6 @@ def _proposal_from_payload(*, target: FactTarget, payload: object) -> FactPropos
     evidence_snippet = _optional_string(_field(payload, "evidence_snippet", "evidenceSnippet"))
     source_unit_id = _optional_string(_field(payload, "source_unit_id", "sourceUnitId"))
     reason = _optional_string(_field(payload, "reason")) or "LLM proposer가 fact 후보를 반환했습니다."
-    sensitive = bool(_field(payload, "sensitive") is True)
 
     if target.id == CHECKIN_START_TIME_FACT_ID and evidence_state == EvidenceState.SUPPORTED:
         if value is None or not _looks_like_time_value(value):
@@ -213,7 +211,6 @@ def _proposal_from_payload(*, target: FactTarget, payload: object) -> FactPropos
         evidence_state=evidence_state,
         evidence_snippet=evidence_snippet,
         source_unit_id=source_unit_id,
-        sensitive=sensitive,
         reason=reason,
     )
 
@@ -241,7 +238,6 @@ def _repair_supported_proposal(
                 evidence_state=proposal.evidence_state,
                 evidence_snippet=evidence_ref.snippet,
                 source_unit_id=proposal.source_unit_id,
-                sensitive=proposal.sensitive,
                 reason=proposal.reason,
             )
         except EvidenceGroundingError:
@@ -261,7 +257,6 @@ def _repair_supported_proposal(
         evidence_state=proposal.evidence_state,
         evidence_snippet=narrowed_snippet,
         source_unit_id=proposal.source_unit_id,
-        sensitive=proposal.sensitive,
         reason=proposal.reason,
     )
 

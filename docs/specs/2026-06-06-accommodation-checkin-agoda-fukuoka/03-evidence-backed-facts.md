@@ -20,7 +20,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 
 - evidence-backed fact candidate 생성 입력은 02의 source unit, embedding record, 그리고 질문 또는 extraction target을 받는다.
 - retrieval/RAG는 LLM/extractor가 읽을 source unit 후보나 context pack을 만든다.
-- LLM/extractor는 후보 원문을 읽고 label, value 또는 value 없음, evidence snippet, reason, sensitive 여부를 제안한다.
+- LLM/extractor는 후보 원문을 읽고 label, value 또는 value 없음, evidence snippet, reason을 제안한다.
 - backend validator는 제안된 evidence snippet이 실제 source unit 원문 일부인지 확인한 뒤에만 `supported`로 받아들인다.
 - 체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해야 한다는 fact candidate가 나온다.
 - 예약 확정서 제시 candidate에는 실제 PDF 본문 일부가 `EvidenceRef`로 붙는다.
@@ -28,7 +28,6 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 - 체크인 시작 시각은 source unit 원문으로 grounding되지 않으면 value 없이 `근거 부족`으로 남는다.
 - `근거 부족`은 candidate/item으로 직접 표현한다. 그래야 04 채팅이 값을 만들지 않고 부족 상태를 보여줄 수 있다.
 - 등록되지 않은 companion source의 값을 PDF 근거처럼 만들지 않는다.
-- 예약번호, 고객명, 회원 ID, 결제 카드, 숙소 연락처, 정확한 주소는 일반 `supported` candidate로 자동 승격하지 않는다.
 - 04 채팅은 이 candidate/state/evidence를 입력으로 받아 답변 화면에 표시한다.
 
 ## Rules
@@ -41,7 +40,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 - `EvidenceRef.snippet`은 실제 source unit text의 일부여야 한다.
 - `EvidenceRef.locator`는 처음에는 파일명과 page 정도로 충분하다.
 - `missing` fact는 value가 없고 evidence가 비어 있을 수 있다.
-- 민감하거나 애매한 값은 03에서 감지/flag 또는 `needs_review`까지만 다룬다. 자동 카드 제외와 대시보드 반영 금지는 05/06에서 닫는다.
+- 애매한 값은 `needs_review`로 둘 수 있다.
 - retrieval candidate를 그대로 `EvidenceRef`로 쓰지 않는다. candidate는 source unit 원문 확인을 거쳐야 한다.
 - 외부 LLM을 붙일 때도 같은 입력과 출력 기준을 유지한다. provider를 바꿔도 `자료 -> retrieval 후보 -> LLM/extractor 판단 -> 원문 검증 -> 상태` 인과는 유지한다.
 - 삭제한 `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다. Python backend 전환 중 유지하지 않는다.
@@ -50,7 +49,6 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 
 - 모든 숙소 필드 추출.
 - conflict 전체 처리.
-- 민감정보 표시 세부 정책 완성.
 - LLM provider 선택, 운영 프롬프트 품질, 모델 평가 고도화.
 - AI 답변 문장 스타일 고도화.
 - Agoda HTML 메일 본문 companion source 병합.
@@ -63,7 +61,6 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 - `apps/server/retrieval/`: source unit, embedding record, retrieval repository, Supabase vector match, lexical fallback으로 `ContextPack` 후보를 만든다.
 - `apps/server/extraction/checkin.py`: check-in fact candidate 생성 경로가 있다. retrieval repository를 통해 context 후보를 받고, Ollama JSON proposer가 fact proposal을 만든 뒤 validator가 grounding한다. 테스트에서는 deterministic proposer를 주입한다.
 - `apps/server/extraction/evidence.py`: proposer가 낸 snippet이 source unit 원문에 실제로 포함되는지 validator가 확인한다.
-- `apps/server/extraction/sensitive.py`: 민감정보 감지/flag가 들어갈 자리.
 - `apps/server/schemas/`: backend API 응답 스키마.
 - 삭제된 `src/server/trip-facts`, `src/shared`, `src/ai`의 고정값/fixture 기준은 유지하지 않는다.
 
@@ -74,7 +71,7 @@ SourceUnit[] / EmbeddingRecord[] / question or extraction target
 -> RetrievalCandidate[] / ContextPack
 -> LLM/extractor proposes fact candidates from candidate source text
 -> validator grounds evidence snippets against SourceUnit.text
--> Evidence-backed fact item / TripFact-shaped candidate(label, value, evidenceState, evidence, sensitive?, reason)
+-> Evidence-backed fact item / TripFact-shaped candidate(label, value, evidenceState, evidence, reason)
 -> 04 ChatAnswer 입력
 ```
 
@@ -95,11 +92,9 @@ SourceUnit[] / EmbeddingRecord[] / question or extraction target
 2. 예약 확정서 제시 근거는 Agoda PDF에서 파싱한 본문 일부를 보여준다.
 3. 체크인 시작 시각은 source unit 원문으로 grounding되지 않으면 value 없이 `근거 부족` candidate로 나온다.
 4. 체크인 제시물 근거 source가 없으면 해당 candidate가 `근거 있음`으로 나오지 않는다.
-5. 예약번호, 고객명, 결제 카드 같은 민감 필드는 일반 `supported` candidate로 자동 승격하지 않는다.
 
 ## 남은 판단
 
-- 민감정보를 `needs_review` candidate로 남길지, fact candidate 생성 단계에서 제외하고 debug reason만 남길지.
 - 체크인 날짜/체크아웃 날짜를 03에서 함께 candidate로 만들지, 1차 구현에서는 제시물과 시작 시각만 닫을지.
 - missing candidate의 reason 문구를 backend schema에 둘지, 04 chat wording에서 만들지.
 - Ollama proposer 실패 시 missing 처리만 둘지, retry/backoff와 사용자-facing 오류 상태를 별도로 둘지.

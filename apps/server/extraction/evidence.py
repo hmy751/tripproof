@@ -71,7 +71,6 @@ def validate_fact_proposal(
             value=proposal.value,
             evidence_state=EvidenceState.SUPPORTED,
             evidence=[evidence_ref],
-            sensitive=proposal.sensitive,
             reason=proposal.reason,
         )
 
@@ -81,7 +80,6 @@ def validate_fact_proposal(
         value=None if proposal.evidence_state == EvidenceState.MISSING else proposal.value,
         evidence_state=proposal.evidence_state,
         evidence=[],
-        sensitive=proposal.sensitive,
         reason=proposal.reason,
     )
 
