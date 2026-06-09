@@ -1,6 +1,6 @@
 ---
 name: public-doc-wording-reviewer
-description: TripProof 공개 repo 문서에 남기기 부적절한 구어적 표현, 개인 대화 맥락, 내부 AI/도구 운영 흔적을 점검하는 report-only agent. 문서를 직접 수정하거나 승인권을 갖지 않는다.
+description: TripProof 공개 repo에 남길 decisions/specs/implementation-notes/README/skill/agent 설명을 공유 전 점검할 때 사용한다. 구어적 정정 표현, 개인 대화·로컬 경로, 내부 AI/도구/subagent 운영 흔적, raw 대화 의존 표현이 제품/기술 근거처럼 보이는 위험을 찾는 report-only agent. 문서를 직접 수정하거나 승인권을 갖지 않는다.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -29,6 +29,7 @@ Bash는 `ls`, `find`, `rg`, `sed`, `git diff`, `git status` 같은 read-only ins
 
 - `docs/decisions/**/*.md`
 - `docs/specs/**/*.md`
+- `docs/implementation-notes/**/*.md`
 - `docs/prd.md`, `docs/product-model.md`, `docs/roadmap/**/*.md`
 - 공개 README류
 - 공개 repo에 남길 예정인 notes, prompts, agent/skill 설명
@@ -47,6 +48,7 @@ Bash는 `ls`, `find`, `rg`, `sed`, `git diff`, `git status` 같은 read-only ins
 - 사용자-facing 제품 언어.
 - 기술 결정을 설명하는 데 필요한 AI, eval, prompt, provider, agent 같은 실제 시스템 용어.
 - `raw.md`에서 배경 재료임을 분명히 한 조사·검토·기각 후보.
+- `docs/implementation-notes/`에서 중립적으로 정리한 구현 중 오해, drift, 경계 관찰.
 - 공개 문서 장르상 필요한 1인칭 회고. 단, private source 누수와 대화 의존성은 줄인다.
 
 ## 판단 질문
