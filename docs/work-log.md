@@ -46,3 +46,8 @@
 
 - 바뀐 것: ready material 생성 시 `[page N]` 마커를 page locator가 있는 `SourceUnit`으로 나누고, 각 source unit에 pending `EmbeddingRecord`를 붙인다. `IndexRecord`는 두지 않고 lexical 검색용 text는 `SourceUnit.searchText`로 둔다. local Ollama profile(`nomic-embed-text-v2-moe`, 768 dimensions)은 기본값으로 잡되, 실제 vector 생성은 `TRIPPROOF_EMBEDDING_AUTO_GENERATE=1`일 때만 수행한다. 질문 API smoke 경로는 `excerpt`, `excerptLocator`, `excerptSourceUnitId`를 반환한다.
 - 남은 관찰: Supabase adapter/schema, stable source unit id, 실제 Ollama 호출 검증, 03의 `RetrievalCandidate`/`EvidenceRef`/`TripFact` 경계를 다음에 닫아야 한다. 02 검색 결과는 accepted evidence가 아니다.
+
+## 2026-06-09 - 03 스펙 구현 참조 맥락 drift 관찰
+
+- 바뀐 것: `03-evidence-backed-facts.md` 구현 중 하위 스펙만 보고 parent feature spec과 02/04 계약을 잃으면 `target -> retrieval candidate -> SourceUnit grounding -> TripFact` 경로가 특정 PDF 문장/값 중심 구현으로 좁아질 수 있음을 확인했다. `tripproof-spec-driven` skill과 specs README에 `스펙 구현 전 참조 맥락 확인` 기준을 추가했다.
+- 남은 관찰: 다음 03/04 작업에서 입력이 앞 단계 product artifact인지, 출력이 뒤 단계 contract인지, deterministic/stub이 같은 계약을 통과시키는 test double인지 관찰한다. 이 기록은 작업 queue가 아니며, 아직 채택/기각한 방법론 결정은 아니므로 decision note는 만들지 않는다.
