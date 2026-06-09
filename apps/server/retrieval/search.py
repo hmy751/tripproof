@@ -236,7 +236,7 @@ def _score_text(text: str, terms: list[str]) -> int:
         return 0
 
     lower_text = text.lower()
-    return sum(lower_text.count(term) for term in terms)
+    return sum(1 for term in set(terms) if term in lower_text)
 
 
 def _query_terms(query: str) -> list[str]:

@@ -9,9 +9,12 @@ from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 import server.app as server_app
 from server.app import create_app
+from server.extraction.models import EvidenceRef, EvidenceState
 from server.materials.store import MaterialStore
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
+from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse
+from server.schemas.facts import EvidenceRefResponse
 
 
 def test_upload_text_pdf_returns_ready_material() -> None:
@@ -48,7 +51,17 @@ def test_upload_blank_pdf_returns_failed_material() -> None:
 
 
 def test_question_returns_chat_answer_for_ready_materials() -> None:
-    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
+    composer = FakeLibraryChatAnswerComposer(
+        body="체크인 시작 시각은 15:00입니다.",
+        snippet="Check-in starts at 15:00.",
+    )
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=composer,
+        )
+    )
     upload = client.post(
         "/api/materials",
         files={
@@ -69,11 +82,14 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert body["materialIds"] == [material_id]
     assert body["materialCount"] == 1
     assert body["pageCount"] == 1
-    assert body["answer"]["summary"]
-    assert {item["id"] for item in body["answer"]["items"]} == {
-        "checkin_booking_confirmation",
-        "checkin_start_time",
-    }
+    assert body["answer"]["summary"] == "자료에서 확인한 답변입니다."
+    assert body["answer"]["items"][0]["id"] == "answer"
+    assert body["answer"]["items"][0]["body"] == "체크인 시작 시각은 15:00입니다."
+    assert body["answer"]["items"][0]["evidence"][0]["snippet"] == "Check-in starts at 15:00."
+    assert composer.last_question == "check-in time?"
+    assert composer.last_context is not None
+    assert composer.last_context.query == "check-in time?"
+    assert composer.last_context.candidates
     assert "excerpt" not in body
     assert "facts" not in body
 
@@ -220,6 +236,39 @@ class FakeEmbeddingProvider:
 
     def embed_query(self, text: str) -> list[float]:
         return [1.0, 0.0, 0.0]
+
+
+class FakeLibraryChatAnswerComposer:
+    def __init__(self, *, body: str, snippet: str) -> None:
+        self._body = body
+        self._snippet = snippet
+        self.last_question = None
+        self.last_context = None
+
+    def compose(self, *, question, context):
+        self.last_question = question
+        self.last_context = context
+        source_unit = context.candidates[0].source_unit
+        evidence_ref = EvidenceRef(
+            material_id=source_unit.material_id,
+            source_unit_id=source_unit.id,
+            label=source_unit.file_name,
+            locator=source_unit.locator,
+            snippet=self._snippet,
+        )
+        return ChatAnswerResponse(
+            summary="자료에서 확인한 답변입니다.",
+            items=[
+                ChatAnswerItemResponse(
+                    id="answer",
+                    label="답변",
+                    body=self._body,
+                    evidence_state=EvidenceState.SUPPORTED,
+                    value=None,
+                    evidence=[EvidenceRefResponse.from_domain(evidence_ref)],
+                )
+            ],
+        )
 
 
 class FailingRetrievalRepository:

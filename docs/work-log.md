@@ -72,3 +72,9 @@
 
 - 바뀐 것: `/api/questions`의 기본 product 응답을 `ChatAnswer` 중심으로 정리하고, client 채팅이 답변 항목별 `근거 있음`/`근거 부족` 상태와 inline evidence snippet을 보여주도록 연결했다. retrieval smoke용 excerpt, raw fact candidate, proposer reason은 기본 응답에서 제거했다.
 - 남은 관찰: 현재 Agoda PDF는 체크인 날짜만 담고 체크인 시작 시각은 담지 않아 `근거 부족`이 맞다. companion source가 추가되면 같은 answer 계약 안에서 체크인 시작 시각을 `근거 있음`으로 바꿀 수 있다. evidence snippet fallback은 source unit 전체가 아니라 해당 근거 주변으로 좁혀야 한다.
+
+## 2026-06-09 - 04 library chat fixed target 제거
+
+- 바뀐 것: `/api/questions`가 더 이상 check-in fact target checklist를 채팅 답변처럼 돌리지 않고, 사용자 질문 자체를 retrieval query로 사용한 뒤 `LibraryChatAnswerComposer`가 source unit 후보에서 답변과 근거를 만들게 바꿨다. 03의 fact candidate 흐름은 카드/정형 후보로 이어질 수 있는 내부 재료로 남기고, 채팅의 사용자-facing 앞면에서는 제거했다.
+- 실행 관찰: 확인용 Agoda 예약 PDF를 실제 API에 넣어 확인했을 때, `체크인 날짜가 어떻게 돼?`는 `2025년 3월 9일`을 `근거 있음`으로 답하고, `체크인 시작 시각은 몇 시야?`는 날짜를 시간으로 승격하지 않고 `근거 부족`으로 답했다.
+- 남은 관찰: 현재 answer composer는 grounding 실패 시 supported 답변을 내리지 않도록 막지만, 더 넓은 질문군에서는 답변 문장 품질과 source unit reranking을 계속 제품 화면 기준으로 봐야 한다.

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.routes import health, materials, questions
+from server.answers.library_chat import LibraryChatAnswerComposer, create_library_chat_answer_composer_from_config
 from server.core.config import ALLOWED_ORIGINS, EMBEDDING_AUTO_GENERATE, RETRIEVAL_BACKEND
 from server.extraction.checkin import CheckinFactProposer, create_checkin_fact_proposer_from_config
 from server.materials.store import MaterialStore
@@ -17,6 +18,7 @@ def create_app(
     embedding_auto_generate: bool | None = None,
     retrieval_backend: str | None = None,
     checkin_fact_proposer: CheckinFactProposer | None = None,
+    library_chat_answer_composer: LibraryChatAnswerComposer | None = None,
     fact_proposer_backend: str | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TripProof Backend")
@@ -40,6 +42,10 @@ def create_app(
         )
     app.state.checkin_fact_proposer = checkin_fact_proposer or create_checkin_fact_proposer_from_config(
         backend=fact_proposer_backend
+    )
+    app.state.library_chat_answer_composer = (
+        library_chat_answer_composer
+        or create_library_chat_answer_composer_from_config(backend=fact_proposer_backend)
     )
 
     app.add_middleware(

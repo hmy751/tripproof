@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
-from server.app import create_app
 from server.extraction.checkin import (
     BOOKING_CONFIRMATION_FACT_ID,
     BOOKING_CONFIRMATION_TARGET,
@@ -16,7 +14,6 @@ from server.extraction.evidence import EvidenceGroundingError, evidence_ref_from
 from server.extraction.models import EvidenceState, FactProposal
 from server.llm.ollama import OllamaClientError
 from server.extraction.sensitive import SensitiveKind, detect_sensitive_findings
-from server.materials.store import MaterialStore
 from server.retrieval.models import ContextPack, RetrievalCandidate, SourceUnit
 from server.retrieval.search import retrieve_context
 
@@ -202,51 +199,6 @@ def test_sensitive_fields_are_detected_without_becoming_supported_facts() -> Non
     }
     assert {fact.id for fact in facts} == {BOOKING_CONFIRMATION_FACT_ID, CHECKIN_START_TIME_FACT_ID}
     assert all(not fact.sensitive for fact in facts)
-
-
-def test_question_response_includes_evidence_backed_fact_candidates() -> None:
-    store = MaterialStore()
-    material = store.add_ready(
-        name="Agoda Fukuoka",
-        file_name="booking.pdf",
-        content_type="application/pdf",
-        page_count=1,
-        text=(
-            "[page 1]\n"
-            "Arrival : 체크인 : 2025년 3월 09일\n"
-            "체크인 시 고객님의 예약 확정서(전자 사본 또는 인쇄본)를 제시해 주시기 바랍니다."
-        ),
-        preview="체크인 시 고객님의 예약 확정서",
-    )
-    client = TestClient(
-        create_app(
-            store=store,
-            checkin_fact_proposer=_TargetProposalProposer(
-                {
-                    BOOKING_CONFIRMATION_FACT_ID: (
-                        "예약 확정서(전자 사본 또는 인쇄본)",
-                        "체크인 시 고객님의 예약 확정서(전자 사본 또는 인쇄본)를 제시해 주시기 바랍니다.",
-                    )
-                }
-            ),
-        )
-    )
-
-    response = client.post("/api/questions", json={"question": "체크인 때 뭘 보여줘?", "materialIds": [material.id]})
-
-    assert response.status_code == 200
-    body = response.json()
-    answer_items = {item["id"]: item for item in body["answer"]["items"]}
-    assert "확인한 내용과 확인되지 않은 항목" in body["answer"]["summary"]
-    assert answer_items[BOOKING_CONFIRMATION_FACT_ID]["evidenceState"] == "supported"
-    assert "예약 확정서" in answer_items[BOOKING_CONFIRMATION_FACT_ID]["body"]
-    assert answer_items[BOOKING_CONFIRMATION_FACT_ID]["evidence"][0]["snippet"]
-    assert answer_items[CHECKIN_START_TIME_FACT_ID]["evidenceState"] == "missing"
-    assert answer_items[CHECKIN_START_TIME_FACT_ID]["value"] is None
-    assert "체크인 시작 시각을 확인하지 못했습니다" in answer_items[CHECKIN_START_TIME_FACT_ID]["body"]
-    assert answer_items[CHECKIN_START_TIME_FACT_ID]["evidence"] == []
-    assert "excerpt" not in body
-    assert "facts" not in body
 
 
 def test_ollama_checkin_proposer_maps_structured_json_to_grounded_fact() -> None:

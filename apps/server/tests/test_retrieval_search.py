@@ -57,6 +57,29 @@ def test_retrieve_context_uses_lexical_search_when_vectors_are_not_ready() -> No
     assert context.candidates[0].lexical_score > 0
 
 
+def test_lexical_search_does_not_let_repeated_terms_hide_earlier_relevant_source_unit() -> None:
+    arrival = _source_unit(
+        id="su_arrival",
+        text="Arrival : 체크인 : 2025년 3월 09일 Departure : 체크아웃 : 2025년 3월 13일",
+    )
+    cancellation = _source_unit(
+        id="su_cancellation",
+        text=(
+            "체크인 날짜 전 1일 이내 예약 취소 시 취소 요금이 부과됩니다. "
+            "체크인하지 않을 경우 노쇼로 간주됩니다. 익스프레스 체크인."
+        ),
+    )
+
+    context = retrieve_context(
+        target_id="library_chat_answer",
+        query="체크인 날짜가 어떻게 돼?",
+        source_units=[arrival, cancellation],
+        embedding_records=[],
+    )
+
+    assert [candidate.source_unit.id for candidate in context.candidates] == ["su_arrival", "su_cancellation"]
+
+
 def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
     source_unit = _source_unit(
         id="su_supabase",
