@@ -62,3 +62,8 @@
 - 바뀐 것: check-in fact proposer의 product 기본 경로를 local proposer에서 Ollama JSON proposer로 전환했다. 질문 API는 Supabase vector retrieval로 만든 `ContextPack`을 proposer에 넘기고, validator는 source unit 원문으로 grounding된 proposal만 `supported`로 받아들인다. 해당 시점의 실행 관찰에서는 업로드된 예약 PDF가 source unit과 vector retrieval을 거쳐 check-in fact proposer에 전달되고, 예약 확정서 제시는 `supported`, 체크인 시작 시각은 날짜 오인 없이 `missing`으로 남는 흐름을 확인했다.
 - 후속 정리: 민감정보 감지, PDF 공백 정리, retrieval query tokenization, page marker parsing을 문자열/token 기반 처리로 바꿔 서버 active 경로의 코드 내부 패턴 매칭 잔재를 줄였다.
 - 남은 관찰: Ollama proposer 실패는 현재 `missing`으로 낮춘다. retry/backoff, provider 오류의 사용자-facing 상태, LLM이 맞는 source unit을 골랐지만 snippet을 의역하는 경우의 evidence fallback 범위는 다음 03/04 경계에서 다시 판단한다.
+
+## 2026-06-09 - spec-driven skill / README 축약 기록
+
+- 바뀐 것: `.claude/skills/spec-driven/SKILL.md`를 runtime core로 줄이고, 자세한 읽기 순서와 calibration은 `docs/specs/README.md`가 소유하도록 정리했다. 배경, 보존한 guardrail, 복구 기준은 `docs/implementation-notes/2026-06-09-spec-driven-skill-readme-refactor/`에 남겼다.
+- 남은 관찰: 이 개편이 실제 작업에서 제품 흐름 손실, fixture/seed 값 맞추기, raw output을 product result로 보는 drift, 또는 새로운 gate화를 만들면 먼저 작업 전 기준(`6adc709`)의 skill / README 복구를 검토한다.
