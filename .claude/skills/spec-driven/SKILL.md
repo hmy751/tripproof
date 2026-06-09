@@ -1,9 +1,9 @@
 ---
-name: tripproof-spec-driven
+name: spec-driven
 description: TripProof repo 전용 light spec-driven 작업 루프. TripProof에서 큰 작업, AI 위임, AC(acceptance criteria) 선택, product-first/eval 관찰, 사람 판단 회수, spec/decision/work-log 기록 위치를 판단해야 할 때 사용한다. "TripProof spec-driven", "feature spec", "AC를 고르자", "spec으로 작업하자", "이 작업이 큰 작업인가", "문서가 실행을 잡아먹지 않게" 같은 요청에 트리거한다.
 ---
 
-# TripProof Spec-driven
+# Spec-driven
 
 이 skill은 TripProof에서 spec-driven을 repo gate가 아니라 가벼운 작업 루프로 쓰게 한다. 목적은 구현 전에 사용자 장면, 경계, 확인 기준을 짧게 맞춰 사람과 AI가 같은 완료 조건을 보게 하는 것이다.
 
@@ -12,7 +12,7 @@ description: TripProof repo 전용 light spec-driven 작업 루프. TripProof에
 - Source: TripProof repo-local skill.
 - Input: 현재 TripProof 작업 요청, 관련 feature, 현재 코드/문서 상태.
 - Output: 큰 작업 여부 판단, 이번 AC(acceptance criteria), 최소 brief, 기록 위치 제안, 위험 신호.
-- Bridge: Claude 원천은 `.claude/skills/tripproof-spec-driven`, Codex 브릿지는 `.codex/skills/tripproof-spec-driven` symlink.
+- Bridge: Claude 원천은 `.claude/skills/spec-driven`, Codex 브릿지는 `.codex/skills/spec-driven` symlink.
 
 ## 실행 우선순위
 
@@ -106,6 +106,7 @@ spec 읽기
 - `docs/specs/README.md`: spec을 어떻게 쓸지에 대한 짧은 운영 규칙.
 - `docs/specs/*.md`: 여러 세션/작업으로 이어지는 제품 동작 기준. 작은 작업마다 만들지 않는다.
 - `docs/decisions/*.md`: 이후 구현 방향에 영향을 줄 결정, 기각/보류한 방법론, tradeoff.
+- `docs/implementation-notes/*.md`: 구현 중 반복해서 다시 볼 오해, drift, 경계 관찰. 결정이나 재진입 로그가 아니다.
 - `docs/work-log.md`: 중요한 작업의 얇은 재진입 기록.
 - commit/PR/test output: 작은 작업의 기본 기록 위치.
 

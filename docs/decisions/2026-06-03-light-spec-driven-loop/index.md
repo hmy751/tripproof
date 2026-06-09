@@ -32,11 +32,11 @@ TripProof의 기본 운영은 light spec-driven loop로 둔다.
 
 `docs/specs/README.md`에는 작업자가 바로 쓸 짧은 운영 규칙을 남긴다. 이 decision note는 왜 그 방식을 택했는지와 무엇을 기각/보류했는지를 보존한다.
 
-`tripproof-spec-driven`은 이 repo 전용 skill로 둔다. 전역 skill이 아니라 `.claude/skills/tripproof-spec-driven`에 두고, Codex 호환은 `.codex/skills/tripproof-spec-driven` symlink로 연결한다.
+`spec-driven`은 이 repo 전용 skill로 둔다. 전역 skill이 아니라 `.claude/skills/spec-driven`에 두고, Codex 호환은 `.codex/skills/spec-driven` symlink로 연결한다.
 
 ## 2026-06-04 보강
 
-spec-driven의 상단 원칙은 "구현 전에 사용자 장면, 경계, 확인 기준을 짧게 맞춰 사람과 AI가 같은 완료 조건을 보게 하는 것"으로 정리한다. 문서가 먼저 커지지 않도록, `docs/specs/README.md`와 `tripproof-spec-driven` skill은 실행용 gate가 아니라 범위 감각을 맞추는 reference로 둔다.
+spec-driven의 상단 원칙은 "구현 전에 사용자 장면, 경계, 확인 기준을 짧게 맞춰 사람과 AI가 같은 완료 조건을 보게 하는 것"으로 정리한다. 문서가 먼저 커지지 않도록, `docs/specs/README.md`와 `spec-driven` skill은 실행용 gate가 아니라 범위 감각을 맞추는 reference로 둔다.
 
 `docs/specs/README.md`의 권장 형식은 `한눈에 보기`와 `상세 기준`으로 나눈다.
 
@@ -67,7 +67,7 @@ spec-driven의 상단 원칙은 "구현 전에 사용자 장면, 경계, 확인 
 - product behavior가 먼저 생기고, eval이나 기록은 그 behavior를 관찰하는가.
 - 작은 작업에 불필요한 spec/log/eval이 붙지 않는가.
 - 사람이 채택/기각한 판단이 필요한 만큼만 남는가.
-- `tripproof-spec-driven` skill이 큰 slice 판단과 brief 제안만 하고, 문서 gate를 만들지 않는가.
+- `spec-driven` skill이 큰 slice 판단과 brief 제안만 하고, 문서 gate를 만들지 않는가.
 
 ## 이번 결정 밖
 

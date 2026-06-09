@@ -27,14 +27,14 @@
 반영 위치:
 
 - `docs/specs/README.md` — 처음 읽는 법·Light loop·문서 경계에 흡수, 용어표 정렬.
-- `.claude/skills/tripproof-spec-driven/SKILL.md` — 먼저 판단할 것·권장 첫 슬라이스 감각·기록 위치·기본 경계·냄새 신호에 분산.
+- `.claude/skills/spec-driven/SKILL.md` — 먼저 판단할 것·권장 첫 슬라이스 감각·기록 위치·기본 경계·냄새 신호에 분산.
 
 ## 기각 또는 보류
 
 - **분해를 별도 work-map / execution-map 파일로 두기 — 기각.** tracked 영구 파일에 번호 매긴 작업 목록을 두면 다음 구현 항목을 지시하는 queue처럼 읽힌다. `2026-06-03-light-spec-driven-loop`의 "두 현역 기준 문서가 남으면 gate/queue로 읽힌다"와 충돌한다. 분해는 spec 안 진행 메모 + 태그 commit으로 남긴다.
 - **분해를 product spec 본문에 통과 기준처럼 심기 — 기각.** spec이 작업지시서가 된다. 이전 검토에서 확인한 핵심 실패다.
 - **외부 방법론을 정의째 도입(capability 위계, specify→plan→tasks 파이프라인, EARS, constitution/steering) — 기각.** 현재 규모에는 과하다. 표준어 이름만 빌리고 무거운 절차는 들이지 않는다(결정 6).
-- **worktree 기반 병렬 분해 장치 — 보류(deprecated).** 큰 spec을 worktree로 병렬 분해하는 무거운 장치는 현재 단계에 과하고 조기 분해를 유도한다. 유용한 핵심(구현면 펼치기·slice·stub 감각)만 이 repo의 작업 루프(`tripproof-spec-driven`)로 흡수했다.
+- **worktree 기반 병렬 분해 장치 - 보류(deprecated).** 큰 spec을 worktree로 병렬 분해하는 무거운 장치는 현재 단계에 과하고 조기 분해를 유도한다. 유용한 핵심(구현면 펼치기·slice·stub 감각)만 이 repo의 작업 루프(`spec-driven`)로 흡수했다.
 - **feature마다 AC를 재서술하는 새 spec 파일 — 보류.** 기존 문서와 drift를 만든다. 만들 때도 기존 문서를 가리키는 thin pointer만 두고 재서술하지 않는다.
 
 ## 검증

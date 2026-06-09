@@ -49,5 +49,5 @@
 
 ## 2026-06-09 - 03 스펙 구현 참조 맥락 drift 관찰
 
-- 바뀐 것: `03-evidence-backed-facts.md` 구현 중 하위 스펙만 보고 parent feature spec과 02/04 계약을 잃으면 `target -> retrieval candidate -> SourceUnit grounding -> TripFact` 경로가 특정 PDF 문장/값 중심 구현으로 좁아질 수 있음을 확인했다. `tripproof-spec-driven` skill과 specs README에 `스펙 구현 전 참조 맥락 확인` 기준을 추가했다.
+- 바뀐 것: `03-evidence-backed-facts.md` 구현 중 하위 스펙만 보고 parent feature spec과 02/04 계약을 잃으면 `target -> retrieval candidate -> SourceUnit grounding -> TripFact` 경로가 특정 PDF 문장/값 중심 구현으로 좁아질 수 있음을 확인했다. `spec-driven` skill과 specs README에 `스펙 구현 전 참조 맥락 확인` 기준을 추가했다.
 - 남은 관찰: 다음 03/04 작업에서 입력이 앞 단계 product artifact인지, 출력이 뒤 단계 contract인지, deterministic/stub이 같은 계약을 통과시키는 test double인지 관찰한다. 이 기록은 작업 queue가 아니며, 아직 채택/기각한 방법론 결정은 아니므로 decision note는 만들지 않는다.
