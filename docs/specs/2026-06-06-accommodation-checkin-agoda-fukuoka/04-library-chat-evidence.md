@@ -75,4 +75,3 @@
 - 근거를 항상 펼쳐 보일지, 접었다 펼치는 UI로 둘지.
 - 한 질문 안에서 두 항목을 한 답변 카드로 보여줄지, 항목별 작은 블록으로 나눌지.
 - `facts[]`, retrieval excerpt, proposer reason 같은 debug/raw 응답을 별도 개발자용 endpoint나 mode로 다시 열지 여부.
-- 05에서 카드 초안을 만들 때 채팅 답변의 grounded evidence를 카드 후보와 어떻게 연결할지.
