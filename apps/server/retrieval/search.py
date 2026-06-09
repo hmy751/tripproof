@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 from server.retrieval.chunking import chunk_text
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
-from server.retrieval.models import EmbeddingRecord, SourceUnit
+from server.retrieval.models import ContextPack, EmbeddingRecord, RetrievalCandidate, SourceUnit
 
 
 @dataclass(frozen=True)
@@ -49,10 +49,56 @@ def select_source_unit(
     query: str,
     embedding_provider: EmbeddingProvider | None = None,
 ) -> SourceUnitMatch | None:
+    matches = _rank_source_units(
+        source_units=source_units,
+        embedding_records=embedding_records,
+        query=query,
+        embedding_provider=embedding_provider,
+    )
+    return matches[0] if matches else None
+
+
+def retrieve_context(
+    *,
+    target_id: str,
+    query: str,
+    source_units: Iterable[SourceUnit],
+    embedding_records: Iterable[EmbeddingRecord],
+    embedding_provider: EmbeddingProvider | None = None,
+    top_k: int = 3,
+) -> ContextPack:
+    matches = _rank_source_units(
+        source_units=source_units,
+        embedding_records=embedding_records,
+        query=query,
+        embedding_provider=embedding_provider,
+    )
+    candidates = [
+        RetrievalCandidate(
+            target_id=target_id,
+            query=query,
+            source_unit=match.source_unit,
+            score=match.score,
+            lexical_score=match.lexical_score,
+            vector_score=match.vector_score,
+        )
+        for match in matches[:top_k]
+        if match.score > 0
+    ]
+    return ContextPack(target_id=target_id, query=query, candidates=candidates)
+
+
+def _rank_source_units(
+    *,
+    source_units: Iterable[SourceUnit],
+    embedding_records: Iterable[EmbeddingRecord],
+    query: str,
+    embedding_provider: EmbeddingProvider | None,
+) -> list[SourceUnitMatch]:
     embedding_records_list = list(embedding_records)
     units = list(source_units)
     if not units:
-        return None
+        return []
 
     terms = _query_terms(query)
     query_vector = _query_vector(
@@ -66,7 +112,7 @@ def select_source_unit(
         if record.status == "ready" and record.vector
     }
 
-    best: SourceUnitMatch | None = None
+    matches: list[SourceUnitMatch] = []
     for unit in units:
         lexical_score = _score_text(unit.search_text, terms)
         vector_score = None
@@ -79,16 +125,16 @@ def select_source_unit(
         if vector_score is not None:
             score += max(vector_score, 0.0)
 
-        candidate = SourceUnitMatch(
-            source_unit=unit,
-            score=score,
-            lexical_score=lexical_score,
-            vector_score=vector_score,
+        matches.append(
+            SourceUnitMatch(
+                source_unit=unit,
+                score=score,
+                lexical_score=lexical_score,
+                vector_score=vector_score,
+            )
         )
-        if best is None or candidate.score > best.score:
-            best = candidate
 
-    return best
+    return sorted(matches, key=lambda match: match.score, reverse=True)
 
 
 def select_source_excerpt(

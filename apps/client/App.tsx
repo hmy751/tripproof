@@ -79,6 +79,7 @@ export function App() {
               ? `자료 ${response.materialCount}개 · ${response.pageCount}쪽 · ${response.charCount.toLocaleString()}자`
               : undefined,
           excerpt: response.excerpt,
+          facts: response.facts,
           tone: response.status === "blocked" ? "blocked" : "neutral",
         },
       ]);

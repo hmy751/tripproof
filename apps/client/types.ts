@@ -17,7 +17,28 @@ export type ChatMessage = {
   text: string;
   meta?: string;
   excerpt?: string | null;
+  facts?: FactCandidate[];
   tone?: "neutral" | "blocked";
+};
+
+export type EvidenceState = "supported" | "needs_review" | "missing" | "conflict";
+
+export type EvidenceRef = {
+  materialId: string;
+  sourceUnitId: string;
+  label: string;
+  locator: string;
+  snippet: string;
+};
+
+export type FactCandidate = {
+  id: string;
+  label: string;
+  value?: string | null;
+  evidenceState: EvidenceState;
+  evidence: EvidenceRef[];
+  sensitive: boolean;
+  reason?: string | null;
 };
 
 export type QuestionResponse = {
@@ -30,4 +51,5 @@ export type QuestionResponse = {
   excerpt?: string | null;
   excerptLocator?: string | null;
   excerptSourceUnitId?: string | null;
+  facts?: FactCandidate[];
 };

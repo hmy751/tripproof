@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field
 
 from server.schemas.base import ApiModel
+from server.schemas.facts import FactCandidateResponse
 
 QuestionStatus = Literal["accepted", "blocked"]
 
@@ -24,3 +25,4 @@ class QuestionResponse(ApiModel):
     excerpt: str | None = None
     excerpt_locator: str | None = Field(default=None, alias="excerptLocator")
     excerpt_source_unit_id: str | None = Field(default=None, alias="excerptSourceUnitId")
+    facts: list[FactCandidateResponse] = Field(default_factory=list)

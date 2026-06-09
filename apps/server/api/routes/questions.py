@@ -5,8 +5,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 
 from server.api.deps import get_material_store
+from server.extraction.checkin import extract_checkin_fact_candidates
 from server.materials.store import MaterialStore
 from server.retrieval.search import select_source_excerpt
+from server.schemas.facts import FactCandidateResponse
 from server.schemas.questions import QuestionRequest, QuestionResponse
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
@@ -33,6 +35,7 @@ def ask_question(
             excerpt=None,
             excerpt_locator=None,
             excerpt_source_unit_id=None,
+            facts=[],
         )
 
     page_count = sum(material.page_count for material in ready_materials)
@@ -42,6 +45,11 @@ def ask_question(
         source_units=retrieval_records.source_units,
         embedding_records=retrieval_records.embedding_records,
         query=question,
+        embedding_provider=store.embedding_provider,
+    )
+    facts = extract_checkin_fact_candidates(
+        source_units=retrieval_records.source_units,
+        embedding_records=retrieval_records.embedding_records,
         embedding_provider=store.embedding_provider,
     )
 
@@ -55,4 +63,5 @@ def ask_question(
         excerpt=excerpt_match.excerpt if excerpt_match else None,
         excerpt_locator=excerpt_match.source_unit.locator if excerpt_match else None,
         excerpt_source_unit_id=excerpt_match.source_unit.id if excerpt_match else None,
+        facts=[FactCandidateResponse.from_domain(fact) for fact in facts],
     )

@@ -19,6 +19,23 @@ class SourceUnit:
     metadata: dict[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class RetrievalCandidate:
+    target_id: str
+    query: str
+    source_unit: SourceUnit
+    score: float
+    lexical_score: int
+    vector_score: float | None
+
+
+@dataclass(frozen=True)
+class ContextPack:
+    target_id: str
+    query: str
+    candidates: list[RetrievalCandidate]
+
+
 EmbeddingStatus = Literal["pending", "ready", "failed"]
 
 
