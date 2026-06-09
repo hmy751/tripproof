@@ -1,4 +1,4 @@
-# 숙소 체크인 03 - Retrieval과 Evidence-backed fact
+# 숙소 체크인 03 - Retrieval과 Evidence-backed fact candidate
 
 상태: sub-spec draft.
 
@@ -6,9 +6,11 @@
 
 ## 왜 지금
 
-02에서 source unit과 RAG search boundary가 준비되어도, 그것만으로 제품 답변이 되지는 않는다. 이번 단계는 질문이나 extraction target으로 retrieval candidate를 찾고, source unit 원문으로 grounding한 뒤 `TripFact`, `EvidenceRef`, `EvidenceState`를 만드는 상태 계약을 닫는다.
+02에서 source unit과 RAG search boundary가 준비되어도, 그것만으로 제품 답변이 되지는 않는다. 이번 단계는 질문이나 extraction target으로 retrieval candidate를 찾고, LLM/extractor가 후보 원문을 읽어 체크인 fact 후보를 만들며, backend validator가 source unit 원문으로 evidence snippet과 상태를 검증해 04 `ChatAnswer` 입력을 만든다.
 
-Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` fact는 source unit 원문 일부를 `EvidenceRef`로 붙일 수 있을 때만 나온다.
+`TripFact`, `EvidenceRef`, `EvidenceState`는 제품 도메인 어휘로 유지한다. 다만 03의 첫 구현 산출물은 카드나 대시보드까지 확정된 완성 `TripFact`가 아니라, 04 채팅이 소비할 수 있는 evidence-backed fact candidate/item이다.
+
+Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extractor 출력도 검증 전에는 accepted evidence가 아니다. `supported` candidate는 source unit 원문 일부를 `EvidenceRef`로 붙일 수 있을 때만 나온다.
 
 ## 사용자 장면
 
@@ -16,28 +18,32 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 
 ## Goal
 
-- evidence-backed fact 생성 입력은 02의 source unit, embedding record, 그리고 질문 또는 extraction target을 받는다.
-- retrieval은 source unit 후보나 context pack을 만든다.
-- 체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해야 한다는 fact가 나온다.
-- 예약 확정서 제시 fact에는 실제 PDF 본문 일부가 `EvidenceRef`로 붙는다.
+- evidence-backed fact candidate 생성 입력은 02의 source unit, embedding record, 그리고 질문 또는 extraction target을 받는다.
+- retrieval/RAG는 LLM/extractor가 읽을 source unit 후보나 context pack을 만든다.
+- LLM/extractor는 후보 원문을 읽고 label, value 또는 value 없음, evidence snippet, reason, sensitive 여부를 제안한다.
+- backend validator는 제안된 evidence snippet이 실제 source unit 원문 일부인지 확인한 뒤에만 `supported`로 받아들인다.
+- 체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해야 한다는 fact candidate가 나온다.
+- 예약 확정서 제시 candidate에는 실제 PDF 본문 일부가 `EvidenceRef`로 붙는다.
 - 체크인 날짜와 체크아웃 날짜는 날짜 정보로만 다룬다.
 - 체크인 시작 시각은 source unit 원문으로 grounding되지 않으면 value 없이 `근거 부족`으로 남는다.
-- `근거 부족`은 fact/candidate로 직접 표현한다. 그래야 04 채팅이 값을 만들지 않고 부족 상태를 보여줄 수 있다.
+- `근거 부족`은 candidate/item으로 직접 표현한다. 그래야 04 채팅이 값을 만들지 않고 부족 상태를 보여줄 수 있다.
 - 등록되지 않은 companion source의 값을 PDF 근거처럼 만들지 않는다.
-- 예약번호, 고객명, 회원 ID, 결제 카드, 숙소 연락처, 정확한 주소는 일반 `supported` fact로 자동 승격하지 않는다.
-- 화면이나 답변은 fact와 상태를 받아서 보여준다.
+- 예약번호, 고객명, 회원 ID, 결제 카드, 숙소 연락처, 정확한 주소는 일반 `supported` candidate로 자동 승격하지 않는다.
+- 04 채팅은 이 candidate/state/evidence를 입력으로 받아 답변 화면에 표시한다.
 
 ## Rules
 
-- 첫 구현은 Python backend의 fact 생성 함수가 맡는다.
+- 첫 구현은 Python backend의 grounded extractor/adapter와 validator가 맡는다. RAG는 읽을 후보를 고르고, LLM/extractor는 후보 원문을 해석하며, validator는 source unit 원문으로 evidence와 상태를 확인한다.
+- 실제 LLM provider 품질이나 프롬프트 고도화는 뒤로 둘 수 있다. 그래도 hard-coded answer나 fixture value가 RAG/LLM/evidence 인과를 대신하면 안 된다.
 - retrieval score, vector similarity, keyword match만으로 `supported`를 만들지 않는다.
+- LLM/extractor 출력만으로도 `supported`를 만들지 않는다. `supported`는 validator를 통과해야 한다.
 - `supported`는 source unit 원문을 가리키는 `EvidenceRef` 없이는 나올 수 없다.
 - `EvidenceRef.snippet`은 실제 source unit text의 일부여야 한다.
 - `EvidenceRef.locator`는 처음에는 파일명과 page 정도로 충분하다.
 - `missing` fact는 value가 없고 evidence가 비어 있을 수 있다.
 - 민감하거나 애매한 값은 03에서 감지/flag 또는 `needs_review`까지만 다룬다. 자동 카드 제외와 대시보드 반영 금지는 05/06에서 닫는다.
 - retrieval candidate를 그대로 `EvidenceRef`로 쓰지 않는다. candidate는 source unit 원문 확인을 거쳐야 한다.
-- 외부 LLM을 붙일 때도 같은 입력과 출력 기준을 유지한다.
+- 외부 LLM을 붙일 때도 같은 입력과 출력 기준을 유지한다. provider를 바꿔도 `자료 -> retrieval 후보 -> LLM/extractor 판단 -> 원문 검증 -> 상태` 인과는 유지한다.
 - 삭제한 `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다. Python backend 전환 중 유지하지 않는다.
 
 ## Non-goals
@@ -45,6 +51,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 - 모든 숙소 필드 추출.
 - conflict 전체 처리.
 - 민감정보 표시 세부 정책 완성.
+- LLM provider 선택, 운영 프롬프트 품질, 모델 평가 고도화.
 - AI 답변 문장 스타일 고도화.
 - Agoda HTML 메일 본문 companion source 병합.
 - 카드 초안 생성이나 대시보드 반영.
@@ -54,7 +61,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 - `apps/server/api/routes/questions.py`: 02 slice에서 source unit 기반 excerpt와 locator/source unit id를 반환하는 smoke 경로가 있다. 03에서는 이 결과를 accepted evidence로 바로 쓰지 않는다.
 - `apps/server/materials/pdf.py`: PDF 본문 추출 경계.
 - `apps/server/retrieval/`: 02 source unit과 RAG search boundary가 있다. 03에서는 retrieval 후보/context pack과 grounding 경계를 추가한다.
-- `apps/server/extraction/checkin.py`: 체크인 fact 생성이 들어갈 자리.
+- `apps/server/extraction/checkin.py`: 체크인 grounded extractor/adapter와 validator가 들어갈 자리.
 - `apps/server/extraction/evidence.py`: `EvidenceRef` helper가 들어갈 자리.
 - `apps/server/extraction/sensitive.py`: 민감정보 감지/flag가 들어갈 자리.
 - `apps/server/schemas/`: backend API 응답 스키마.
@@ -65,21 +72,22 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. `supported` 
 ```text
 SourceUnit[] / EmbeddingRecord[] / question or extraction target
 -> RetrievalCandidate[] / ContextPack
--> grounding against SourceUnit.text
--> TripFact(label, value, evidenceState, evidence, sensitive?)
+-> LLM/extractor proposes fact candidates from candidate source text
+-> validator grounds evidence snippets against SourceUnit.text
+-> Evidence-backed fact item / TripFact-shaped candidate(label, value, evidenceState, evidence, sensitive?, reason)
 -> 04 ChatAnswer 입력
 ```
 
 ## 이번 AC
 
-1. 예약 확정서 제시 안내는 source unit 원문으로 grounding될 때만 `근거 있음` fact로 나온다.
+1. 예약 확정서 제시 안내는 source unit 원문으로 grounding될 때만 `근거 있음` candidate로 나온다.
 2. 예약 확정서 제시 근거는 Agoda PDF에서 파싱한 본문 일부를 보여준다.
-3. 체크인 시작 시각은 source unit 원문으로 grounding되지 않으면 value 없이 `근거 부족` fact로 나온다.
-4. 체크인 제시물 근거 source가 없으면 해당 fact가 `근거 있음`으로 나오지 않는다.
-5. 예약번호, 고객명, 결제 카드 같은 민감 필드는 일반 `supported` fact로 자동 승격하지 않는다.
+3. 체크인 시작 시각은 source unit 원문으로 grounding되지 않으면 value 없이 `근거 부족` candidate로 나온다.
+4. 체크인 제시물 근거 source가 없으면 해당 candidate가 `근거 있음`으로 나오지 않는다.
+5. 예약번호, 고객명, 결제 카드 같은 민감 필드는 일반 `supported` candidate로 자동 승격하지 않는다.
 
 ## 남은 판단
 
-- 민감정보를 `needs_review` fact로 남길지, fact 생성 단계에서 제외하고 debug reason만 남길지.
-- 체크인 날짜/체크아웃 날짜를 03에서 함께 fact로 만들지, 1차 구현에서는 제시물과 시작 시각만 닫을지.
-- missing fact의 reason 문구를 backend schema에 둘지, 04 chat wording에서 만들지.
+- 민감정보를 `needs_review` candidate로 남길지, fact candidate 생성 단계에서 제외하고 debug reason만 남길지.
+- 체크인 날짜/체크아웃 날짜를 03에서 함께 candidate로 만들지, 1차 구현에서는 제시물과 시작 시각만 닫을지.
+- missing candidate의 reason 문구를 backend schema에 둘지, 04 chat wording에서 만들지.
