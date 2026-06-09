@@ -44,6 +44,19 @@ export type ChatAnswer = {
   items: ChatAnswerItem[];
 };
 
+export type CardDraftSourceKind = "evidence" | "manual";
+
+export type CardDraft = {
+  id: string;
+  answerItemId: string;
+  schedule: string;
+  title: string;
+  value: string;
+  sourceKind: CardDraftSourceKind;
+  evidenceState: EvidenceState;
+  evidence: EvidenceRef[];
+};
+
 export type QuestionResponse = {
   status: "accepted" | "blocked";
   message: string;

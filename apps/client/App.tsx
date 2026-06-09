@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "./api/http";
 import { fetchMaterials, uploadMaterial } from "./api/materials";
 import { askQuestion } from "./api/questions";
+import { createDraftFromAnswerItem, markDraftAsManual } from "./drafts";
 import { AppHeader } from "./components/AppHeader";
 import { ChatWorkspace } from "./components/ChatWorkspace";
 import { DraftListPanel } from "./components/DraftListPanel";
@@ -9,11 +10,12 @@ import { LeftRail } from "./components/LeftRail";
 import { RecommendationRail } from "./components/RecommendationRail";
 import { StaticEmptyView } from "./components/StaticEmptyView";
 import { ViewTabs } from "./components/ViewTabs";
-import type { ChatMessage, LibraryItem, View } from "./types";
+import type { CardDraft, ChatAnswerItem, ChatMessage, LibraryItem, View } from "./types";
 
 export function App() {
   const [materials, setMaterials] = useState<LibraryItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [drafts, setDrafts] = useState<CardDraft[]>([]);
   const [activeView, setActiveView] = useState<View>("ask");
   const [question, setQuestion] = useState("");
   const [toast, setToast] = useState("");
@@ -95,6 +97,31 @@ export function App() {
     }
   }
 
+  function addDraftFromAnswer(message: ChatMessage, item: ChatAnswerItem) {
+    const draftId = `${message.id}-${item.id}`;
+    setDrafts((current) => {
+      if (current.some((draft) => draft.id === draftId)) return current;
+      return [...current, createDraftFromAnswerItem({ id: draftId, item })];
+    });
+  }
+
+  function updateDraft(id: string, field: "schedule" | "title" | "value", value: string) {
+    setDrafts((current) =>
+      current.map((draft) =>
+        draft.id === id
+          ? {
+              ...markDraftAsManual(draft),
+              [field]: value,
+            }
+          : draft,
+      ),
+    );
+  }
+
+  function removeDraft(id: string) {
+    setDrafts((current) => current.filter((draft) => draft.id !== id));
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 antialiased">
       <AppHeader materialCount={materials.length} />
@@ -114,11 +141,17 @@ export function App() {
               <ChatWorkspace
                 materialCount={readyMaterials.length}
                 messages={messages}
+                onCreateDraft={addDraftFromAnswer}
                 question={question}
                 onAsk={ask}
                 onQuestionChange={setQuestion}
               />
-              <DraftListPanel />
+              <DraftListPanel
+                drafts={drafts}
+                onClearDrafts={() => setDrafts([])}
+                onRemoveDraft={removeDraft}
+                onUpdateDraft={updateDraft}
+              />
             </>
           ) : null}
 

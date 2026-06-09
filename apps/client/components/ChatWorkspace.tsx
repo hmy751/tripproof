@@ -1,16 +1,19 @@
 import { AlertTriangle, CheckCircle2, FileText, HelpCircle, Send } from "lucide-react";
+import { draftActionLabel } from "../drafts";
 import type { ChatAnswerItem, ChatMessage, EvidenceRef, EvidenceState } from "../types";
 import { Button, Panel, PanelHeader, Pill, cx } from "./ui";
 
 export function ChatWorkspace({
   materialCount,
   messages,
+  onCreateDraft,
   question,
   onAsk,
   onQuestionChange,
 }: {
   materialCount: number;
   messages: ChatMessage[];
+  onCreateDraft: (message: ChatMessage, item: ChatAnswerItem) => void;
   question: string;
   onAsk: (question?: string) => void;
   onQuestionChange: (value: string) => void;
@@ -58,7 +61,7 @@ export function ChatWorkspace({
                 {message.answer?.items.length ? (
                   <div className="mt-4 grid gap-4">
                     {message.answer.items.map((item) => (
-                      <AnswerItem item={item} key={item.id} />
+                      <AnswerItem item={item} key={item.id} onCreateDraft={() => onCreateDraft(message, item)} />
                     ))}
                   </div>
                 ) : null}
@@ -95,7 +98,13 @@ export function ChatWorkspace({
   );
 }
 
-function AnswerItem({ item }: { item: ChatAnswerItem }) {
+function AnswerItem({
+  item,
+  onCreateDraft,
+}: {
+  item: ChatAnswerItem;
+  onCreateDraft: () => void;
+}) {
   return (
     <article className="border-l-2 border-slate-200 pl-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -110,6 +119,11 @@ function AnswerItem({ item }: { item: ChatAnswerItem }) {
           ))}
         </div>
       ) : null}
+      <div className="mt-3">
+        <Button onClick={onCreateDraft} size="sm" variant="ghost">
+          {draftActionLabel(item)}
+        </Button>
+      </div>
     </article>
   );
 }
