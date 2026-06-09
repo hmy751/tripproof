@@ -3,16 +3,19 @@ from __future__ import annotations
 from io import BytesIO
 
 from fastapi.testclient import TestClient
+import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
+import server.app as server_app
 from server.app import create_app
 from server.materials.store import MaterialStore
 from server.retrieval.embeddings import EmbeddingProfile
+from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
 
 
 def test_upload_text_pdf_returns_ready_material() -> None:
-    client = TestClient(create_app())
+    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
 
     response = client.post(
         "/api/materials",
@@ -30,7 +33,7 @@ def test_upload_text_pdf_returns_ready_material() -> None:
 
 
 def test_upload_blank_pdf_returns_failed_material() -> None:
-    client = TestClient(create_app())
+    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
 
     response = client.post(
         "/api/materials",
@@ -45,7 +48,7 @@ def test_upload_blank_pdf_returns_failed_material() -> None:
 
 
 def test_question_uses_ready_material_text_context() -> None:
-    client = TestClient(create_app())
+    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
     upload = client.post(
         "/api/materials",
         files={
@@ -117,8 +120,24 @@ def test_material_store_can_generate_embedding_records_with_provider() -> None:
     assert embedding.vector == [1.0, 0.0, 0.0]
 
 
+def test_material_store_does_not_publish_ready_material_when_retrieval_upsert_fails() -> None:
+    store = MaterialStore(retrieval_repository=FailingRetrievalRepository())
+
+    with pytest.raises(RuntimeError, match="upsert failed"):
+        store.add_ready(
+            name="Agoda Fukuoka",
+            file_name="booking.pdf",
+            content_type="application/pdf",
+            page_count=1,
+            text="Show your booking confirmation.",
+            preview="Show your booking confirmation.",
+        )
+
+    assert store.list_public() == []
+
+
 def test_question_blocks_when_only_failed_material_exists() -> None:
-    client = TestClient(create_app())
+    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
     client.post(
         "/api/materials",
         files={"file": ("blank.pdf", _blank_pdf(), "application/pdf")},
@@ -129,6 +148,30 @@ def test_question_blocks_when_only_failed_material_exists() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "blocked"
     assert response.json()["materialCount"] == 0
+
+
+def test_create_app_uses_supabase_repository_when_backend_enabled(monkeypatch) -> None:
+    repository = InMemoryRetrievalRepository()
+    monkeypatch.setattr(server_app, "RETRIEVAL_BACKEND", "supabase")
+    monkeypatch.setattr(server_app, "create_supabase_retrieval_repository_from_config", lambda: repository)
+
+    app = server_app.create_app(embedding_auto_generate=False)
+
+    assert app.state.material_store.retrieval_repository is repository
+
+
+def test_create_app_uses_provided_store_without_building_supabase_repository(monkeypatch) -> None:
+    store = MaterialStore()
+    monkeypatch.setattr(server_app, "RETRIEVAL_BACKEND", "supabase")
+
+    def fail_if_called():
+        raise AssertionError("Supabase repository should not be created when store is provided.")
+
+    monkeypatch.setattr(server_app, "create_supabase_retrieval_repository_from_config", fail_if_called)
+
+    app = server_app.create_app(store=store)
+
+    assert app.state.material_store is store
 
 
 def _blank_pdf() -> bytes:
@@ -173,3 +216,17 @@ class FakeEmbeddingProvider:
 
     def embed_query(self, text: str) -> list[float]:
         return [1.0, 0.0, 0.0]
+
+
+class FailingRetrievalRepository:
+    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+        raise RuntimeError("upsert failed")
+
+    def records_for_materials(self, material_ids):
+        return RetrievalRecords(source_units=[], embedding_records=[])
+
+    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+        return []
+
+    def clear(self) -> None:
+        pass

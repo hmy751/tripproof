@@ -51,3 +51,8 @@
 
 - 바뀐 것: `03-evidence-backed-facts.md` 구현 중 하위 스펙만 보고 parent feature spec과 02/04 계약을 잃으면 `target -> retrieval candidate -> SourceUnit grounding -> TripFact` 경로가 특정 PDF 문장/값 중심 구현으로 좁아질 수 있음을 확인했다. `spec-driven` skill과 specs README에 `스펙 구현 전 참조 맥락 확인` 기준을 추가했다.
 - 남은 관찰: 다음 03/04 작업에서 입력이 앞 단계 product artifact인지, 출력이 뒤 단계 contract인지, deterministic/stub이 같은 계약을 통과시키는 test double인지 관찰한다. 이 기록은 작업 queue가 아니며, 아직 채택/기각한 방법론 결정은 아니므로 decision note는 만들지 않는다.
+
+## 2026-06-09 - Supabase vector retrieval backend 연결
+
+- 바뀐 것: `RetrievalRepository`에 vector match 계약을 추가하고, Supabase REST adapter와 pgvector migration을 붙였다. product 실행은 `TRIPPROOF_RETRIEVAL_BACKEND=supabase`일 때 `tripproof_source_units` / `tripproof_source_embeddings`를 저장하고 `match_tripproof_source_units` RPC로 후보 source unit을 가져온다. `.env.example`은 Supabase backend 기준으로 정리하되 실제 URL과 service role key는 비워 둔다.
+- 남은 관찰: Supabase 연결과 migration은 확인됐지만, 설치된 Ollama embedding model과 `.env`의 model 이름이 아직 맞지 않아 실제 업로드→ready vector→RAG 응답 관찰은 다음 단계로 남았다. check-in fact proposer는 아직 local regex 기반이며, LLM proposer 전환은 별도 03 slice로 닫아야 한다.

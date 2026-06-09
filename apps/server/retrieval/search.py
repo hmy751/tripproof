@@ -5,9 +5,11 @@ from math import sqrt
 import re
 from collections.abc import Iterable
 
+from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.chunking import chunk_text
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
 from server.retrieval.models import ContextPack, EmbeddingRecord, RetrievalCandidate, SourceUnit
+from server.retrieval.repository import RetrievalRepository
 
 
 @dataclass(frozen=True)
@@ -65,13 +67,48 @@ def retrieve_context(
     source_units: Iterable[SourceUnit],
     embedding_records: Iterable[EmbeddingRecord],
     embedding_provider: EmbeddingProvider | None = None,
-    top_k: int = 3,
+    retrieval_repository: RetrievalRepository | None = None,
+    material_ids: Iterable[str] | None = None,
+    top_k: int = RAG_TOP_K,
+    similarity_threshold: float = RAG_SIMILARITY_THRESHOLD,
 ) -> ContextPack:
+    records = list(embedding_records)
+    query_vector = _query_vector(
+        query=query,
+        embedding_records=records,
+        embedding_provider=embedding_provider,
+    )
+    if query_vector is not None and retrieval_repository is not None and material_ids is not None:
+        vector_matches = retrieval_repository.match_source_units(
+            material_ids=material_ids,
+            query_embedding=query_vector,
+            limit=top_k,
+            similarity_threshold=similarity_threshold,
+        )
+        if vector_matches:
+            terms = _query_terms(query)
+            return ContextPack(
+                target_id=target_id,
+                query=query,
+                candidates=[
+                    RetrievalCandidate(
+                        target_id=target_id,
+                        query=query,
+                        source_unit=match.source_unit,
+                        score=match.similarity,
+                        lexical_score=_score_text(match.source_unit.search_text, terms),
+                        vector_score=match.similarity,
+                    )
+                    for match in vector_matches
+                ],
+            )
+
     matches = _rank_source_units(
         source_units=source_units,
-        embedding_records=embedding_records,
+        embedding_records=records,
         query=query,
         embedding_provider=embedding_provider,
+        query_vector=query_vector,
     )
     candidates = [
         RetrievalCandidate(
@@ -94,6 +131,7 @@ def _rank_source_units(
     embedding_records: Iterable[EmbeddingRecord],
     query: str,
     embedding_provider: EmbeddingProvider | None,
+    query_vector: list[float] | None = None,
 ) -> list[SourceUnitMatch]:
     embedding_records_list = list(embedding_records)
     units = list(source_units)
@@ -101,11 +139,12 @@ def _rank_source_units(
         return []
 
     terms = _query_terms(query)
-    query_vector = _query_vector(
-        query=query,
-        embedding_records=embedding_records_list,
-        embedding_provider=embedding_provider,
-    )
+    if query_vector is None:
+        query_vector = _query_vector(
+            query=query,
+            embedding_records=embedding_records_list,
+            embedding_provider=embedding_provider,
+        )
     vectors_by_source_unit_id = {
         record.source_unit_id: record.vector
         for record in embedding_records_list
@@ -121,9 +160,10 @@ def _rank_source_units(
             if document_vector is not None:
                 vector_score = _cosine_similarity(query_vector, document_vector)
 
-        score = float(lexical_score)
         if vector_score is not None:
-            score += max(vector_score, 0.0)
+            score = vector_score
+        else:
+            score = float(lexical_score)
 
         matches.append(
             SourceUnitMatch(
@@ -134,7 +174,7 @@ def _rank_source_units(
             )
         )
 
-    return sorted(matches, key=lambda match: match.score, reverse=True)
+    return sorted(matches, key=lambda match: (match.score, match.lexical_score), reverse=True)
 
 
 def select_source_excerpt(
@@ -143,14 +183,40 @@ def select_source_excerpt(
     embedding_records: Iterable[EmbeddingRecord],
     query: str,
     embedding_provider: EmbeddingProvider | None = None,
+    retrieval_repository: RetrievalRepository | None = None,
+    material_ids: Iterable[str] | None = None,
     max_chars: int = 420,
 ) -> SourceUnitExcerpt | None:
-    match = select_source_unit(
-        source_units=source_units,
-        embedding_records=embedding_records,
+    records = list(embedding_records)
+    query_vector = _query_vector(
         query=query,
+        embedding_records=records,
         embedding_provider=embedding_provider,
     )
+    match = None
+    if query_vector is not None and retrieval_repository is not None and material_ids is not None:
+        vector_matches = retrieval_repository.match_source_units(
+            material_ids=material_ids,
+            query_embedding=query_vector,
+            limit=1,
+            similarity_threshold=RAG_SIMILARITY_THRESHOLD,
+        )
+        if vector_matches:
+            vector_match = vector_matches[0]
+            terms = _query_terms(query)
+            match = SourceUnitMatch(
+                source_unit=vector_match.source_unit,
+                score=vector_match.similarity,
+                lexical_score=_score_text(vector_match.source_unit.search_text, terms),
+                vector_score=vector_match.similarity,
+            )
+    if match is None:
+        match = select_source_unit(
+            source_units=source_units,
+            embedding_records=records,
+            query=query,
+            embedding_provider=embedding_provider,
+        )
     if match is None:
         return None
 

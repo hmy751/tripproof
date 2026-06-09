@@ -40,23 +40,28 @@ def ask_question(
 
     page_count = sum(material.page_count for material in ready_materials)
     char_count = sum(len(material.text) for material in ready_materials)
+    ready_material_ids = [material.id for material in ready_materials]
     retrieval_records = store.retrieval_records(payload.material_ids)
     excerpt_match = select_source_excerpt(
         source_units=retrieval_records.source_units,
         embedding_records=retrieval_records.embedding_records,
         query=question,
         embedding_provider=store.embedding_provider,
+        retrieval_repository=store.retrieval_repository,
+        material_ids=ready_material_ids,
     )
     facts = extract_checkin_fact_candidates(
         source_units=retrieval_records.source_units,
         embedding_records=retrieval_records.embedding_records,
         embedding_provider=store.embedding_provider,
+        retrieval_repository=store.retrieval_repository,
+        material_ids=ready_material_ids,
     )
 
     return QuestionResponse(
         status="accepted",
         message=f"읽기 완료 자료 {len(ready_materials)}개를 기준으로 질문을 받았습니다.",
-        material_ids=[material.id for material in ready_materials],
+        material_ids=ready_material_ids,
         material_count=len(ready_materials),
         page_count=page_count,
         char_count=char_count,

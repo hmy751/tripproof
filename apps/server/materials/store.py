@@ -61,6 +61,10 @@ class MaterialStore:
     def embedding_provider(self) -> EmbeddingProvider | None:
         return self._embedding_provider
 
+    @property
+    def retrieval_repository(self) -> RetrievalRepository:
+        return self._retrieval_repository
+
     def add_ready(
         self,
         *,
@@ -96,8 +100,8 @@ class MaterialStore:
             source_units=source_units,
             embedding_records=embedding_records,
         )
-        self._materials[material.id] = material
         self._retrieval_repository.upsert_material_records(material_id=material.id, records=retrieval_records)
+        self._materials[material.id] = material
         return material.public()
 
     def add_failed(

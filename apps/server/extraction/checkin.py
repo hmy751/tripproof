@@ -8,6 +8,7 @@ from server.extraction.evidence import validate_fact_proposal
 from server.extraction.models import EvidenceState, FactCandidate, FactProposal, FactTarget
 from server.retrieval.embeddings import EmbeddingProvider
 from server.retrieval.models import ContextPack, EmbeddingRecord, SourceUnit
+from server.retrieval.repository import RetrievalRepository
 from server.retrieval.search import retrieve_context
 
 BOOKING_CONFIRMATION_FACT_ID = "checkin_booking_confirmation"
@@ -120,6 +121,8 @@ def extract_checkin_fact_candidates(
     source_units: Iterable[SourceUnit],
     embedding_records: Iterable[EmbeddingRecord],
     embedding_provider: EmbeddingProvider | None = None,
+    retrieval_repository: RetrievalRepository | None = None,
+    material_ids: Iterable[str] | None = None,
     proposer: CheckinFactProposer | None = None,
 ) -> list[FactCandidate]:
     units = list(source_units)
@@ -134,6 +137,8 @@ def extract_checkin_fact_candidates(
             source_units=units,
             embedding_records=records,
             embedding_provider=embedding_provider,
+            retrieval_repository=retrieval_repository,
+            material_ids=material_ids,
         )
         proposal = active_proposer.propose(target=target, context=context)
         candidates.append(validate_fact_proposal(target=target, context=context, proposal=proposal))

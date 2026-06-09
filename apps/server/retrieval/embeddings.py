@@ -10,6 +10,7 @@ from server.core.config import (
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
     EMBEDDING_PROVIDER,
+    OLLAMA_EMBEDDING_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
 )
 from server.retrieval.models import EmbeddingRecord, SourceUnit
@@ -113,6 +114,7 @@ def create_ollama_embedding_provider_from_config() -> OllamaEmbeddingProvider:
         base_url=OLLAMA_BASE_URL,
         model=EMBEDDING_MODEL,
         dimensions=EMBEDDING_DIMENSIONS,
+        timeout_seconds=OLLAMA_EMBEDDING_TIMEOUT_SECONDS,
     )
 
 

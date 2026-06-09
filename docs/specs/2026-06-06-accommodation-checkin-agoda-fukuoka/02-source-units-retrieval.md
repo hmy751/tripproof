@@ -1,6 +1,6 @@
 # 숙소 체크인 02 - Source unit과 RAG search boundary
 
-상태: first backend source/search boundary implemented.
+상태: source unit boundary와 Supabase vector retrieval backend 연결 구현.
 
 부모: [숙소 체크인 확인 - Agoda 후쿠오카 예약 PDF](index.md)
 
@@ -64,7 +64,7 @@ TripProof에서 이 흐름의 소유권은 아래처럼 나눈다.
 - evidence source 선택이나 rejected candidate 판정.
 - `TripFact`, `EvidenceRef`, `EvidenceState` 생성.
 - 답변 문장 생성, 카드 초안, 대시보드, 현장 카드.
-- 특정 vector DB 제품 선택이나 운영 스택 확정.
+- vector DB 운영 튜닝, background embedding job, 장기 보관 정책 확정.
 - 모든 PDF 형식에 맞는 semantic chunking.
 - OCR, bbox, visual region locator.
 - eval metric dashboard.
@@ -78,9 +78,11 @@ TripProof에서 이 흐름의 소유권은 아래처럼 나눈다.
 - `apps/server/retrieval/models.py`: `SourceUnit`과 `EmbeddingRecord` 경계.
 - `apps/server/retrieval/chunking.py`: `[page N]` 마커를 page locator가 있는 source unit으로 나눈다.
 - `apps/server/retrieval/embeddings.py`: Ollama embedding provider와 pending/ready/failed `EmbeddingRecord` 생성.
-- `apps/server/retrieval/repository.py`: 현재는 in-memory retrieval record 저장소이며, 나중에 Supabase adapter로 바꿀 boundary다.
-- `apps/server/retrieval/search.py`: lexical/vector 기반 source unit 후보 선택 helper. 체크인 도메인 target 규칙은 넣지 않는다.
+- `apps/server/retrieval/repository.py`: in-memory repository와 vector match 계약을 둔다.
+- `apps/server/retrieval/supabase.py`: Supabase REST 기반 `source_units` / `source_embeddings` 저장소와 vector match adapter를 둔다.
+- `apps/server/retrieval/search.py`: Supabase vector match를 우선 사용하고, ready vector나 vector match 결과가 없으면 lexical fallback으로 source unit 후보를 고른다. 체크인 도메인 target 규칙은 넣지 않는다.
 - `apps/server/api/routes/questions.py`: 질문 API smoke 경로에서 source unit excerpt, locator, source unit id를 반환한다.
+- `supabase/migrations/20260609_tripproof_retrieval.sql`: pgvector extension, source unit/embedding table, HNSW index, match RPC를 정의한다.
 
 ## 기본 흐름
 
@@ -107,10 +109,11 @@ StoredMaterial(text, fileName, pageCount)
 이번 구현은 채팅 smoke 경로에서 source unit retrieval까지 확인하되, accepted evidence나 fact/card 생성으로 넘어가지 않는다.
 
 - `IndexRecord`는 중간에 고려했지만 02 구현에서는 만들지 않는다. 별도 타입으로 빼면 RAG 검색 후보와 원문 source boundary가 불필요하게 한 겹 더 벌어져서, lexical 검색용 text는 `SourceUnit.searchText`로 둔다.
-- `EmbeddingRecord`는 유지한다. embedding은 provider, model, dimensions, vector, status 수명주기가 원문 text와 다르고, 나중에 Supabase의 `source_embeddings` 같은 별도 테이블로 옮기기 쉽기 때문이다.
-- 첫 개발 기본 profile은 local Ollama `nomic-embed-text-v2-moe`, 768 dimensions로 둔다. 다만 upload가 로컬 Ollama 실행 여부에 막히지 않게 `TRIPPROOF_EMBEDDING_AUTO_GENERATE=1`일 때만 실제 vector를 만든다.
-- auto-generate가 꺼져 있거나 provider가 없으면 `EmbeddingRecord.status`는 `pending`이다. 이 상태도 `sourceUnitId`, provider, model, dimensions를 보존하므로 나중에 background job이나 Supabase adapter가 이어받을 수 있다.
-- `RetrievalRepository`는 현재 in-memory 구현만 가진다. 02는 Supabase 연동을 고려한 adapter 경계를 만든 것이고, 실제 Supabase schema/migration/vector DB 선택은 아직 확정하지 않는다.
+- `EmbeddingRecord`는 유지한다. embedding은 provider, model, dimensions, vector, status 수명주기가 원문 text와 다르므로 Supabase에서도 `tripproof_source_embeddings` 테이블로 분리한다.
+- 첫 개발 기본 profile은 local Ollama `nomic-embed-text-v2-moe`, 768 dimensions로 둔다. upload가 로컬 Ollama 실행 여부에 막히지 않게 provider 실패는 `EmbeddingRecord.status=failed`로 저장한다.
+- auto-generate가 꺼져 있거나 provider가 없으면 `EmbeddingRecord.status`는 `pending`이다. 이 상태도 `sourceUnitId`, provider, model, dimensions를 보존하므로 나중에 background job이 이어받을 수 있다.
+- `RetrievalRepository`는 in-memory 구현과 Supabase adapter를 가진다. product 실행은 `TRIPPROOF_RETRIEVAL_BACKEND=supabase`일 때 Supabase `match_tripproof_source_units` RPC를 우선 사용하고, 테스트는 memory backend로 분리한다.
+- local `.env`에는 실제 Supabase URL과 service role key를 둘 수 있지만, 커밋 대상은 값이 비어 있는 `.env.example`뿐이다.
 - `/api/questions`의 `excerpt`, `excerptLocator`, `excerptSourceUnitId`는 02 smoke 결과다. 이것은 사용자가 보는 accepted evidence가 아니라, 검색된 source unit이 원문 locator로 되돌아오는지 확인하기 위한 임시 응답면이다.
 - retrieval helper에는 체크인 제시물, 체크인 시작 시각, Agoda 전용 문구 같은 도메인 target 하드코딩을 넣지 않는다. query/text token과 optional vector similarity로 source unit 후보만 고른다.
 
@@ -120,15 +123,17 @@ StoredMaterial(text, fileName, pageCount)
 - PDF 파싱 본문의 `[page N]` 마커를 읽어 page locator를 source unit에 보존한다.
 - lexical 검색은 `SourceUnit.searchText`를 쓰고, 응답 snippet과 locator는 `SourceUnit.text`와 `SourceUnit.locator`로 되돌린다.
 - embedding provider test double로 ready embedding record 생성 경로를 검증했다.
-- 기본 실행에서는 embedding record가 pending으로 저장되며, Ollama 자동 호출은 env flag를 켜야 한다.
+- Supabase backend profile에서는 embedding auto-generate를 시도하고, Ollama 호출 실패 시 failed embedding record를 저장한다.
+- Supabase migration은 `tripproof_source_units`, `tripproof_source_embeddings`, HNSW vector index, `match_tripproof_source_units` RPC를 만든다.
+- 질문 API와 check-in extraction path는 retrieval repository를 통해 ready vector가 있으면 Supabase vector match 후보를, 없으면 fallback 후보를 사용한다.
 - 질문 API는 source unit 기반 excerpt와 locator/source unit id를 반환한다.
-- 확인한 테스트: `uv run pytest apps/server/tests` 결과 6 passed. FastAPI/TestClient deprecation warning은 남아 있다.
+- 확인한 테스트: `uv run pytest apps/server/tests` 결과 24 passed. FastAPI/TestClient deprecation warning은 남아 있다.
 
 ## 남은 판단
 
 - 첫 source unit granularity는 현재 page 안 chunk 단위다. Agoda PDF가 길어질 때 section/문장 단위로 더 쪼갤지.
 - `sourceUnitId`는 현재 material id와 page/unit index 기반이다. Supabase 장기 저장 전에 content hash를 섞은 stable id로 바꿀지.
-- Supabase로 옮길 때 `source_units.search_text`로 둘지, 별도 materialized lexical index나 `source_embeddings` table로 분리할지.
-- Ollama 실제 호출은 수동 또는 integration test로 언제 검증할지.
+- Supabase `source_embeddings.material_id` denormalization을 DB constraint로 더 강하게 묶을지.
+- Ollama 실제 호출은 설치된 embedding model과 `.env` model을 맞춘 뒤 수동 또는 integration test로 언제 검증할지.
 - lexical score와 vector score를 같은 retrieval 단계에서 합칠지, 03에서 rerank/context pack으로 넘길지.
 - 03에서 `RetrievalCandidate`와 `EvidenceRef`를 만들 때 현재 `SourceUnitExcerpt` smoke helper를 유지할지, 03 전용 candidate 타입으로 교체할지.
