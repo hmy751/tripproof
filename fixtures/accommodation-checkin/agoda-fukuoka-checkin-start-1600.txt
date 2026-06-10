@@ -1,0 +1,4 @@
+Agoda Fukuoka booking confirmation
+Hotel address is Hakata.
+Check-in starts at 16:00.
+Check-out is at 11:00.

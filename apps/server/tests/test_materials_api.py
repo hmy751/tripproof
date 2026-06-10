@@ -94,6 +94,43 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert "facts" not in body
 
 
+def test_question_route_calls_library_chat_answer_composer_contract() -> None:
+    composer = SpyLibraryChatAnswerComposer()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=composer,
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Hotel address is Hakata. Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert body["answer"]["summary"] == "composer contract reached"
+    assert body["answer"]["items"][0]["body"] == "route called LibraryChatAnswerComposer.compose"
+    assert composer.calls == 1
+    assert composer.last_question == "check-in time?"
+    assert composer.last_context is not None
+    assert composer.last_context.target_id == "library_chat_answer"
+    assert [candidate.source_unit.text for candidate in composer.last_context.candidates] == [
+        "Hotel address is Hakata. Check-in starts at 15:00."
+    ]
+
+
 def test_ready_material_builds_source_units_and_pending_embeddings() -> None:
     store = MaterialStore()
 
@@ -266,6 +303,31 @@ class FakeLibraryChatAnswerComposer:
                     evidence_state=EvidenceState.SUPPORTED,
                     value=None,
                     evidence=[EvidenceRefResponse.from_domain(evidence_ref)],
+                )
+            ],
+        )
+
+
+class SpyLibraryChatAnswerComposer:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.last_question = None
+        self.last_context = None
+
+    def compose(self, *, question, context):
+        self.calls += 1
+        self.last_question = question
+        self.last_context = context
+        return ChatAnswerResponse(
+            summary="composer contract reached",
+            items=[
+                ChatAnswerItemResponse(
+                    id="answer",
+                    label="답변",
+                    body="route called LibraryChatAnswerComposer.compose",
+                    evidence_state=EvidenceState.MISSING,
+                    value=None,
+                    evidence=[],
                 )
             ],
         )
