@@ -3,8 +3,6 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
-from server.answers.prompts.loaders.library_chat_answer_prompt import load_library_chat_prompt
-from server.answers.prompts.loaders.markdown_prompt_asset import PromptAsset
 from server.core.config import (
     FACT_PROPOSER_BACKEND,
     OLLAMA_BASE_URL,
@@ -14,6 +12,10 @@ from server.core.config import (
 from server.extraction.evidence import EvidenceGroundingError, evidence_ref_from_snippet
 from server.extraction.models import EvidenceRef, EvidenceState
 from server.llm.ollama import OllamaChatJsonClient, OllamaChatJsonConfig, OllamaClientError
+from server.prompts.renderers.answer.library_chat_answer import (
+    LibraryChatAnswerPrompt,
+    load_library_chat_answer_prompt,
+)
 from server.retrieval.models import ContextPack, SourceUnit
 from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse
 from server.schemas.facts import EvidenceRefResponse
@@ -36,12 +38,12 @@ class MissingLibraryChatAnswerComposer:
 
 
 class OllamaLibraryChatAnswerComposer:
-    def __init__(self, *, client: OllamaChatJsonClient, prompt: PromptAsset | None = None) -> None:
+    def __init__(self, *, client: OllamaChatJsonClient, prompt: LibraryChatAnswerPrompt | None = None) -> None:
         self._client = client
-        self._prompt = prompt or load_library_chat_prompt()
+        self._prompt = prompt or load_library_chat_answer_prompt()
 
     @property
-    def prompt_asset(self) -> PromptAsset:
+    def prompt(self) -> LibraryChatAnswerPrompt:
         return self._prompt
 
     def compose(self, *, question: str, context: ContextPack) -> ChatAnswerResponse:
@@ -50,7 +52,7 @@ class OllamaLibraryChatAnswerComposer:
 
         try:
             payload = self._client.generate_json(
-                system=self._prompt.section("System"),
+                system=self._prompt.system_message(),
                 user=_user_prompt(question=question, context=context, prompt=self._prompt),
             )
         except OllamaClientError as exc:
@@ -79,7 +81,7 @@ def create_library_chat_answer_composer_from_config(
     raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
 
 
-def _user_prompt(*, question: str, context: ContextPack, prompt: PromptAsset) -> str:
+def _user_prompt(*, question: str, context: ContextPack, prompt: LibraryChatAnswerPrompt) -> str:
     source_blocks = "\n\n".join(
         (
             f"source_unit_id: {candidate.source_unit.id}\n"
@@ -88,7 +90,7 @@ def _user_prompt(*, question: str, context: ContextPack, prompt: PromptAsset) ->
         )
         for candidate in context.candidates
     )
-    return prompt.render_section("User", question=question, source_blocks=source_blocks)
+    return prompt.user_message(question=question, source_blocks=source_blocks)
 
 
 def _answer_from_payload(*, question: str, payload: object, context: ContextPack) -> ChatAnswerResponse:

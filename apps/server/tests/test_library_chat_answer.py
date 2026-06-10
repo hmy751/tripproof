@@ -4,8 +4,8 @@ import re
 from pathlib import Path
 
 from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID, OllamaLibraryChatAnswerComposer
-from server.answers.prompts.loaders.library_chat_answer_prompt import load_library_chat_prompt
 from server.extraction.models import EvidenceState
+from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
 from server.retrieval.models import ContextPack, RetrievalCandidate, SourceUnit
 
 
@@ -66,21 +66,24 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
 
     composer.compose(question="체크인 시작 시각은 몇 시야?", context=_context(unit))
 
-    prompt = load_library_chat_prompt()
-    assert composer.prompt_asset.category == "llm"
-    assert composer.prompt_asset.name == "library_chat_answer"
-    assert composer.prompt_asset.version == "2026-06-10"
-    assert composer.prompt_asset.metadata["display_name_ko"] == "자료함 질문 답변"
-    assert composer.prompt_asset.metadata["description_ko"] == (
+    prompt = load_library_chat_answer_prompt()
+    assert composer.prompt.document.domain == "answer"
+    assert composer.prompt.document.name == "library_chat_answer"
+    assert composer.prompt.document.version == "2026-06-10"
+    assert composer.prompt.document.title == "Library Chat Answer Prompt"
+    assert composer.prompt.document.metadata["display_name_ko"] == "자료함 질문 답변"
+    assert composer.prompt.document.metadata["description_ko"] == (
         "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만든다."
     )
-    assert composer.prompt_asset.snapshot()["contentHash"] == prompt.content_hash
-    assert composer.prompt_asset.snapshot()["assetPath"] == (
-        "apps/server/answers/prompts/llm/library_chat_answer/2026-06-10.md"
+    assert "# 자료함 질문 답변 프롬프트" in composer.prompt.document.metadata["translation_ko"]
+    assert "일반 여행 지식으로 추론하지 않는다." in composer.prompt.document.metadata["translation_ko"]
+    assert composer.prompt.snapshot()["bodyHash"] == prompt.document.body_hash
+    assert composer.prompt.snapshot()["assetPath"] == (
+        "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
     )
-    assert "displayNameKo" not in composer.prompt_asset.snapshot()
-    assert "descriptionKo" not in composer.prompt_asset.snapshot()
-    assert client.last_system == prompt.section("System")
+    assert "displayNameKo" not in composer.prompt.snapshot()
+    assert "descriptionKo" not in composer.prompt.snapshot()
+    assert client.last_system == prompt.system_message()
     assert client.last_user is not None
     assert "question: 체크인 시작 시각은 몇 시야?" in client.last_user
     assert "source_unit_id: su_mat_1_1" in client.last_user
