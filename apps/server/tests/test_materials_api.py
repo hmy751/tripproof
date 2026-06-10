@@ -8,8 +8,10 @@ from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 import server.app as server_app
+import server.api.routes.materials as materials_route
 from server.app import create_app
 from server.extraction.models import EvidenceRef, EvidenceState
+from server.materials.observation import InMemoryMaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
@@ -18,7 +20,14 @@ from server.schemas.facts import EvidenceRefResponse
 
 
 def test_upload_text_pdf_returns_ready_material() -> None:
-    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
+    observation_sink = InMemoryMaterialUploadObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            material_upload_observation_sink=observation_sink,
+        )
+    )
 
     response = client.post(
         "/api/materials",
@@ -33,10 +42,49 @@ def test_upload_text_pdf_returns_ready_material() -> None:
     assert material["fileName"] == "booking.pdf"
     assert material["pageCount"] == 1
     assert "Check-in starts at 15:00" in material["preview"]
+    assert "observation" not in material
+    assert "debug" not in material
+    assert "raw" not in material
+
+    records = observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.operation == "material_upload"
+    assert record.material_id == material["id"]
+    assert _step_names(record) == [
+        "upload",
+        "pdf_parse",
+        "source_unit_build",
+        "embedding_record_build",
+        "retrieval_repository_upsert",
+    ]
+    assert record.step("upload").status == "succeeded"
+    assert record.step("upload").facts["file_name"] == "booking.pdf"
+    assert record.step("upload").facts["content_type"] == "application/pdf"
+    assert record.step("upload").facts["size_bytes"] > 0
+    assert record.step("pdf_parse").status == "succeeded"
+    assert record.step("pdf_parse").facts == {"page_count": 1}
+    assert record.step("source_unit_build").status == "succeeded"
+    assert record.step("source_unit_build").facts == {"count": 1}
+    assert record.step("embedding_record_build").status == "succeeded"
+    assert record.step("embedding_record_build").facts == {
+        "count": 1,
+        "status_counts": {"pending": 1},
+    }
+    assert record.step("retrieval_repository_upsert").status == "succeeded"
+    assert record.final_material_status == "ready"
+    assert record.failure_kind is None
 
 
 def test_upload_blank_pdf_returns_failed_material() -> None:
-    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
+    observation_sink = InMemoryMaterialUploadObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            material_upload_observation_sink=observation_sink,
+        )
+    )
 
     response = client.post(
         "/api/materials",
@@ -48,6 +96,113 @@ def test_upload_blank_pdf_returns_failed_material() -> None:
     assert material["status"] == "failed"
     assert material["pageCount"] is None
     assert material["error"] == "텍스트를 추출할 수 없는 PDF입니다."
+    assert "observation" not in material
+    assert "debug" not in material
+    assert "raw" not in material
+
+    records = observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.material_id == material["id"]
+    assert record.step("upload").status == "succeeded"
+    assert record.step("pdf_parse").status == "failed"
+    assert record.step("pdf_parse").failure_kind == "parse_failed"
+    assert record.step("source_unit_build").status == "not_started"
+    assert record.step("embedding_record_build").status == "not_started"
+    assert record.step("retrieval_repository_upsert").status == "not_started"
+    assert record.final_material_status == "failed"
+    assert record.failure_kind == "parse_failed"
+
+
+def test_upload_non_pdf_records_unsupported_file_observation() -> None:
+    observation_sink = InMemoryMaterialUploadObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            material_upload_observation_sink=observation_sink,
+        )
+    )
+
+    response = client.post(
+        "/api/materials",
+        files={"file": ("notes.txt", b"not a pdf", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    material = response.json()
+    assert material["status"] == "failed"
+    assert material["error"] == "PDF 파일만 지원합니다."
+    assert "observation" not in material
+    assert "debug" not in material
+    assert "raw" not in material
+
+    records = observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.material_id == material["id"]
+    assert record.step("upload").facts["file_name"] == "notes.txt"
+    assert record.step("upload").facts["content_type"] == "text/plain"
+    assert record.step("upload").status == "failed"
+    assert record.step("upload").failure_kind == "unsupported_file"
+    assert record.step("pdf_parse").status == "not_started"
+    assert record.final_material_status == "failed"
+    assert record.failure_kind == "unsupported_file"
+
+
+def test_upload_too_large_pdf_records_size_limit_observation(monkeypatch) -> None:
+    observation_sink = InMemoryMaterialUploadObservationSink()
+    monkeypatch.setattr(materials_route, "MAX_UPLOAD_BYTES", 5)
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            material_upload_observation_sink=observation_sink,
+        )
+    )
+
+    response = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", b"%PDF-too-large", "application/pdf")},
+    )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "PDF 파일이 너무 큽니다."}
+
+    records = observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.material_id is None
+    assert record.step("upload").facts["file_name"] == "booking.pdf"
+    assert record.step("upload").facts["size_bytes"] == len(b"%PDF-too-large")
+    assert record.step("upload").facts["size_limit_bytes"] == 5
+    assert record.step("upload").status == "failed"
+    assert record.step("upload").failure_kind == "size_limit_exceeded"
+    assert record.step("pdf_parse").status == "not_started"
+    assert record.final_material_status == "failed"
+    assert record.failure_kind == "size_limit_exceeded"
+
+
+def test_upload_observation_sink_failure_does_not_change_ready_response() -> None:
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            material_upload_observation_sink=FailingObservationSink(),
+        )
+    )
+
+    response = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00"), "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    material = response.json()
+    assert material["status"] == "ready"
+    assert "observation" not in material
+    assert "debug" not in material
+    assert "raw" not in material
 
 
 def test_question_returns_chat_answer_for_ready_materials() -> None:
@@ -193,6 +348,41 @@ def test_material_store_does_not_publish_ready_material_when_retrieval_upsert_fa
     assert store.list_public() == []
 
 
+def test_upload_records_repository_upsert_failure_without_publishing_ready_material() -> None:
+    observation_sink = InMemoryMaterialUploadObservationSink()
+    store = MaterialStore(retrieval_repository=FailingRetrievalRepository())
+    client = TestClient(
+        create_app(store=store, material_upload_observation_sink=observation_sink),
+        raise_server_exceptions=False,
+    )
+
+    response = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Show your booking confirmation."), "application/pdf")},
+    )
+
+    assert response.status_code == 500
+    assert store.list_public() == []
+
+    records = observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.material_id is not None
+    assert record.step("upload").status == "succeeded"
+    assert record.step("pdf_parse").status == "succeeded"
+    assert record.step("source_unit_build").status == "succeeded"
+    assert record.step("source_unit_build").facts == {"count": 1}
+    assert record.step("embedding_record_build").status == "succeeded"
+    assert record.step("embedding_record_build").facts == {
+        "count": 1,
+        "status_counts": {"pending": 1},
+    }
+    assert record.step("retrieval_repository_upsert").status == "failed"
+    assert record.step("retrieval_repository_upsert").failure_kind == "repository_upsert_failed"
+    assert record.final_material_status == "failed"
+    assert record.failure_kind == "repository_upsert_failed"
+
+
 def test_question_blocks_when_only_failed_material_exists() -> None:
     client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
     client.post(
@@ -258,6 +448,10 @@ def _pdf_with_text(text: str) -> bytes:
     buffer = BytesIO()
     writer.write(buffer)
     return buffer.getvalue()
+
+
+def _step_names(record) -> list[str]:
+    return [step.name for step in record.steps]
 
 
 class FakeEmbeddingProvider:
@@ -345,3 +539,8 @@ class FailingRetrievalRepository:
 
     def clear(self) -> None:
         pass
+
+
+class FailingObservationSink:
+    def record_material_upload(self, record) -> None:
+        raise RuntimeError("observation sink failed")

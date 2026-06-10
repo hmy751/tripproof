@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from server.api.routes import health, materials, questions
 from server.answers.library_chat import LibraryChatAnswerComposer, create_library_chat_answer_composer_from_config
 from server.core.config import ALLOWED_ORIGINS, EMBEDDING_AUTO_GENERATE, RETRIEVAL_BACKEND
+from server.materials.observation import MaterialUploadObservationSink, NoopMaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
@@ -18,6 +19,7 @@ def create_app(
     retrieval_backend: str | None = None,
     library_chat_answer_composer: LibraryChatAnswerComposer | None = None,
     fact_proposer_backend: str | None = None,
+    material_upload_observation_sink: MaterialUploadObservationSink | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TripProof Backend")
     if store is not None:
@@ -41,6 +43,9 @@ def create_app(
     app.state.library_chat_answer_composer = (
         library_chat_answer_composer
         or create_library_chat_answer_composer_from_config(backend=fact_proposer_backend)
+    )
+    app.state.material_upload_observation_sink = (
+        material_upload_observation_sink or NoopMaterialUploadObservationSink()
     )
 
     app.add_middleware(

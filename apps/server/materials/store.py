@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
+from server.materials.observation import MaterialUploadObservationRecorder, embedding_record_build_facts
 from server.retrieval.chunking import build_source_units
 from server.retrieval.embeddings import (
     EmbeddingProfile,
@@ -74,15 +75,36 @@ class MaterialStore:
         page_count: int,
         text: str,
         preview: str,
+        observation: MaterialUploadObservationRecorder | None = None,
     ) -> Material:
         material_id = _new_material_id()
-        source_units = build_source_units(material_id=material_id, file_name=file_name, text=text)
-        embedding_records = build_embedding_records(
-            source_units,
-            provider=self._embedding_provider,
-            profile=self._embedding_profile,
-            generate=self._embedding_auto_generate,
-        )
+        if observation is not None:
+            observation.assign_material_id(material_id)
+        try:
+            source_units = build_source_units(material_id=material_id, file_name=file_name, text=text)
+        except Exception:
+            if observation is not None:
+                observation.fail("source_unit_build", "source_unit_build_failed")
+                observation.finalize("failed", failure_kind="source_unit_build_failed")
+            raise
+        if observation is not None:
+            observation.succeed("source_unit_build", facts={"count": len(source_units)})
+
+        try:
+            embedding_records = build_embedding_records(
+                source_units,
+                provider=self._embedding_provider,
+                profile=self._embedding_profile,
+                generate=self._embedding_auto_generate,
+            )
+        except Exception:
+            if observation is not None:
+                observation.fail("embedding_record_build", "embedding_record_build_failed")
+                observation.finalize("failed", failure_kind="embedding_record_build_failed")
+            raise
+        if observation is not None:
+            observation.succeed("embedding_record_build", facts=embedding_record_build_facts(embedding_records))
+
         retrieval_records = RetrievalRecords(
             source_units=source_units,
             embedding_records=embedding_records,
@@ -100,7 +122,16 @@ class MaterialStore:
             source_units=source_units,
             embedding_records=embedding_records,
         )
-        self._retrieval_repository.upsert_material_records(material_id=material.id, records=retrieval_records)
+        try:
+            self._retrieval_repository.upsert_material_records(material_id=material.id, records=retrieval_records)
+        except Exception:
+            if observation is not None:
+                observation.fail("retrieval_repository_upsert", "repository_upsert_failed")
+                observation.finalize("failed", failure_kind="repository_upsert_failed")
+            raise
+        if observation is not None:
+            observation.succeed("retrieval_repository_upsert")
+            observation.finalize("ready")
         self._materials[material.id] = material
         return material.public()
 
