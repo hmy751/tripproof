@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID, OllamaLibraryChatAnswerComposer
+from server.answers.prompts.loaders.library_chat_answer_prompt import load_library_chat_prompt
 from server.extraction.models import EvidenceState
 from server.retrieval.models import ContextPack, RetrievalCandidate, SourceUnit
 
@@ -42,6 +43,52 @@ def test_library_chat_composer_answers_question_from_grounded_source() -> None:
     assert item.evidence_state == EvidenceState.SUPPORTED
     assert item.evidence[0].snippet in unit.text
     assert item.evidence[0].locator == "booking.pdf p.1 u.1"
+
+
+def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
+    unit = _source_unit("Check-in starts at 15:00.")
+    client = _CapturingJsonClient(
+        {
+            "items": [
+                {
+                    "id": "answer",
+                    "label": "체크인 시작 시각",
+                    "body": "체크인 시작 시각은 15:00입니다.",
+                    "value": "15:00",
+                    "evidence_state": "supported",
+                    "source_unit_id": unit.id,
+                    "evidence_snippet": "Check-in starts at 15:00.",
+                }
+            ]
+        }
+    )
+    composer = OllamaLibraryChatAnswerComposer(client=client)
+
+    composer.compose(question="체크인 시작 시각은 몇 시야?", context=_context(unit))
+
+    prompt = load_library_chat_prompt()
+    assert composer.prompt_asset.category == "llm"
+    assert composer.prompt_asset.name == "library_chat_answer"
+    assert composer.prompt_asset.version == "2026-06-10"
+    assert composer.prompt_asset.metadata["display_name_ko"] == "자료함 질문 답변"
+    assert composer.prompt_asset.metadata["description_ko"] == (
+        "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만든다."
+    )
+    assert composer.prompt_asset.snapshot()["contentHash"] == prompt.content_hash
+    assert composer.prompt_asset.snapshot()["assetPath"] == (
+        "apps/server/answers/prompts/llm/library_chat_answer/2026-06-10.md"
+    )
+    assert "displayNameKo" not in composer.prompt_asset.snapshot()
+    assert "descriptionKo" not in composer.prompt_asset.snapshot()
+    assert client.last_system == prompt.section("System")
+    assert client.last_user is not None
+    assert "question: 체크인 시작 시각은 몇 시야?" in client.last_user
+    assert "source_unit_id: su_mat_1_1" in client.last_user
+    assert "Check-in starts at 15:00." in client.last_user
+    assert "자료함 질문 답변" not in client.last_system
+    assert "자료함 질문 답변" not in client.last_user
+    assert "일반 여행 지식으로 추론하지 않는다." not in client.last_system
+    assert "일반 여행 지식으로 추론하지 않는다." not in client.last_user
 
 
 def test_library_chat_answer_changes_when_only_source_checkin_time_changes() -> None:
@@ -252,6 +299,18 @@ class _FakeJsonClient:
 
     def generate_json(self, *, system: str, user: str) -> object:
         return self._payload
+
+
+class _CapturingJsonClient(_FakeJsonClient):
+    def __init__(self, payload: object) -> None:
+        super().__init__(payload)
+        self.last_system = None
+        self.last_user = None
+
+    def generate_json(self, *, system: str, user: str) -> object:
+        self.last_system = system
+        self.last_user = user
+        return super().generate_json(system=system, user=user)
 
 
 class _SourceDrivenCheckinTimeJsonClient:

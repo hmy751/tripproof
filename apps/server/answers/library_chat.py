@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
+from server.answers.prompts.loaders.library_chat_answer_prompt import load_library_chat_prompt
+from server.answers.prompts.loaders.markdown_prompt_asset import PromptAsset
 from server.core.config import (
     FACT_PROPOSER_BACKEND,
     OLLAMA_BASE_URL,
@@ -34,8 +36,13 @@ class MissingLibraryChatAnswerComposer:
 
 
 class OllamaLibraryChatAnswerComposer:
-    def __init__(self, *, client: OllamaChatJsonClient) -> None:
+    def __init__(self, *, client: OllamaChatJsonClient, prompt: PromptAsset | None = None) -> None:
         self._client = client
+        self._prompt = prompt or load_library_chat_prompt()
+
+    @property
+    def prompt_asset(self) -> PromptAsset:
+        return self._prompt
 
     def compose(self, *, question: str, context: ContextPack) -> ChatAnswerResponse:
         if not context.candidates:
@@ -43,8 +50,8 @@ class OllamaLibraryChatAnswerComposer:
 
         try:
             payload = self._client.generate_json(
-                system=_system_prompt(),
-                user=_user_prompt(question=question, context=context),
+                system=self._prompt.section("System"),
+                user=_user_prompt(question=question, context=context, prompt=self._prompt),
             )
         except OllamaClientError as exc:
             return _missing_answer(reason=f"답변 생성에 실패했습니다: {exc}")
@@ -72,16 +79,7 @@ def create_library_chat_answer_composer_from_config(
     raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
 
 
-def _system_prompt() -> str:
-    return (
-        "You answer questions about the user's travel materials. "
-        "Use only the provided source unit text. Do not infer from general travel knowledge. "
-        "If the source units do not support an answer, say it is missing. "
-        "Return JSON only."
-    )
-
-
-def _user_prompt(*, question: str, context: ContextPack) -> str:
+def _user_prompt(*, question: str, context: ContextPack, prompt: PromptAsset) -> str:
     source_blocks = "\n\n".join(
         (
             f"source_unit_id: {candidate.source_unit.id}\n"
@@ -90,34 +88,7 @@ def _user_prompt(*, question: str, context: ContextPack) -> str:
         )
         for candidate in context.candidates
     )
-    return (
-        f"question: {question}\n\n"
-        "Answer the question directly in Korean.\n"
-        "Return this JSON shape exactly:\n"
-        "{\n"
-        '  "items": [\n'
-        "    {\n"
-        '      "id": "short_snake_case_or_null",\n'
-        '      "label": "short Korean label",\n'
-        '      "body": "Korean answer sentence",\n'
-        '      "value": "string or null",\n'
-        '      "evidence_state": "supported | missing | needs_review",\n'
-        '      "source_unit_id": "string or null",\n'
-        '      "evidence_snippet": "string or null"\n'
-        "    }\n"
-        "  ]\n"
-        "}\n\n"
-        "Rules:\n"
-        "- If an item is supported, source_unit_id must be one of the provided ids.\n"
-        "- If an item is supported, evidence_snippet must be an exact substring copied from that source unit text.\n"
-        "- If the exact source text does not support the answer, use evidence_state missing and value null.\n"
-        "- Do not answer a different checklist item just because it is present in the source.\n\n"
-        "Writing rules:\n"
-        "- label is the requested field name, not the answer value. For example: 체크인 날짜, 체크인 시작 시각, 결제 수단.\n"
-        "- body must be a complete Korean sentence that directly answers the user's question.\n"
-        "- id must not be a source_unit_id. Use answer or a short semantic snake_case id.\n\n"
-        f"Retrieved source units:\n{source_blocks}"
-    )
+    return prompt.render_section("User", question=question, source_blocks=source_blocks)
 
 
 def _answer_from_payload(*, question: str, payload: object, context: ContextPack) -> ChatAnswerResponse:
