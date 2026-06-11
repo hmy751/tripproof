@@ -2,13 +2,13 @@
 
 작성일: 2026-06-11
 
-상태: 하위 작업 spec. `POST /api/questions`의 question preparation, material scope, retrieval pipeline, answer pipeline, finalization 경계를 내부 observation record로 남기는 기준을 정한다.
+상태: 구현된 하위 작업 spec. `POST /api/questions`의 question preparation, material scope, retrieval pipeline, answer pipeline, finalization 경계를 내부 observation record로 남기는 기준을 정한다.
 
 ## 왜 지금
 
 `POST /api/materials`는 upload, parse, source unit, embedding, retrieval repository upsert 경계를 내부 record로 남긴다. 이제 자료함 질문 결과가 흔들렸을 때 답변만 보면 어떤 ready material이 질문에 들어갔는지, retrieval이 실제 실행됐는지, answer composer가 어떤 결과를 냈는지 확인하기 어렵다.
 
-이 slice에서는 LangSmith나 config/prompt snapshot을 먼저 붙이지 않는다. `/api/questions` product path에서 실제로 생기는 실행 fact를 내부 record로 남기고, 외부 trace나 snapshot은 이후 이 record를 소비하는 계층으로 둔다.
+이 slice에서는 LangSmith나 runtime config snapshot을 먼저 붙이지 않는다. `/api/questions` product path에서 실제로 생기는 실행 fact를 내부 record로 남기고, prompt identity는 composer가 노출할 때 safe facts로 남긴다. 외부 trace나 runtime config snapshot은 이후 이 record를 소비하거나 연결되는 계층으로 둔다.
 
 ## 사용자 장면
 
@@ -56,7 +56,7 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 
 - LangSmith trace export는 이 문서의 범위가 아니다.
 - provider/model/retrieval config snapshot 전체를 확정하지 않는다.
-- prompt version/hash snapshot 연결은 이 문서의 범위가 아니다.
+- runtime config snapshot 전체 연결은 이 문서의 범위가 아니다.
 - composer 내부 provider call, prompt render, raw LLM payload 관측은 만들지 않는다.
 - observation record 저장소의 장기 보관, 검색 UI, 개인정보 마스킹 정책은 정하지 않는다.
 - question API 응답에 debug field, retrieval candidates, observation field를 추가하지 않는다.
@@ -179,6 +179,33 @@ step/fact 판단 기준은 함수 크기나 route visibility가 아니라 AI/run
 4. observation record에는 source unit text, retrieval candidate 전문, answer body 전문, LLM raw payload, exception stack이 들어가지 않는다.
 5. observation sink가 비활성화되거나 실패해도 `POST /api/questions`의 product 응답 계약은 동일하다.
 
+## 구현 결과
+
+2026-06-11 현재 이 slice는 `apps/server/questions/observation.py`와 `/api/questions` route 연결로 구현됐다.
+
+내부 record는 한 요청을 parent/leaf step으로 남긴다. 부모 단계는 제품 파이프라인을 읽기 위한 묶음이고, leaf 단계가 실제 code boundary에서 생긴 fact를 가진다.
+
+```text
+question_answer
+  question_preparation
+    query_snapshot
+  material_scope
+    ready_material_selection
+    retrieval_record_load
+  retrieval_pipeline
+    source_retrieval
+    context_assembly
+    candidate_summary
+  answer_pipeline
+    prompt_snapshot
+    composer_call
+    answer_projection
+  finalization
+    question_status
+```
+
+기본 sink는 no-op이고, 테스트에서는 in-memory sink로 record를 확인한다. sink가 실패해도 product 응답, 예외 propagation, material store 상태를 바꾸지 않는다.
+
 ## 구현 중 주의할 점
 
 - route-level `composer_call` result는 composer 내부 provider 성공 여부가 아니라 `compose()` 호출이 `ChatAnswerResponse`를 반환했는지에 대한 관측이다.
@@ -199,5 +226,5 @@ step/fact 판단 기준은 함수 크기나 route visibility가 아니라 AI/run
 
 - request payload의 requested material ids를 record에 둘지, ready material ids만 둘지.
 - candidate count 외에 candidate source unit id 목록까지 안전한 summary로 볼지.
-- question observation record와 prompt/config snapshot을 같은 record 안에 붙일지, 별도 snapshot id로 연결할지.
-- material upload record도 장기적으로 parent step을 둔 계층형으로 맞출지.
+- question observation record와 runtime config snapshot을 같은 record 안에 붙일지, 별도 snapshot id로 연결할지.
+- requested material ids를 나중에 별도 diagnostic snapshot으로 볼지, ready material selection fact만 유지할지.
