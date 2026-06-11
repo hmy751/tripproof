@@ -13,6 +13,8 @@ from server.app import create_app
 from server.extraction.models import EvidenceRef, EvidenceState
 from server.materials.observation import InMemoryMaterialUploadObservationSink
 from server.materials.store import MaterialStore
+from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
+from server.questions.observation import InMemoryQuestionObservationSink
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
 from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse
@@ -206,6 +208,7 @@ def test_upload_observation_sink_failure_does_not_change_ready_response() -> Non
 
 
 def test_question_returns_chat_answer_for_ready_materials() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
     composer = FakeLibraryChatAnswerComposer(
         body="체크인 시작 시각은 15:00입니다.",
         snippet="Check-in starts at 15:00.",
@@ -215,6 +218,7 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
             embedding_auto_generate=False,
             retrieval_backend="memory",
             library_chat_answer_composer=composer,
+            question_observation_sink=question_observation_sink,
         )
     )
     upload = client.post(
@@ -245,8 +249,139 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert composer.last_context is not None
     assert composer.last_context.query == "check-in time?"
     assert composer.last_context.candidates
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
     assert "excerpt" not in body
     assert "facts" not in body
+
+    records = question_observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.operation == "question_answer"
+    assert _step_names(record) == [
+        "question_preparation",
+        "material_scope",
+        "retrieval_pipeline",
+        "answer_pipeline",
+        "finalization",
+    ]
+    assert _child_step_names(record.step("question_preparation")) == ["query_snapshot"]
+    assert record.step("query_snapshot").status == "succeeded"
+    assert record.step("query_snapshot").facts == {"question_length": len("check-in time?")}
+    assert _child_step_names(record.step("material_scope")) == [
+        "ready_material_selection",
+        "retrieval_record_load",
+    ]
+    assert record.step("ready_material_selection").status == "succeeded"
+    assert record.step("ready_material_selection").facts == {
+        "ready_material_count": 1,
+        "ready_material_ids": [material_id],
+    }
+    assert record.step("material_scope").status == "succeeded"
+    assert _child_step_names(record.step("retrieval_pipeline")) == [
+        "source_retrieval",
+        "context_assembly",
+        "candidate_summary",
+    ]
+    assert record.step("retrieval_pipeline").status == "succeeded"
+    assert record.step("retrieval_record_load").status == "succeeded"
+    assert record.step("retrieval_record_load").facts == {
+        "executed": True,
+        "source_unit_count": 1,
+        "embedding_record_count": 1,
+    }
+    assert record.step("source_retrieval").status == "succeeded"
+    assert record.step("source_retrieval").facts == {
+        "executed": True,
+        "strategy": "lexical",
+        "query_embedding_attempted": False,
+        "query_embedding_available": False,
+        "vector_attempted": False,
+        "vector_candidate_count": 0,
+        "fallback_used": False,
+    }
+    assert record.step("context_assembly").status == "succeeded"
+    assert record.step("context_assembly").facts == {
+        "executed": True,
+        "target_id": "library_chat_answer",
+    }
+    assert record.step("candidate_summary").status == "succeeded"
+    assert record.step("candidate_summary").facts == {
+        "candidate_count": 1,
+        "candidates_with_vector_score": 0,
+        "candidates_with_lexical_score": 1,
+    }
+    assert _child_step_names(record.step("answer_pipeline")) == [
+        "prompt_snapshot",
+        "composer_call",
+        "answer_projection",
+    ]
+    assert record.step("answer_pipeline").status == "succeeded"
+    assert record.step("prompt_snapshot").status == "succeeded"
+    assert record.step("prompt_snapshot").facts == {"available": False}
+    assert record.step("composer_call").status == "succeeded"
+    assert record.step("composer_call").facts == {"result": "succeeded"}
+    assert record.step("answer_projection").status == "succeeded"
+    assert record.step("answer_projection").facts == {
+        "item_count": 1,
+        "evidence_state_counts": {"supported": 1},
+    }
+    assert _child_step_names(record.step("finalization")) == ["question_status"]
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("question_status").status == "succeeded"
+    assert record.step("question_status").facts == {"status": "accepted"}
+    assert record.final_question_status == "accepted"
+    assert record.failure_kind is None
+
+
+def test_question_observation_records_repository_vector_source_retrieval() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    composer = FakeLibraryChatAnswerComposer(
+        body="체크인 시작 시각은 15:00입니다.",
+        snippet="Check-in starts at 15:00.",
+    )
+    store = MaterialStore(
+        embedding_provider=FakeEmbeddingProvider(dimensions=3),
+        embedding_auto_generate=True,
+        retrieval_repository=InMemoryRetrievalRepository(),
+    )
+    client = TestClient(
+        create_app(
+            store=store,
+            library_chat_answer_composer=composer,
+            question_observation_sink=question_observation_sink,
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Hotel address is Hakata. Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 200
+    record = question_observation_sink.records[0]
+    assert record.step("source_retrieval").facts == {
+        "executed": True,
+        "strategy": "repository_vector",
+        "query_embedding_attempted": True,
+        "query_embedding_available": True,
+        "vector_attempted": True,
+        "vector_candidate_count": 1,
+        "fallback_used": False,
+    }
+    assert record.step("candidate_summary").facts["candidate_count"] == 1
+    assert record.step("candidate_summary").facts["candidates_with_vector_score"] == 1
+    assert composer.last_context is not None
+    assert composer.last_context.candidates[0].vector_score is not None
 
 
 def test_question_route_calls_library_chat_answer_composer_contract() -> None:
@@ -284,6 +419,42 @@ def test_question_route_calls_library_chat_answer_composer_contract() -> None:
     assert [candidate.source_unit.text for candidate in composer.last_context.candidates] == [
         "Hotel address is Hakata. Check-in starts at 15:00."
     ]
+
+
+def test_question_observation_records_prompt_snapshot_when_composer_exposes_prompt() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=PromptAwareSpyLibraryChatAnswerComposer(),
+            question_observation_sink=question_observation_sink,
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 200
+    prompt_snapshot = load_library_chat_answer_prompt().snapshot()
+    record = question_observation_sink.records[0]
+    assert record.step("prompt_snapshot").facts == {
+        "available": True,
+        "prompt_domain": "answer",
+        "prompt_name": "library_chat_answer",
+        "prompt_version": "2026-06-10",
+        "prompt_body_hash": prompt_snapshot["bodyHash"],
+        "prompt_file_hash": prompt_snapshot["fileHash"],
+        "prompt_asset_path": "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md",
+    }
+    body = response.json()
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
 
 
 def test_ready_material_builds_source_units_and_pending_embeddings() -> None:
@@ -384,7 +555,14 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
 
 
 def test_question_blocks_when_only_failed_material_exists() -> None:
-    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
+    question_observation_sink = InMemoryQuestionObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            question_observation_sink=question_observation_sink,
+        )
+    )
     client.post(
         "/api/materials",
         files={"file": ("blank.pdf", _blank_pdf(), "application/pdf")},
@@ -393,8 +571,172 @@ def test_question_blocks_when_only_failed_material_exists() -> None:
     response = client.post("/api/questions", json={"question": "check-in time?"})
 
     assert response.status_code == 200
-    assert response.json()["status"] == "blocked"
-    assert response.json()["materialCount"] == 0
+    body = response.json()
+    assert body["status"] == "blocked"
+    assert body["materialCount"] == 0
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
+
+    records = question_observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.step("query_snapshot").status == "succeeded"
+    assert record.step("query_snapshot").facts == {"question_length": len("check-in time?")}
+    assert record.step("ready_material_selection").status == "failed"
+    assert record.step("ready_material_selection").failure_kind == "no_ready_materials"
+    assert record.step("ready_material_selection").facts == {
+        "ready_material_count": 0,
+        "ready_material_ids": [],
+    }
+    assert record.step("material_scope").status == "failed"
+    assert record.step("retrieval_record_load").status == "not_started"
+    assert record.step("retrieval_pipeline").status == "not_started"
+    assert record.step("answer_pipeline").status == "not_started"
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("question_status").status == "succeeded"
+    assert record.step("question_status").facts == {"status": "blocked"}
+    assert record.final_question_status == "blocked"
+    assert record.failure_kind == "no_ready_materials"
+
+
+def test_question_records_empty_question_validation_failure() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            question_observation_sink=question_observation_sink,
+        )
+    )
+
+    response = client.post("/api/questions", json={"question": "   "})
+
+    assert response.status_code == 400
+    records = question_observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.step("question_preparation").status == "failed"
+    assert record.step("query_snapshot").status == "failed"
+    assert record.step("query_snapshot").failure_kind == "empty_question"
+    assert record.step("query_snapshot").facts == {"question_length": 0}
+    assert record.step("material_scope").status == "not_started"
+    assert record.step("retrieval_pipeline").status == "not_started"
+    assert record.step("answer_pipeline").status == "not_started"
+    assert record.step("finalization").status == "not_started"
+    assert record.final_question_status is None
+    assert record.failure_kind == "empty_question"
+
+
+def test_question_observation_sink_failure_does_not_change_accepted_response() -> None:
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
+            question_observation_sink=FailingQuestionObservationSink(),
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
+
+
+def test_question_records_retrieval_failure_without_changing_exception_behavior() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    store = MaterialStore(retrieval_repository=FailingReadRetrievalRepository())
+    client = TestClient(
+        create_app(
+            store=store,
+            library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
+            question_observation_sink=question_observation_sink,
+        ),
+        raise_server_exceptions=False,
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 500
+    records = question_observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.step("query_snapshot").status == "succeeded"
+    assert record.step("ready_material_selection").status == "succeeded"
+    assert record.step("ready_material_selection").facts == {
+        "ready_material_count": 1,
+        "ready_material_ids": [material_id],
+    }
+    assert record.step("material_scope").status == "failed"
+    assert record.step("material_scope").failure_kind == "retrieval_failed"
+    assert record.step("retrieval_record_load").status == "failed"
+    assert record.step("retrieval_record_load").failure_kind == "retrieval_failed"
+    assert record.step("retrieval_record_load").facts == {"executed": True}
+    assert record.step("retrieval_pipeline").status == "not_started"
+    assert record.step("source_retrieval").status == "not_started"
+    assert record.step("context_assembly").status == "not_started"
+    assert record.step("candidate_summary").status == "not_started"
+    assert record.step("answer_pipeline").status == "not_started"
+    assert record.step("finalization").status == "not_started"
+    assert record.final_question_status is None
+    assert record.failure_kind == "retrieval_failed"
+
+
+def test_question_records_answer_composer_failure_without_changing_exception_behavior() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=FailingLibraryChatAnswerComposer(),
+            question_observation_sink=question_observation_sink,
+        ),
+        raise_server_exceptions=False,
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 500
+    records = question_observation_sink.records
+    assert len(records) == 1
+    record = records[0]
+    assert record.step("query_snapshot").status == "succeeded"
+    assert record.step("ready_material_selection").status == "succeeded"
+    assert record.step("retrieval_pipeline").status == "succeeded"
+    assert record.step("candidate_summary").facts == {
+        "candidate_count": 1,
+        "candidates_with_vector_score": 0,
+        "candidates_with_lexical_score": 1,
+    }
+    assert record.step("answer_pipeline").status == "failed"
+    assert record.step("prompt_snapshot").status == "succeeded"
+    assert record.step("prompt_snapshot").facts == {"available": False}
+    assert record.step("composer_call").status == "failed"
+    assert record.step("composer_call").failure_kind == "answer_composer_failed"
+    assert record.step("answer_projection").status == "not_started"
+    assert record.step("finalization").status == "not_started"
+    assert record.final_question_status is None
+    assert record.failure_kind == "answer_composer_failed"
 
 
 def test_create_app_uses_supabase_repository_when_backend_enabled(monkeypatch) -> None:
@@ -452,6 +794,10 @@ def _pdf_with_text(text: str) -> bytes:
 
 def _step_names(record) -> list[str]:
     return [step.name for step in record.steps]
+
+
+def _child_step_names(step) -> list[str]:
+    return [child.name for child in step.children]
 
 
 class FakeEmbeddingProvider:
@@ -527,6 +873,17 @@ class SpyLibraryChatAnswerComposer:
         )
 
 
+class PromptAwareSpyLibraryChatAnswerComposer(SpyLibraryChatAnswerComposer):
+    def __init__(self) -> None:
+        super().__init__()
+        self.prompt = load_library_chat_answer_prompt()
+
+
+class FailingLibraryChatAnswerComposer:
+    def compose(self, *, question, context):
+        raise RuntimeError("answer composer failed")
+
+
 class FailingRetrievalRepository:
     def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
         raise RuntimeError("upsert failed")
@@ -541,6 +898,28 @@ class FailingRetrievalRepository:
         pass
 
 
+class FailingReadRetrievalRepository:
+    def __init__(self) -> None:
+        self._delegate = InMemoryRetrievalRepository()
+
+    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+        self._delegate.upsert_material_records(material_id=material_id, records=records)
+
+    def records_for_materials(self, material_ids):
+        raise RuntimeError("retrieval records read failed")
+
+    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+        return []
+
+    def clear(self) -> None:
+        self._delegate.clear()
+
+
 class FailingObservationSink:
     def record_material_upload(self, record) -> None:
         raise RuntimeError("observation sink failed")
+
+
+class FailingQuestionObservationSink:
+    def record_question_answer(self, record) -> None:
+        raise RuntimeError("question observation sink failed")

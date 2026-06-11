@@ -3,7 +3,7 @@ from __future__ import annotations
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.models import EmbeddingRecord, SourceUnit
 from server.retrieval.repository import RetrievalRecords, VectorSourceUnitMatch
-from server.retrieval.search import retrieve_context
+from server.retrieval.search import retrieve_context, retrieve_context_with_trace
 
 
 def test_retrieve_context_prefers_vector_similarity_over_lexical_matches() -> None:
@@ -111,6 +111,40 @@ def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
     assert repository.seen_query_embedding == [1.0, 0.0]
 
 
+def test_retrieve_context_with_trace_records_repository_vector_strategy() -> None:
+    source_unit = _source_unit(
+        id="su_supabase",
+        text="Supabase vector search가 선택한 source unit입니다.",
+    )
+    embedding = _embedding_record(source_unit_id=source_unit.id, vector=[1.0, 0.0])
+    repository = FakeRetrievalRepository(
+        match=VectorSourceUnitMatch(
+            source_unit=source_unit,
+            embedding_record=embedding,
+            similarity=0.91,
+        )
+    )
+    provider = FakeEmbeddingProvider(query_vector=[1.0, 0.0])
+
+    retrieved = retrieve_context_with_trace(
+        target_id="checkin_start_time",
+        query="check-in time?",
+        source_units=[],
+        embedding_records=[embedding],
+        embedding_provider=provider,
+        retrieval_repository=repository,
+        material_ids=["mat_1"],
+    )
+
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == ["su_supabase"]
+    assert retrieved.source_retrieval.strategy == "repository_vector"
+    assert retrieved.source_retrieval.query_embedding_attempted is True
+    assert retrieved.source_retrieval.query_embedding_available is True
+    assert retrieved.source_retrieval.vector_attempted is True
+    assert retrieved.source_retrieval.vector_candidate_count == 1
+    assert retrieved.source_retrieval.fallback_used is False
+
+
 def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_empty() -> None:
     source_unit = _source_unit(
         id="su_lexical",
@@ -133,6 +167,56 @@ def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_
     assert [candidate.source_unit.id for candidate in context.candidates] == ["su_lexical"]
     assert context.candidates[0].vector_score == 1.0
     assert context.candidates[0].lexical_score > 0
+
+
+def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector() -> None:
+    source_unit = _source_unit(
+        id="su_local_vector",
+        text="체크인 시 예약 확정서를 제시해 주세요.",
+    )
+    embedding = _embedding_record(source_unit_id=source_unit.id, vector=[1.0, 0.0])
+    repository = EmptyRetrievalRepository()
+    provider = FakeEmbeddingProvider(query_vector=[1.0, 0.0])
+
+    retrieved = retrieve_context_with_trace(
+        target_id="booking_confirmation",
+        query="예약 확정서 제시",
+        source_units=[source_unit],
+        embedding_records=[embedding],
+        embedding_provider=provider,
+        retrieval_repository=repository,
+        material_ids=["mat_1"],
+    )
+
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == ["su_local_vector"]
+    assert retrieved.source_retrieval.strategy == "local_vector"
+    assert retrieved.source_retrieval.query_embedding_attempted is True
+    assert retrieved.source_retrieval.query_embedding_available is True
+    assert retrieved.source_retrieval.vector_attempted is True
+    assert retrieved.source_retrieval.vector_candidate_count == 1
+    assert retrieved.source_retrieval.fallback_used is True
+
+
+def test_retrieve_context_with_trace_records_lexical_strategy_without_query_embedding() -> None:
+    source_unit = _source_unit(
+        id="su_lexical",
+        text="체크인 시 예약 확정서를 제시해 주세요.",
+    )
+
+    retrieved = retrieve_context_with_trace(
+        target_id="booking_confirmation",
+        query="예약 확정서 제시",
+        source_units=[source_unit],
+        embedding_records=[],
+    )
+
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == ["su_lexical"]
+    assert retrieved.source_retrieval.strategy == "lexical"
+    assert retrieved.source_retrieval.query_embedding_attempted is False
+    assert retrieved.source_retrieval.query_embedding_available is False
+    assert retrieved.source_retrieval.vector_attempted is False
+    assert retrieved.source_retrieval.vector_candidate_count == 0
+    assert retrieved.source_retrieval.fallback_used is False
 
 
 def _source_unit(*, id: str, text: str) -> SourceUnit:
