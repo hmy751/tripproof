@@ -4,6 +4,18 @@ product entry point가 생긴 뒤 eval code를 여기에 둔다.
 
 eval은 product code를 호출하고 결과를 기록하면서 product behavior를 관찰한다. product logic은 product 쪽에 둔다.
 
+## 현재 runner
+
+```bash
+uv run python eval/question_runtime_recording_smoke.py \
+  --correlation-id flow_eval_test \
+  --json
+```
+
+이 runner는 metric score가 아니라 question runtime recording smoke다. `POST /api/materials`와 `POST /api/questions` product entry point를 호출하고, 생성된 run artifact와 local observation JSONL이 같은 `correlation_id`로 연결되는지 확인한다.
+
+기본 산출물은 `eval/runs/question-runtime-recording/<run-id>/` 아래에 생긴다. 실제 수동 run artifact를 commit할지는 별도 판단으로 둔다.
+
 product flow가 생긴 뒤 고려할 수 있는 evaluation axis:
 
 - Faithfulness/Groundedness

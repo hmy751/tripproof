@@ -236,6 +236,5 @@ HTTP request
 ## 남은 판단
 
 - 새 material batch, explicit session reset, route 전환 같은 product 경계가 생기면 App mount/browser tab 단위 correlation id를 더 좁힐지.
-- eval run artifact가 `correlation_id`를 직접 소유할지, observation export envelope를 통해 연결할지.
 - LangSmith correlation tag의 cardinality가 불편해지면 metadata-only로 줄일지.
 - upstream proxy나 external gateway의 request id를 별도 필드로 받을 필요가 있는지.
