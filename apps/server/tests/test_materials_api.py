@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 
 from fastapi.testclient import TestClient
 import pytest
@@ -13,6 +14,7 @@ from server.app import create_app
 from server.extraction.models import EvidenceRef, EvidenceState
 from server.materials.observation import InMemoryMaterialUploadObservationSink
 from server.materials.store import MaterialStore
+from server.observations.export import LocalArtifactObservationExporter
 from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
 from server.questions.observation import InMemoryQuestionObservationSink
 from server.retrieval.embeddings import EmbeddingProfile
@@ -247,6 +249,106 @@ def test_upload_observation_sink_failure_does_not_change_ready_response() -> Non
     assert "observation" not in material
     assert "debug" not in material
     assert "raw" not in material
+
+
+def test_local_artifact_observation_exporter_records_material_and_question_payloads(tmp_path) -> None:
+    exporter = LocalArtifactObservationExporter(tmp_path)
+    composer = FakeLibraryChatAnswerComposer(
+        body="체크인 시작 시각은 15:00입니다.",
+        snippet="Check-in starts at 15:00.",
+    )
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=composer,
+            observation_exporter=exporter,
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={
+            "file": (
+                "booking-secret-name.pdf",
+                _pdf_with_text("Hotel address is Hakata. Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert "observation" not in body
+    assert "runtimeConfig" not in body
+
+    rows = [json.loads(line) for line in exporter.path.read_text(encoding="utf-8").splitlines()]
+    assert [row["schema_version"] for row in rows] == [
+        "tripproof.observation_export.v1",
+        "tripproof.observation_export.v1",
+    ]
+    assert [row["operation"] for row in rows] == ["material_upload", "question_answer"]
+
+    material_export = rows[0]
+    assert material_export["payload"]["final_status"] == "ready"
+    assert material_export["payload"]["failure_kind"] is None
+    assert material_export["payload"]["subject"] == {"material_id": material_id}
+    assert material_export["payload"]["runtime_config_snapshot"]["retrieval"] == {
+        "backend": "memory",
+        "top_k": 3,
+        "similarity_threshold": 0.0,
+    }
+    upload_facts = _export_step(material_export, "upload_snapshot")["facts"]
+    assert upload_facts["file_name_present"] is True
+    assert upload_facts["file_extension"] == "pdf"
+    assert "file_name" not in upload_facts
+    assert upload_facts["content_type"] == "application/pdf"
+
+    question_export = rows[1]
+    assert question_export["payload"]["final_status"] == "accepted"
+    assert question_export["payload"]["failure_kind"] is None
+    assert _export_step(question_export, "ready_material_selection")["facts"] == {
+        "ready_material_count": 1,
+        "ready_material_ids": [material_id],
+    }
+    assert _export_step(question_export, "question_status")["facts"] == {"status": "accepted"}
+
+    exported_json = json.dumps(rows, ensure_ascii=False)
+    assert "booking-secret-name.pdf" not in exported_json
+    assert "check-in time?" not in exported_json
+    assert "Hotel address is Hakata" not in exported_json
+    assert "체크인 시작 시각은 15:00입니다." not in exported_json
+
+
+def test_observation_exporter_failure_does_not_change_product_responses() -> None:
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
+            observation_exporter=FailingObservationExporter(),
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material = upload.json()
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material["id"]]})
+
+    assert upload.status_code == 200
+    assert material["status"] == "ready"
+    assert "observation" not in material
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
 
 
 def test_question_returns_chat_answer_for_ready_materials() -> None:
@@ -916,6 +1018,24 @@ def _child_step_names(step) -> list[str]:
     return [child.name for child in step.children]
 
 
+def _export_step(export, name: str):
+    for step in export["payload"]["steps"]:
+        match = _find_export_step(step, name)
+        if match is not None:
+            return match
+    raise KeyError(name)
+
+
+def _find_export_step(step, name: str):
+    if step["name"] == name:
+        return step
+    for child in step["children"]:
+        match = _find_export_step(child, name)
+        if match is not None:
+            return match
+    return None
+
+
 class FakeEmbeddingProvider:
     def __init__(self, *, dimensions: int) -> None:
         self.profile = EmbeddingProfile(
@@ -1056,3 +1176,8 @@ class FailingObservationSink:
 class FailingQuestionObservationSink:
     def record_question_answer(self, record) -> None:
         raise RuntimeError("question observation sink failed")
+
+
+class FailingObservationExporter:
+    def export_observation(self, envelope) -> None:
+        raise RuntimeError("observation export failed")

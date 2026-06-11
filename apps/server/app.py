@@ -5,10 +5,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.api.routes import health, materials, questions
 from server.answers.library_chat import LibraryChatAnswerComposer, create_library_chat_answer_composer_from_config
-from server.core.config import ALLOWED_ORIGINS, EMBEDDING_AUTO_GENERATE, RETRIEVAL_BACKEND
-from server.materials.observation import MaterialUploadObservationSink, NoopMaterialUploadObservationSink
+from server.core.config import (
+    ALLOWED_ORIGINS,
+    EMBEDDING_AUTO_GENERATE,
+    OBSERVATION_EXPORT_DIR,
+    RETRIEVAL_BACKEND,
+)
+from server.materials.observation import MaterialUploadObservationSink
 from server.materials.store import MaterialStore
-from server.questions.observation import NoopQuestionObservationSink, QuestionObservationSink
+from server.observations.export import (
+    MaterialUploadObservationExportSink,
+    ObservationExporter,
+    QuestionObservationExportSink,
+    create_observation_exporter_from_directory,
+)
+from server.questions.observation import QuestionObservationSink
 from server.retrieval.search import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
@@ -26,6 +37,7 @@ def create_app(
     fact_proposer_backend: str | None = None,
     material_upload_observation_sink: MaterialUploadObservationSink | None = None,
     question_observation_sink: QuestionObservationSink | None = None,
+    observation_exporter: ObservationExporter | None = None,
 ) -> FastAPI:
     app = FastAPI(title="TripProof Backend")
     if store is not None:
@@ -62,10 +74,17 @@ def create_app(
         library_chat_answer_composer
         or create_library_chat_answer_composer_from_config(backend=fact_proposer_backend)
     )
-    app.state.material_upload_observation_sink = (
-        material_upload_observation_sink or NoopMaterialUploadObservationSink()
+    active_observation_exporter = observation_exporter or create_observation_exporter_from_directory(
+        OBSERVATION_EXPORT_DIR
     )
-    app.state.question_observation_sink = question_observation_sink or NoopQuestionObservationSink()
+    app.state.observation_exporter = active_observation_exporter
+    app.state.material_upload_observation_sink = (
+        material_upload_observation_sink
+        or MaterialUploadObservationExportSink(active_observation_exporter)
+    )
+    app.state.question_observation_sink = (
+        question_observation_sink or QuestionObservationExportSink(active_observation_exporter)
+    )
 
     app.add_middleware(
         CORSMiddleware,

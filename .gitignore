@@ -22,6 +22,9 @@ out/
 # Logs
 *.log
 
+# Local observation export artifacts
+.tripproof-observations/
+
 /doc
 
 # Local research material. May contain email IDs or source handles.
