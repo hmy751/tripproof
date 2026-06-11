@@ -43,13 +43,13 @@ async def upload_material(
     )
 
     if len(raw) > MAX_UPLOAD_BYTES:
-        observation.fail("upload", "size_limit_exceeded")
+        observation.fail("upload_snapshot", "size_limit_exceeded")
         observation.finalize("failed", failure_kind="size_limit_exceeded")
         emit_material_upload_observation(sink=observation_sink, recorder=observation)
         raise HTTPException(status_code=413, detail="PDF 파일이 너무 큽니다.")
 
     if not _looks_like_pdf(file_name, content_type):
-        observation.fail("upload", "unsupported_file")
+        observation.fail("upload_snapshot", "unsupported_file")
         material = store.add_failed(
             name=material_name,
             file_name=file_name,

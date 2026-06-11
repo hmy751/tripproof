@@ -54,18 +54,27 @@ def test_upload_text_pdf_returns_ready_material() -> None:
     assert record.operation == "material_upload"
     assert record.material_id == material["id"]
     assert _step_names(record) == [
-        "upload",
-        "pdf_parse",
+        "material_intake",
+        "content_extraction",
+        "retrieval_preparation",
+        "finalization",
+    ]
+    assert _child_step_names(record.step("material_intake")) == ["upload_snapshot"]
+    assert record.step("material_intake").status == "succeeded"
+    assert record.step("upload_snapshot").status == "succeeded"
+    assert record.step("upload_snapshot").facts["file_name"] == "booking.pdf"
+    assert record.step("upload_snapshot").facts["content_type"] == "application/pdf"
+    assert record.step("upload_snapshot").facts["size_bytes"] > 0
+    assert _child_step_names(record.step("content_extraction")) == ["pdf_parse"]
+    assert record.step("content_extraction").status == "succeeded"
+    assert record.step("pdf_parse").status == "succeeded"
+    assert record.step("pdf_parse").facts == {"page_count": 1}
+    assert _child_step_names(record.step("retrieval_preparation")) == [
         "source_unit_build",
         "embedding_record_build",
         "retrieval_repository_upsert",
     ]
-    assert record.step("upload").status == "succeeded"
-    assert record.step("upload").facts["file_name"] == "booking.pdf"
-    assert record.step("upload").facts["content_type"] == "application/pdf"
-    assert record.step("upload").facts["size_bytes"] > 0
-    assert record.step("pdf_parse").status == "succeeded"
-    assert record.step("pdf_parse").facts == {"page_count": 1}
+    assert record.step("retrieval_preparation").status == "succeeded"
     assert record.step("source_unit_build").status == "succeeded"
     assert record.step("source_unit_build").facts == {"count": 1}
     assert record.step("embedding_record_build").status == "succeeded"
@@ -74,6 +83,15 @@ def test_upload_text_pdf_returns_ready_material() -> None:
         "status_counts": {"pending": 1},
     }
     assert record.step("retrieval_repository_upsert").status == "succeeded"
+    assert record.step("retrieval_repository_upsert").facts == {
+        "executed": True,
+        "source_unit_count": 1,
+        "embedding_record_count": 1,
+    }
+    assert _child_step_names(record.step("finalization")) == ["material_status"]
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("material_status").status == "succeeded"
+    assert record.step("material_status").facts == {"status": "ready"}
     assert record.final_material_status == "ready"
     assert record.failure_kind is None
 
@@ -106,12 +124,17 @@ def test_upload_blank_pdf_returns_failed_material() -> None:
     assert len(records) == 1
     record = records[0]
     assert record.material_id == material["id"]
-    assert record.step("upload").status == "succeeded"
+    assert record.step("material_intake").status == "succeeded"
+    assert record.step("upload_snapshot").status == "succeeded"
+    assert record.step("content_extraction").status == "failed"
     assert record.step("pdf_parse").status == "failed"
     assert record.step("pdf_parse").failure_kind == "parse_failed"
+    assert record.step("retrieval_preparation").status == "not_started"
     assert record.step("source_unit_build").status == "not_started"
     assert record.step("embedding_record_build").status == "not_started"
     assert record.step("retrieval_repository_upsert").status == "not_started"
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("material_status").facts == {"status": "failed"}
     assert record.final_material_status == "failed"
     assert record.failure_kind == "parse_failed"
 
@@ -143,11 +166,15 @@ def test_upload_non_pdf_records_unsupported_file_observation() -> None:
     assert len(records) == 1
     record = records[0]
     assert record.material_id == material["id"]
-    assert record.step("upload").facts["file_name"] == "notes.txt"
-    assert record.step("upload").facts["content_type"] == "text/plain"
-    assert record.step("upload").status == "failed"
-    assert record.step("upload").failure_kind == "unsupported_file"
+    assert record.step("material_intake").status == "failed"
+    assert record.step("upload_snapshot").facts["file_name"] == "notes.txt"
+    assert record.step("upload_snapshot").facts["content_type"] == "text/plain"
+    assert record.step("upload_snapshot").status == "failed"
+    assert record.step("upload_snapshot").failure_kind == "unsupported_file"
+    assert record.step("content_extraction").status == "not_started"
     assert record.step("pdf_parse").status == "not_started"
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("material_status").facts == {"status": "failed"}
     assert record.final_material_status == "failed"
     assert record.failure_kind == "unsupported_file"
 
@@ -175,12 +202,16 @@ def test_upload_too_large_pdf_records_size_limit_observation(monkeypatch) -> Non
     assert len(records) == 1
     record = records[0]
     assert record.material_id is None
-    assert record.step("upload").facts["file_name"] == "booking.pdf"
-    assert record.step("upload").facts["size_bytes"] == len(b"%PDF-too-large")
-    assert record.step("upload").facts["size_limit_bytes"] == 5
-    assert record.step("upload").status == "failed"
-    assert record.step("upload").failure_kind == "size_limit_exceeded"
+    assert record.step("material_intake").status == "failed"
+    assert record.step("upload_snapshot").facts["file_name"] == "booking.pdf"
+    assert record.step("upload_snapshot").facts["size_bytes"] == len(b"%PDF-too-large")
+    assert record.step("upload_snapshot").facts["size_limit_bytes"] == 5
+    assert record.step("upload_snapshot").status == "failed"
+    assert record.step("upload_snapshot").failure_kind == "size_limit_exceeded"
+    assert record.step("content_extraction").status == "not_started"
     assert record.step("pdf_parse").status == "not_started"
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("material_status").facts == {"status": "failed"}
     assert record.final_material_status == "failed"
     assert record.failure_kind == "size_limit_exceeded"
 
@@ -539,8 +570,11 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
     assert len(records) == 1
     record = records[0]
     assert record.material_id is not None
-    assert record.step("upload").status == "succeeded"
+    assert record.step("material_intake").status == "succeeded"
+    assert record.step("upload_snapshot").status == "succeeded"
     assert record.step("pdf_parse").status == "succeeded"
+    assert record.step("retrieval_preparation").status == "failed"
+    assert record.step("retrieval_preparation").failure_kind == "repository_upsert_failed"
     assert record.step("source_unit_build").status == "succeeded"
     assert record.step("source_unit_build").facts == {"count": 1}
     assert record.step("embedding_record_build").status == "succeeded"
@@ -549,7 +583,14 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
         "status_counts": {"pending": 1},
     }
     assert record.step("retrieval_repository_upsert").status == "failed"
+    assert record.step("retrieval_repository_upsert").facts == {
+        "executed": True,
+        "source_unit_count": 1,
+        "embedding_record_count": 1,
+    }
     assert record.step("retrieval_repository_upsert").failure_kind == "repository_upsert_failed"
+    assert record.step("finalization").status == "succeeded"
+    assert record.step("material_status").facts == {"status": "failed"}
     assert record.final_material_status == "failed"
     assert record.failure_kind == "repository_upsert_failed"
 

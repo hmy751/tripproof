@@ -10,11 +10,16 @@ from server.schemas.materials import MaterialStatus
 
 ObservationStepStatus = Literal["not_started", "succeeded", "failed"]
 MaterialUploadStepName = Literal[
-    "upload",
+    "material_intake",
+    "upload_snapshot",
+    "content_extraction",
     "pdf_parse",
+    "retrieval_preparation",
     "source_unit_build",
     "embedding_record_build",
     "retrieval_repository_upsert",
+    "finalization",
+    "material_status",
 ]
 MaterialUploadFailureKind = Literal[
     "unsupported_file",
@@ -26,19 +31,49 @@ MaterialUploadFailureKind = Literal[
 ]
 ObservationFactValue = str | int | float | bool | None | dict[str, int]
 
-_STEP_ORDER: tuple[MaterialUploadStepName, ...] = (
-    "upload",
+_STEP_ROOTS: tuple[MaterialUploadStepName, ...] = (
+    "material_intake",
+    "content_extraction",
+    "retrieval_preparation",
+    "finalization",
+)
+_STEP_CHILDREN: dict[MaterialUploadStepName, tuple[MaterialUploadStepName, ...]] = {
+    "material_intake": ("upload_snapshot",),
+    "content_extraction": ("pdf_parse",),
+    "retrieval_preparation": (
+        "source_unit_build",
+        "embedding_record_build",
+        "retrieval_repository_upsert",
+    ),
+    "finalization": ("material_status",),
+}
+_ALL_STEP_NAMES: tuple[MaterialUploadStepName, ...] = (
+    "material_intake",
+    "upload_snapshot",
+    "content_extraction",
     "pdf_parse",
+    "retrieval_preparation",
     "source_unit_build",
     "embedding_record_build",
     "retrieval_repository_upsert",
+    "finalization",
+    "material_status",
 )
 _ALLOWED_FACT_KEYS: dict[MaterialUploadStepName, set[str]] = {
-    "upload": {"file_name", "content_type", "size_bytes", "size_limit_bytes"},
+    "material_intake": set(),
+    "upload_snapshot": {"file_name", "content_type", "size_bytes", "size_limit_bytes"},
+    "content_extraction": set(),
     "pdf_parse": {"page_count"},
+    "retrieval_preparation": set(),
     "source_unit_build": {"count"},
     "embedding_record_build": {"count", "status_counts"},
-    "retrieval_repository_upsert": set(),
+    "retrieval_repository_upsert": {
+        "executed",
+        "source_unit_count",
+        "embedding_record_count",
+    },
+    "finalization": set(),
+    "material_status": {"status"},
 }
 
 
@@ -48,6 +83,7 @@ class MaterialUploadObservationStep:
     status: ObservationStepStatus
     facts: dict[str, ObservationFactValue] = field(default_factory=dict)
     failure_kind: MaterialUploadFailureKind | None = None
+    children: list[MaterialUploadObservationStep] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -61,8 +97,9 @@ class MaterialUploadObservationRecord:
 
     def step(self, name: MaterialUploadStepName) -> MaterialUploadObservationStep:
         for step in self.steps:
-            if step.name == name:
-                return step
+            match = _find_step(step, name)
+            if match is not None:
+                return match
         raise KeyError(name)
 
 
@@ -101,10 +138,10 @@ class MaterialUploadObservationRecorder:
         self._material_id: str | None = None
         self._steps = {
             step_name: MaterialUploadObservationStep(name=step_name, status="not_started")
-            for step_name in _STEP_ORDER
+            for step_name in _ALL_STEP_NAMES
         }
         self.succeed(
-            "upload",
+            "upload_snapshot",
             facts={
                 "file_name": file_name,
                 "content_type": content_type,
@@ -157,6 +194,7 @@ class MaterialUploadObservationRecorder:
         if material_id is not None:
             self.assign_material_id(material_id)
         self._final_material_status = status
+        self.succeed("material_status", facts={"status": status})
         if failure_kind is not None:
             self._failure_kind = failure_kind
 
@@ -165,9 +203,22 @@ class MaterialUploadObservationRecorder:
             id=self._record_id,
             operation="material_upload",
             material_id=self._material_id,
-            steps=[self._steps[step_name] for step_name in _STEP_ORDER],
+            steps=[self._build_step(step_name) for step_name in _STEP_ROOTS],
             final_material_status=self._final_material_status,
             failure_kind=self._failure_kind,
+        )
+
+    def _build_step(self, step_name: MaterialUploadStepName) -> MaterialUploadObservationStep:
+        current = self._steps[step_name]
+        children = [self._build_step(child_name) for child_name in _STEP_CHILDREN.get(step_name, ())]
+        if not children:
+            return current
+        return MaterialUploadObservationStep(
+            name=current.name,
+            status=_derive_parent_status(children),
+            facts=current.facts,
+            failure_kind=_first_child_failure(children),
+            children=children,
         )
 
 
@@ -188,6 +239,39 @@ def emit_material_upload_observation(
         sink.record_material_upload(recorder.build())
     except Exception:
         return None
+
+
+def _derive_parent_status(children: list[MaterialUploadObservationStep]) -> ObservationStepStatus:
+    if any(child.status == "failed" for child in children):
+        return "failed"
+    if any(child.status == "succeeded" for child in children):
+        return "succeeded"
+    return "not_started"
+
+
+def _first_child_failure(
+    children: list[MaterialUploadObservationStep],
+) -> MaterialUploadFailureKind | None:
+    for child in children:
+        if child.failure_kind is not None:
+            return child.failure_kind
+        nested = _first_child_failure(child.children)
+        if nested is not None:
+            return nested
+    return None
+
+
+def _find_step(
+    step: MaterialUploadObservationStep,
+    name: MaterialUploadStepName,
+) -> MaterialUploadObservationStep | None:
+    if step.name == name:
+        return step
+    for child in step.children:
+        match = _find_step(child, name)
+        if match is not None:
+            return match
+    return None
 
 
 def _safe_facts(

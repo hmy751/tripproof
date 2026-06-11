@@ -126,11 +126,26 @@ class MaterialStore:
             self._retrieval_repository.upsert_material_records(material_id=material.id, records=retrieval_records)
         except Exception:
             if observation is not None:
-                observation.fail("retrieval_repository_upsert", "repository_upsert_failed")
+                observation.fail(
+                    "retrieval_repository_upsert",
+                    "repository_upsert_failed",
+                    facts={
+                        "executed": True,
+                        "source_unit_count": len(source_units),
+                        "embedding_record_count": len(embedding_records),
+                    },
+                )
                 observation.finalize("failed", failure_kind="repository_upsert_failed")
             raise
         if observation is not None:
-            observation.succeed("retrieval_repository_upsert")
+            observation.succeed(
+                "retrieval_repository_upsert",
+                facts={
+                    "executed": True,
+                    "source_unit_count": len(source_units),
+                    "embedding_record_count": len(embedding_records),
+                },
+            )
             observation.finalize("ready")
         self._materials[material.id] = material
         return material.public()
