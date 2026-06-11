@@ -466,4 +466,4 @@ request/correlation id는 07 [Observation request/correlation id](07-observation
 
 - local artifact 파일 rotation/cleanup
 - export artifact viewer
-- eval run artifact 연결
+- LangSmith trace URL/id를 eval artifact나 lookup 결과에 연결할지

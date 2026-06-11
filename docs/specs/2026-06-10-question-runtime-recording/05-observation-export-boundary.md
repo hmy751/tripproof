@@ -2,7 +2,7 @@
 
 작성일: 2026-06-11
 
-상태: 구현된 하위 작업 spec. 내부 material/question observation record와 runtime config snapshot을 no-op, local artifact, LangSmith 같은 export sink로 내보내는 계약을 정한다. local artifact exporter는 구현됐고, LangSmith adapter는 후속 작업으로 둔다.
+상태: 구현된 하위 작업 spec. 내부 material/question observation record와 runtime config snapshot을 no-op, local artifact, LangSmith 같은 export sink로 내보내는 계약을 정한다. local artifact exporter와 LangSmith adapter는 구현된 기준으로 정렬됐다.
 
 ## 왜 지금
 
@@ -234,4 +234,5 @@ local artifact projection은 내부 record의 step tree와 runtime config snapsh
 - local artifact 파일을 operation별로 나눌지, 하나의 JSONL stream으로 둘지.
 - LangSmith에서 parent step을 span으로 둘지, leaf step만 event/metadata로 둘지.
 - `exported_at`만 둘지, 내부 record 생성 시각도 record 자체에 추가할지.
-- request id나 correlation id가 product route에 생기면 export envelope의 `subject` 또는 `correlation`에 어떻게 연결할지.
+
+request/correlation id는 07 [Observation request/correlation id](07-observation-correlation-id.md)에서 export envelope top-level metadata로 연결했다.

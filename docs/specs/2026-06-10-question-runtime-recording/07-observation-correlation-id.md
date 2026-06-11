@@ -211,7 +211,6 @@ HTTP request
 - `material_id`를 correlation id처럼 재해석하지 않는다.
 - product JSON response schema를 바꾸지 않는다.
 - LangSmith trace id/run id를 product response에 연결하지 않는다.
-- eval run artifact와 correlation id 연결은 후속 작업으로 둔다.
 - 프론트엔드가 어떤 시점에 새 correlation id를 생성할지까지 이번 spec에서 확정하지 않는다. 다만 server는 client-provided correlation id를 받을 수 있어야 한다.
 
 ## 이번 AC
