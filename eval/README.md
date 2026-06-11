@@ -16,6 +16,14 @@ uv run python eval/question_runtime_recording_smoke.py \
 
 기본 산출물은 `eval/runs/question-runtime-recording/<run-id>/` 아래에 생긴다. 이 경로는 local run artifact라 `.gitignore`에 포함되어 있고, 실제 수동 run artifact를 commit할지는 별도 판단으로 둔다.
 
+local observation export를 correlation id로 다시 찾을 때는 lookup helper를 쓴다.
+
+```bash
+uv run python eval/find_observation_by_correlation.py flow_eval_test
+```
+
+기본 검색 위치는 `.tripproof-observations/`와 `eval/runs/question-runtime-recording/`이다. 출력은 operation, request id, final status, failure kind, 파일 위치 같은 안전한 요약만 포함한다.
+
 product flow가 생긴 뒤 고려할 수 있는 evaluation axis:
 
 - Faithfulness/Groundedness
