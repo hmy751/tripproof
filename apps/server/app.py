@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import re
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from server.api.routes import health, materials, questions
 from server.answers.library_chat import LibraryChatAnswerComposer, create_library_chat_answer_composer_from_config
 from server.core.config import (
     ALLOWED_ORIGINS,
+    CORS_EXPOSE_HEADERS,
     EMBEDDING_AUTO_GENERATE,
     LANGSMITH_API_KEY,
     LANGSMITH_OBSERVATION_ENABLED,
@@ -21,8 +26,12 @@ from server.observations.export import (
     LocalArtifactObservationExporter,
     MaterialUploadObservationExportSink,
     NoopObservationExporter,
+    ObservationRequestContext,
     ObservationExporter,
     QuestionObservationExportSink,
+    new_observation_request_context,
+    reset_current_observation_request_context,
+    set_current_observation_request_context,
 )
 from server.observations.langsmith import LangSmithObservationExporter, LangSmithRunTreeWriter
 from server.questions.observation import QuestionObservationSink
@@ -30,6 +39,11 @@ from server.retrieval.search import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
 from server.runtime.config_snapshot import RuntimeConfigSettings
+
+
+REQUEST_ID_HEADER = "X-TripProof-Request-Id"
+CORRELATION_ID_HEADER = "X-TripProof-Correlation-Id"
+_CORRELATION_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 
 
 def create_app(
@@ -90,12 +104,26 @@ def create_app(
         question_observation_sink or QuestionObservationExportSink(active_observation_exporter)
     )
 
+    @app.middleware("http")
+    async def attach_request_context(request: Request, call_next) -> Response:
+        context = _observation_request_context_from_headers(request.headers)
+        request.state.tripproof_observation_request_context = context
+        token = set_current_observation_request_context(context)
+        try:
+            response = await call_next(request)
+        finally:
+            reset_current_observation_request_context(token)
+        response.headers[REQUEST_ID_HEADER] = context.request_id
+        response.headers[CORRELATION_ID_HEADER] = context.correlation_id
+        return response
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=CORS_EXPOSE_HEADERS,
     )
 
     app.include_router(health.router)
@@ -123,6 +151,26 @@ def _create_default_observation_exporter() -> ObservationExporter:
     if len(exporters) == 1:
         return exporters[0]
     return FanoutObservationExporter(exporters)
+
+
+def _observation_request_context_from_headers(headers) -> ObservationRequestContext:
+    header_value = headers.get(CORRELATION_ID_HEADER)
+    correlation_id = _valid_correlation_id(header_value)
+    if correlation_id is None:
+        return new_observation_request_context()
+    return new_observation_request_context(
+        correlation_id=correlation_id,
+        correlation_id_source="header",
+    )
+
+
+def _valid_correlation_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip()
+    if not _CORRELATION_ID_RE.fullmatch(trimmed):
+        return None
+    return trimmed
 
 
 app = create_app()

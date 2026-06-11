@@ -22,6 +22,10 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 ALLOWED_ORIGINS = ["http://127.0.0.1:5173", "http://localhost:5173"]
+CORS_EXPOSE_HEADERS = [
+    "X-TripProof-Request-Id",
+    "X-TripProof-Correlation-Id",
+]
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 RETRIEVAL_BACKEND = os.getenv("TRIPPROOF_RETRIEVAL_BACKEND", "memory").lower()

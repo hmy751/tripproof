@@ -41,11 +41,18 @@ def test_upload_text_pdf_returns_ready_material() -> None:
 
     response = client.post(
         "/api/materials",
+        headers={"Origin": "http://localhost:5173"},
         data={"displayName": "Agoda Fukuoka"},
         files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00"), "application/pdf")},
     )
 
     assert response.status_code == 200
+    request_id = response.headers["X-TripProof-Request-Id"]
+    assert request_id.startswith("req_")
+    assert response.headers["X-TripProof-Correlation-Id"] == request_id
+    exposed_headers = response.headers["access-control-expose-headers"]
+    assert "X-TripProof-Request-Id" in exposed_headers
+    assert "X-TripProof-Correlation-Id" in exposed_headers
     material = response.json()
     assert material["status"] == "ready"
     assert material["name"] == "Agoda Fukuoka"
@@ -56,6 +63,8 @@ def test_upload_text_pdf_returns_ready_material() -> None:
     assert "debug" not in material
     assert "raw" not in material
     assert "runtimeConfig" not in material
+    assert "requestId" not in material
+    assert "correlationId" not in material
 
     records = observation_sink.records
     assert len(records) == 1
@@ -215,6 +224,9 @@ def test_upload_too_large_pdf_records_size_limit_observation(monkeypatch) -> Non
     )
 
     assert response.status_code == 413
+    request_id = response.headers["X-TripProof-Request-Id"]
+    assert request_id.startswith("req_")
+    assert response.headers["X-TripProof-Correlation-Id"] == request_id
     assert response.json() == {"detail": "PDF 파일이 너무 큽니다."}
 
     records = observation_sink.records
@@ -233,6 +245,26 @@ def test_upload_too_large_pdf_records_size_limit_observation(monkeypatch) -> Non
     assert record.step("material_status").facts == {"status": "failed"}
     assert record.final_material_status == "failed"
     assert record.failure_kind == "size_limit_exceeded"
+
+
+def test_upload_invalid_correlation_id_header_falls_back_without_product_error() -> None:
+    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
+
+    response = client.post(
+        "/api/materials",
+        headers={"X-TripProof-Correlation-Id": "bad flow!"},
+        files={"file": ("notes.txt", b"not a pdf", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    request_id = response.headers["X-TripProof-Request-Id"]
+    assert request_id.startswith("req_")
+    assert response.headers["X-TripProof-Correlation-Id"] == request_id
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["error"] == "PDF 파일만 지원합니다."
+    assert "requestId" not in body
+    assert "correlationId" not in body
 
 
 def test_upload_observation_sink_failure_does_not_change_ready_response() -> None:
@@ -283,13 +315,24 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        headers={"X-TripProof-Correlation-Id": "flow_test"},
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
+    upload_request_id = upload.headers["X-TripProof-Request-Id"]
+    assert upload.headers["X-TripProof-Correlation-Id"] == upload_request_id
+    question_request_id = response.headers["X-TripProof-Request-Id"]
+    assert question_request_id.startswith("req_")
+    assert response.headers["X-TripProof-Correlation-Id"] == "flow_test"
     body = response.json()
     assert body["status"] == "accepted"
     assert "observation" not in body
     assert "runtimeConfig" not in body
+    assert "requestId" not in body
+    assert "correlationId" not in body
 
     rows = [json.loads(line) for line in exporter.path.read_text(encoding="utf-8").splitlines()]
     assert [row["schema_version"] for row in rows] == [
@@ -299,6 +342,8 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert [row["operation"] for row in rows] == ["material_upload", "question_answer"]
 
     material_export = rows[0]
+    assert material_export["request_id"] == upload_request_id
+    assert material_export["correlation_id"] == upload_request_id
     assert material_export["payload"]["final_status"] == "ready"
     assert material_export["payload"]["failure_kind"] is None
     assert material_export["payload"]["subject"] == {"material_id": material_id}
@@ -314,6 +359,8 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert upload_facts["content_type"] == "application/pdf"
 
     question_export = rows[1]
+    assert question_export["request_id"] == question_request_id
+    assert question_export["correlation_id"] == "flow_test"
     assert question_export["payload"]["final_status"] == "accepted"
     assert question_export["payload"]["failure_kind"] is None
     assert _export_step(question_export, "ready_material_selection")["facts"] == {
@@ -335,6 +382,9 @@ def test_fanout_observation_exporter_continues_after_sink_failure() -> None:
         exported_at="2026-06-11T00:00:00Z",
         operation="material_upload",
         record_id="obs_material_test",
+        request_id="req_test",
+        correlation_id="req_test",
+        correlation_id_source="request_id_fallback",
         payload={"final_status": "ready"},
     )
     spy = SpyObservationExporter()
@@ -372,7 +422,11 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        headers={"X-TripProof-Correlation-Id": "flow_test"},
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert upload.status_code == 200
     assert response.status_code == 200
@@ -383,6 +437,7 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     ]
 
     material_run = writer.runs[0]
+    upload_request_id = upload.headers["X-TripProof-Request-Id"]
     assert material_run["run_type"] == "chain"
     assert material_run["inputs"] == {
         "operation": "material_upload",
@@ -390,8 +445,12 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     }
     assert material_run["outputs"] == {"final_status": "ready", "failure_kind": None}
     assert material_run["metadata"]["tripproof.schema_version"] == "tripproof.observation_export.v1"
+    assert material_run["metadata"]["tripproof.request_id"] == upload_request_id
+    assert material_run["metadata"]["tripproof.correlation_id"] == upload_request_id
+    assert material_run["metadata"]["tripproof.correlation_id_source"] == "request_id_fallback"
     assert material_run["metadata"]["tripproof.retrieval_backend"] == "memory"
     assert material_run["metadata"]["tripproof.embedding_provider"] == "ollama"
+    assert f"tripproof.correlation:{upload_request_id}" in material_run["tags"]
     assert [child["name"] for child in material_run["child_runs"]] == [
         "material_intake",
         "content_extraction",
@@ -426,8 +485,15 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     assert "file_name" not in upload_event["kwargs"]["facts"]
 
     question_run = writer.runs[1]
+    question_request_id = response.headers["X-TripProof-Request-Id"]
+    assert question_request_id.startswith("req_")
+    assert response.headers["X-TripProof-Correlation-Id"] == "flow_test"
     assert question_run["inputs"] == {"operation": "question_answer", "subject": {}}
     assert question_run["outputs"] == {"final_status": "accepted", "failure_kind": None}
+    assert question_run["metadata"]["tripproof.request_id"] == question_request_id
+    assert question_run["metadata"]["tripproof.correlation_id"] == "flow_test"
+    assert question_run["metadata"]["tripproof.correlation_id_source"] == "header"
+    assert "tripproof.correlation:flow_test" in question_run["tags"]
     assert [child["name"] for child in question_run["child_runs"]] == [
         "question_preparation",
         "material_scope",
@@ -1050,6 +1116,10 @@ def test_question_records_empty_question_validation_failure() -> None:
     response = client.post("/api/questions", json={"question": "   "})
 
     assert response.status_code == 400
+    request_id = response.headers["X-TripProof-Request-Id"]
+    assert request_id.startswith("req_")
+    assert response.headers["X-TripProof-Correlation-Id"] == request_id
+    assert response.json() == {"detail": "질문을 입력해야 합니다."}
     records = question_observation_sink.records
     assert len(records) == 1
     record = records[0]

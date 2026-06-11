@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 from pathlib import Path
+import secrets
 from typing import Any, Literal, Protocol
 
 from server.materials.observation import (
@@ -16,6 +18,20 @@ from server.runtime.config_snapshot import RuntimeConfigSnapshot
 
 OBSERVATION_EXPORT_SCHEMA_VERSION = "tripproof.observation_export.v1"
 ObservationExportOperation = Literal["material_upload", "question_answer"]
+CorrelationIdSource = Literal["header", "request_id_fallback"]
+
+
+@dataclass(frozen=True)
+class ObservationRequestContext:
+    request_id: str
+    correlation_id: str
+    correlation_id_source: CorrelationIdSource
+
+
+_OBSERVATION_REQUEST_CONTEXT: ContextVar[ObservationRequestContext | None] = ContextVar(
+    "tripproof_observation_request_context",
+    default=None,
+)
 
 
 @dataclass(frozen=True)
@@ -24,6 +40,9 @@ class ObservationExportEnvelope:
     exported_at: str
     operation: ObservationExportOperation
     record_id: str
+    request_id: str
+    correlation_id: str
+    correlation_id_source: CorrelationIdSource
     payload: dict[str, Any]
 
 
@@ -100,16 +119,50 @@ def create_observation_exporter_from_directory(directory: str | Path | None) -> 
     return LocalArtifactObservationExporter(directory)
 
 
+def new_observation_request_context(
+    *,
+    correlation_id: str | None = None,
+    correlation_id_source: CorrelationIdSource = "request_id_fallback",
+) -> ObservationRequestContext:
+    request_id = _new_request_id()
+    return ObservationRequestContext(
+        request_id=request_id,
+        correlation_id=correlation_id or request_id,
+        correlation_id_source=correlation_id_source,
+    )
+
+
+def set_current_observation_request_context(
+    context: ObservationRequestContext,
+) -> Token[ObservationRequestContext | None]:
+    return _OBSERVATION_REQUEST_CONTEXT.set(context)
+
+
+def reset_current_observation_request_context(
+    token: Token[ObservationRequestContext | None],
+) -> None:
+    _OBSERVATION_REQUEST_CONTEXT.reset(token)
+
+
+def current_observation_request_context() -> ObservationRequestContext | None:
+    return _OBSERVATION_REQUEST_CONTEXT.get()
+
+
 def material_upload_observation_export(
     record: MaterialUploadObservationRecord,
     *,
     exported_at: str | None = None,
+    request_context: ObservationRequestContext | None = None,
 ) -> ObservationExportEnvelope:
+    context = request_context or current_observation_request_context() or new_observation_request_context()
     return ObservationExportEnvelope(
         schema_version=OBSERVATION_EXPORT_SCHEMA_VERSION,
         exported_at=exported_at or _utc_timestamp(),
         operation=record.operation,
         record_id=record.id,
+        request_id=context.request_id,
+        correlation_id=context.correlation_id,
+        correlation_id_source=context.correlation_id_source,
         payload={
             "final_status": record.final_material_status,
             "failure_kind": record.failure_kind,
@@ -126,12 +179,17 @@ def question_observation_export(
     record: QuestionObservationRecord,
     *,
     exported_at: str | None = None,
+    request_context: ObservationRequestContext | None = None,
 ) -> ObservationExportEnvelope:
+    context = request_context or current_observation_request_context() or new_observation_request_context()
     return ObservationExportEnvelope(
         schema_version=OBSERVATION_EXPORT_SCHEMA_VERSION,
         exported_at=exported_at or _utc_timestamp(),
         operation=record.operation,
         record_id=record.id,
+        request_id=context.request_id,
+        correlation_id=context.correlation_id,
+        correlation_id_source=context.correlation_id_source,
         payload={
             "final_status": record.final_question_status,
             "failure_kind": record.failure_kind,
@@ -150,6 +208,8 @@ def observation_export_to_dict(envelope: ObservationExportEnvelope) -> dict[str,
         "exported_at": envelope.exported_at,
         "operation": envelope.operation,
         "record_id": envelope.record_id,
+        "request_id": envelope.request_id,
+        "correlation_id": envelope.correlation_id,
         "payload": envelope.payload,
     }
 
@@ -249,3 +309,7 @@ def _is_export_safe_value(value: Any) -> bool:
 
 def _utc_timestamp() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _new_request_id() -> str:
+    return f"req_{secrets.token_hex(8)}"

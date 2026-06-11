@@ -87,6 +87,9 @@ def langsmith_run_payload(envelope: ObservationExportEnvelope) -> dict[str, Any]
         "tripproof.schema_version": envelope.schema_version,
         "tripproof.operation": envelope.operation,
         "tripproof.record_id": envelope.record_id,
+        "tripproof.request_id": envelope.request_id,
+        "tripproof.correlation_id": envelope.correlation_id,
+        "tripproof.correlation_id_source": envelope.correlation_id_source,
         "tripproof.exported_at": envelope.exported_at,
         "tripproof.final_status": final_status,
         "tripproof.failure_kind": failure_kind,
@@ -117,6 +120,7 @@ def langsmith_run_payload(envelope: ObservationExportEnvelope) -> dict[str, Any]
             "tripproof",
             "tripproof.observation_export",
             f"tripproof.operation:{envelope.operation}",
+            f"tripproof.correlation:{envelope.correlation_id}",
         ],
     }
 
