@@ -456,10 +456,11 @@ app factory는 local artifact exporter와 LangSmith exporter를 독립적으로 
 
 ## 남은 판단
 
-- request id 또는 correlation id를 export envelope에 추가할 필요가 있는가.
 - LangSmith project default를 TripProof에서 정할지, SDK default에 맡길지.
 - step timing이 생기면 어떤 parent/leaf step을 child span으로 승격할지.
 - LangSmith trace id/run id를 product response나 local artifact에 연결할 필요가 있는가.
+
+request/correlation id는 07 [Observation request/correlation id](07-observation-correlation-id.md)로 분리했다.
 
 ## 06 밖 후순위
 
