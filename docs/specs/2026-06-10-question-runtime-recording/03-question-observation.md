@@ -2,7 +2,7 @@
 
 작성일: 2026-06-11
 
-상태: 하위 작업 spec. `POST /api/questions`의 ready material 선택, retrieval 실행, answer composer 호출, 최종 question status 경계를 내부 observation record로 남기는 기준을 정한다.
+상태: 하위 작업 spec. `POST /api/questions`의 question preparation, material selection, retrieval pipeline, answer composition, 최종 question status 경계를 내부 observation record로 남기는 기준을 정한다.
 
 ## 왜 지금
 
@@ -22,9 +22,10 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 
 - 질문에 들어간 ready material이 몇 개인가.
 - 질문에 들어간 ready material id는 무엇인가.
-- retrieval이 실행됐는가.
-- retrieval 결과 answer composer에 전달된 candidate가 몇 개인가.
-- answer composer 호출이 route 관점에서 성공했는가, 실패했는가.
+- retrieval record load가 성공했는가.
+- RAG context retrieval이 실행됐고, candidate summary는 어떤가.
+- answer composer에 prompt snapshot이 연결됐는가.
+- answer composer 호출과 answer projection이 route 관점에서 성공했는가, 실패했는가.
 - 최종 question status가 `accepted`인지 `blocked`인지.
 - 실패했다면 최소 failure kind가 무엇인가.
 
@@ -32,7 +33,7 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 
 - `POST /api/questions` 한 요청에 대응하는 question execution observation record를 만들 수 있다.
 - 이 slice는 adapter나 공통 tracing wrapper가 아니라 product path에서 question execution fact를 생성하는 leaf producer를 구현한다.
-- record는 ready material selection, retrieval, answer composer, final question status 경계를 담는다.
+- record는 question preparation, material selection, retrieval pipeline, answer composition, final question status 경계를 담는다.
 - `accepted`/`blocked` question 응답의 public contract는 바꾸지 않는다.
 - observation record는 source unit text, retrieval candidate 전문, answer body 전문, LLM raw payload, exception stack을 저장하지 않는다.
 - 관측 record 생성 실패나 비활성화가 question response 결과를 바꾸지 않는다.
@@ -41,10 +42,11 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 
 - observation은 product path를 관찰하는 side effect다. question status를 결정하는 주체가 되면 안 된다.
 - record shape의 소유자는 adapter가 아니라 `/api/questions` execution event다.
+- question preparation은 질문 원문이 아니라 정규화된 질문 길이 같은 safe summary만 남긴다.
 - ready material selection은 `ready_material_count`와 `ready_material_ids`까지만 남긴다.
 - ready material이 없어 `blocked`가 되면 retrieval과 answer composer는 실행되지 않은 상태로 남긴다.
-- retrieval step은 실행 여부와 retrieved candidate count를 남긴다. candidate text, source unit text, score 상세 목록은 기본 record에 넣지 않는다.
-- answer composer step은 route가 관찰할 수 있는 호출 결과만 남긴다. provider raw response나 LLM 내부 실패 payload를 route record가 추정해 채우지 않는다.
+- retrieval pipeline은 retrieval record load, context retrieval, candidate summary를 구분한다. candidate text, source unit text, score 상세 목록은 기본 record에 넣지 않는다.
+- answer composition은 prompt snapshot, composer call, answer projection을 구분한다. provider raw response나 LLM 내부 실패 payload를 route record가 추정해 채우지 않는다.
 - composer가 missing answer를 정상 `ChatAnswerResponse`로 반환하면 route 관점의 composer 호출 결과는 `succeeded`다.
 - retrieval 또는 answer composer가 예외를 내면 기존 public error behavior를 바꾸지 않고, record에는 실패 boundary와 failure kind를 요약한다.
 - sink가 실패해도 question response, exception propagation, material store 상태를 바꾸지 않는다.
@@ -74,39 +76,98 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 
 | 구현 요소 | 필요한 이유 | 현재 코드/문서 | 처음 닫을 기준 |
 | --- | --- | --- | --- |
-| Question observation model | 한 질문 요청의 관측 결과를 안정된 형태로 남겨야 한다 | 새 `questions/observation.py`가 필요하다 | ready material, retrieval, answer composer, final status를 담는 ordered step record가 있다 |
+| Question observation model | 한 질문 요청의 관측 결과를 안정된 형태로 남겨야 한다 | 새 `questions/observation.py`가 필요하다 | question preparation, material selection, retrieval pipeline, answer composition, final status를 담는 계층형 ordered step record가 있다 |
 | Observation sink | record 생성과 저장 방식을 product logic에서 분리해야 한다 | material upload는 no-op/in-memory sink 패턴을 쓴다 | 기본 no-op sink와 테스트용 in-memory sink가 있고 비활성화 시 응답이 바뀌지 않는다 |
-| Route boundary capture | ready material count/id, retrieval 실행 여부, composer 호출 결과는 route가 연결한다 | `routes/questions.py`가 product path를 모두 연결한다 | blocked/accepted/exception 경계에서 record가 finalize된다 |
+| Route boundary capture | ready material count/id, retrieval record load, context retrieval, composer 호출 결과는 route가 연결한다 | `routes/questions.py`가 product path를 모두 연결한다 | blocked/accepted/exception 경계에서 record가 finalize된다 |
 | Failure summary | 실패를 나중에 비교하려면 최소 failure kind가 필요하다 | question route에는 아직 내부 failure kind가 없다 | `empty_question`, `no_ready_materials`, `retrieval_failed`, `answer_composer_failed`를 구분한다 |
 | Safe facts allowlist | raw source, raw answer, provider payload가 새지 않아야 한다 | material observation은 step별 allowlist를 둔다 | step별 허용 fact만 record에 남긴다 |
 | Tests | record가 product response를 오염시키지 않아야 한다 | `test_materials_api.py`에 question route 테스트가 있다 | accepted/blocked 응답은 유지되고 internal record만 추가로 확인한다 |
 
 ## 처음 record shape
 
-내부 record는 한 요청을 ordered step으로 남긴다.
+내부 record는 한 요청을 계층형 ordered step으로 남긴다.
 
 ```text
 question_answer
-  ready_material_selection
+  question_preparation
+    question_normalization
+  material_selection
+    ready_material_selection
   retrieval
-  answer_composer
+    retrieval_record_load
+    context_assembly
+    candidate_summary
+  answer_composition
+    prompt_snapshot
+    composer_call
+    answer_projection
 ```
 
-각 step은 `not_started`, `succeeded`, `failed` 중 하나의 status를 가진다. step별 facts는 allowlist로 제한한다.
+각 step은 `not_started`, `succeeded`, `failed` 중 하나의 status를 가진다. parent step의 status는 child step 결과에서 파생된다. step별 facts는 allowlist로 제한한다.
 
 | Step | 남기는 facts | 실패 예 |
 | --- | --- | --- |
+| `question_normalization` | `question_length` | `empty_question` |
 | `ready_material_selection` | `ready_material_count`, `ready_material_ids` | `no_ready_materials` |
-| `retrieval` | `executed`, `candidate_count` | `retrieval_failed` |
-| `answer_composer` | `result`, `item_count`, `evidence_state_counts` | `answer_composer_failed` |
+| `retrieval_record_load` | `executed`, `source_unit_count`, `embedding_record_count` | `retrieval_failed` |
+| `context_assembly` | `executed`, `target_id` | `retrieval_failed` |
+| `candidate_summary` | `candidate_count`, `candidates_with_vector_score`, `candidates_with_lexical_score` | 없음 |
+| `prompt_snapshot` | `available`, `prompt_domain`, `prompt_name`, `prompt_version`, `prompt_body_hash`, `prompt_file_hash`, `prompt_asset_path` | 없음 |
+| `composer_call` | `result` | `answer_composer_failed` |
+| `answer_projection` | `item_count`, `evidence_state_counts` | 없음 |
 
 top-level record는 `final_question_status`를 `accepted`, `blocked`, 또는 예외로 응답이 완성되지 않은 경우 `None`으로 남긴다. `failure_kind`는 필요한 경우만 최소 구분으로 남긴다.
 
-`empty_question`은 현재 route가 `400`을 반환하는 validation failure다. 이 경우 observation을 남길지 여부는 구현에서 route 진입 이후 recorder를 만들 수 있는지에 따라 결정한다. 남긴다면 final status는 `None`, failure kind는 `empty_question`으로 둔다.
+`empty_question`은 현재 route가 `400`을 반환하는 request failure다. route 진입 이후 recorder를 만들 수 있으므로 `question_normalization` failure, final status `None`, failure kind `empty_question`으로 남긴다.
+
+`query_rewrite`, `rerank`, `judge`, `answer_grounding`처럼 이후 추가될 수 있는 pipeline은 현재 record에 가짜 step으로 넣지 않는다. 구현되면 `question_preparation`, `retrieval`, `answer_composition` 중 실제 책임 위치 아래에 leaf step으로 추가한다.
+
+## 관측 기준
+
+`question_answer` record는 답변 상태를 만든 AI/runtime 경로를 복원하기 위한 지도다. 서버 함수 호출 로그나 LLM raw trace가 아니라, material scope, retrieval/RAG context, prompt/composer 조건, answer projection을 안전한 summary로 남긴다.
+
+이 record는 다음 질문에 답할 수 있어야 한다.
+
+- AI/composer가 읽을 context는 어떤 material scope와 retrieval/RAG 경로에서 준비됐는가.
+- AI/composer는 어떤 prompt identity와 조건에서 호출됐는가.
+- composer 결과가 제품 answer state로 어떻게 projection됐는가.
+- 최종 question status가 왜 `accepted`, `blocked`, 또는 예외 미완료 상태가 됐는가.
+
+`step`은 AI/runtime 판단이나 answer 결과를 바꾸는 안정된 pipeline boundary다. provider나 내부 구현이 바뀌어도 제품 의미의 이름이 유지될 수 있어야 한다.
+
+`fact`는 step 안의 safe summary다. strategy, mode, count, hash, status처럼 원인 추적에는 필요하지만 독립 stage로 보기엔 작은 값은 fact로 둔다.
+
+parent step은 영역을 나누고, leaf step은 실제 제품 fact를 만든다. 관측은 leaf 중심으로 찍고 parent status는 leaf 결과에서 파생한다.
+
+목표 구조는 이 감각이다.
+
+```text
+question_answer
+  question_preparation
+    query_snapshot
+  material_scope
+    ready_material_selection
+    retrieval_record_load
+  retrieval_pipeline
+    source_retrieval
+    context_assembly
+    candidate_summary
+  answer_pipeline
+    prompt_snapshot
+    composer_call
+    grounding_check
+    answer_projection
+  finalization
+    question_status
+```
+
+`source_retrieval`은 step 후보지만, `lexical fallback`은 지금 단계에서는 `source_retrieval`의 fact에 가깝다. 예: `strategy`, `vector_attempted`, `vector_candidate_count`, `fallback_used`. rerank, judge, grounding check가 실제 product module로 들어와 후보 순서나 answer state를 바꾸면 독립 step으로 승격한다.
+
+step/fact 판단 기준은 함수 크기나 route visibility가 아니라 AI/runtime 원인 추적력이다. raw source text, embedding vector, raw LLM payload, exception stack은 기본 record에 넣지 않는다. 필요하면 id/count/hash/status summary만 남긴다.
 
 ## 이번 AC
 
-1. ready material이 있는 질문은 기존 `accepted` 응답을 유지하면서 ready material count/id, retrieval executed, retrieved candidate count, answer composer result, final question status `accepted`를 담은 internal observation record를 만든다.
+1. ready material이 있는 질문은 기존 `accepted` 응답을 유지하면서 question normalization, ready material count/id, retrieval record load, context assembly, candidate summary, prompt snapshot availability, composer call, answer projection, final question status `accepted`를 담은 internal observation record를 만든다.
 2. ready material이 없는 질문은 기존 `blocked` 응답을 유지하면서 ready material count `0`, material ids `[]`, final question status `blocked`, failure kind `no_ready_materials`를 담은 internal observation record를 만든다.
 3. retrieval 또는 answer composer가 예외를 내면 기존 public 동작을 바꾸지 않고, 관측 가능한 실패 boundary와 failure kind를 record에 요약한다.
 4. observation record에는 source unit text, retrieval candidate 전문, answer body 전문, LLM raw payload, exception stack이 들어가지 않는다.
@@ -114,10 +175,11 @@ top-level record는 `final_question_status`를 `accepted`, `blocked`, 또는 예
 
 ## 구현 중 주의할 점
 
-- route-level `answer_composer` result는 composer 내부 provider 성공 여부가 아니라 `compose()` 호출이 `ChatAnswerResponse`를 반환했는지에 대한 관측이다.
-- retrieved candidate count는 `ContextPack.candidates` 길이로 충분히 시작한다. vector match인지 lexical fallback인지는 이번 slice에서 추정하지 않는다.
+- route-level `composer_call` result는 composer 내부 provider 성공 여부가 아니라 `compose()` 호출이 `ChatAnswerResponse`를 반환했는지에 대한 관측이다.
+- retrieved candidate count는 `ContextPack.candidates` 길이로 시작한다. vector/lexical 세부는 안전한 count summary까지만 남기고 branch 판단을 과하게 추정하지 않는다.
 - material id 목록은 ready material id만 남긴다. 요청 payload에 들어왔지만 failed이거나 존재하지 않는 material id를 별도 진단하는 것은 다음 slice다.
-- prompt/config snapshot은 이 record와 나중에 연결할 수 있지만, 이번 record가 prompt/config snapshot 없이도 닫히도록 둔다.
+- prompt snapshot은 composer가 prompt identity를 노출할 때만 version/hash/asset path summary를 남긴다. prompt 전문은 저장하지 않는다.
+- config snapshot은 이 record와 나중에 연결할 수 있지만, 이번 record가 config snapshot 없이도 닫히도록 둔다.
 
 ## 확인 방법
 
@@ -129,8 +191,7 @@ top-level record는 `final_question_status`를 `accepted`, `blocked`, 또는 예
 
 ## 남은 판단
 
-- `empty_question` 같은 request validation failure까지 question observation record로 남길지.
 - request payload의 requested material ids를 record에 둘지, ready material ids만 둘지.
 - candidate count 외에 candidate source unit id 목록까지 안전한 summary로 볼지.
-- composer result에 `evidence_state_counts`를 둘지, item count만 먼저 둘지.
 - question observation record와 prompt/config snapshot을 같은 record 안에 붙일지, 별도 snapshot id로 연결할지.
+- material upload record도 장기적으로 parent step을 둔 계층형으로 맞출지.
