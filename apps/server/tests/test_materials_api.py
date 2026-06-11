@@ -14,7 +14,12 @@ from server.app import create_app
 from server.extraction.models import EvidenceRef, EvidenceState
 from server.materials.observation import InMemoryMaterialUploadObservationSink
 from server.materials.store import MaterialStore
-from server.observations.export import LocalArtifactObservationExporter, NoopObservationExporter
+from server.observations.export import (
+    FanoutObservationExporter,
+    LocalArtifactObservationExporter,
+    NoopObservationExporter,
+    ObservationExportEnvelope,
+)
 from server.observations.langsmith import LangSmithObservationExporter
 from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
 from server.questions.observation import InMemoryQuestionObservationSink
@@ -324,6 +329,22 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert "체크인 시작 시각은 15:00입니다." not in exported_json
 
 
+def test_fanout_observation_exporter_continues_after_sink_failure() -> None:
+    envelope = ObservationExportEnvelope(
+        schema_version="tripproof.observation_export.v1",
+        exported_at="2026-06-11T00:00:00Z",
+        operation="material_upload",
+        record_id="obs_material_test",
+        payload={"final_status": "ready"},
+    )
+    spy = SpyObservationExporter()
+    exporter = FanoutObservationExporter([FailingObservationExporter(), spy])
+
+    exporter.export_observation(envelope)
+
+    assert spy.envelopes == [envelope]
+
+
 def test_langsmith_observation_exporter_records_safe_material_and_question_runs() -> None:
     writer = SpyLangSmithRunWriter()
     exporter = LangSmithObservationExporter(writer)
@@ -489,6 +510,36 @@ def test_default_observation_exporter_uses_noop_when_langsmith_enabled_without_a
     exporter = server_app._create_default_observation_exporter()
 
     assert isinstance(exporter, NoopObservationExporter)
+
+
+def test_default_observation_exporter_keeps_local_when_langsmith_api_key_is_missing(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setattr(server_app, "LANGSMITH_OBSERVATION_ENABLED", True)
+    monkeypatch.setattr(server_app, "LANGSMITH_API_KEY", "")
+    monkeypatch.setattr(server_app, "OBSERVATION_EXPORT_DIR", str(tmp_path))
+
+    exporter = server_app._create_default_observation_exporter()
+
+    assert isinstance(exporter, LocalArtifactObservationExporter)
+
+
+def test_default_observation_exporter_fans_out_local_and_langsmith(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setattr(server_app, "LANGSMITH_OBSERVATION_ENABLED", True)
+    monkeypatch.setattr(server_app, "LANGSMITH_API_KEY", "test-key")
+    monkeypatch.setattr(server_app, "LANGSMITH_PROJECT", "tripproof-test")
+    monkeypatch.setattr(server_app, "OBSERVATION_EXPORT_DIR", str(tmp_path))
+
+    exporter = server_app._create_default_observation_exporter()
+
+    assert isinstance(exporter, FanoutObservationExporter)
+    assert len(exporter.exporters) == 2
+    assert isinstance(exporter.exporters[0], LocalArtifactObservationExporter)
+    assert isinstance(exporter.exporters[1], LangSmithObservationExporter)
 
 
 def test_observation_exporter_failure_does_not_change_product_responses() -> None:
@@ -1369,6 +1420,14 @@ class FailingQuestionObservationSink:
 class FailingObservationExporter:
     def export_observation(self, envelope) -> None:
         raise RuntimeError("observation export failed")
+
+
+class SpyObservationExporter:
+    def __init__(self) -> None:
+        self.envelopes = []
+
+    def export_observation(self, envelope) -> None:
+        self.envelopes.append(envelope)
 
 
 class SpyLangSmithRunWriter:

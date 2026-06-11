@@ -37,6 +37,22 @@ class NoopObservationExporter:
         return None
 
 
+class FanoutObservationExporter:
+    def __init__(self, exporters: list[ObservationExporter]) -> None:
+        self._exporters = list(exporters)
+
+    @property
+    def exporters(self) -> list[ObservationExporter]:
+        return list(self._exporters)
+
+    def export_observation(self, envelope: ObservationExportEnvelope) -> None:
+        for exporter in self._exporters:
+            try:
+                exporter.export_observation(envelope)
+            except Exception:
+                continue
+
+
 class LocalArtifactObservationExporter:
     def __init__(
         self,

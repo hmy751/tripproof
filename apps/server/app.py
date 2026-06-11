@@ -17,11 +17,12 @@ from server.core.config import (
 from server.materials.observation import MaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.observations.export import (
+    FanoutObservationExporter,
+    LocalArtifactObservationExporter,
     MaterialUploadObservationExportSink,
     NoopObservationExporter,
     ObservationExporter,
     QuestionObservationExportSink,
-    create_observation_exporter_from_directory,
 )
 from server.observations.langsmith import LangSmithObservationExporter, LangSmithRunTreeWriter
 from server.questions.observation import QuestionObservationSink
@@ -105,13 +106,23 @@ def create_app(
 
 
 def _create_default_observation_exporter() -> ObservationExporter:
-    if LANGSMITH_OBSERVATION_ENABLED:
-        if not LANGSMITH_API_KEY:
-            return NoopObservationExporter()
-        return LangSmithObservationExporter(
-            LangSmithRunTreeWriter(project_name=LANGSMITH_PROJECT or None)
+    exporters: list[ObservationExporter] = []
+
+    if OBSERVATION_EXPORT_DIR.strip():
+        exporters.append(LocalArtifactObservationExporter(OBSERVATION_EXPORT_DIR))
+
+    if LANGSMITH_OBSERVATION_ENABLED and LANGSMITH_API_KEY:
+        exporters.append(
+            LangSmithObservationExporter(
+                LangSmithRunTreeWriter(project_name=LANGSMITH_PROJECT or None)
+            )
         )
-    return create_observation_exporter_from_directory(OBSERVATION_EXPORT_DIR)
+
+    if not exporters:
+        return NoopObservationExporter()
+    if len(exporters) == 1:
+        return exporters[0]
+    return FanoutObservationExporter(exporters)
 
 
 app = create_app()

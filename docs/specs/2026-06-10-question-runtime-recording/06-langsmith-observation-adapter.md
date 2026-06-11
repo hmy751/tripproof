@@ -30,9 +30,9 @@
 - LangSmith root run은 한 export envelope에 대응한다.
 - parent/leaf step은 synthetic LangSmith child runs로 펼치고, root run의 ordered events와 metadata에도 남긴다.
 - child run tree는 observation record tree를 보기 좋게 펼친 표현이며, step별 실제 latency를 의미하지 않는다.
-- runtime config snapshot은 root run metadata에만 둔다.
+- full runtime config snapshot은 root run metadata에 두고, child run에는 해당 step을 해석하는 데 필요한 runtime hint만 선별해 둔다.
 - LangSmith input/output, event payload, metadata에는 실행을 다시 설명하는 데 필요한 진단 신호만 기본으로 넣는다.
-- LangSmith env가 없거나 비활성화된 환경은 no-op처럼 동작한다.
+- LangSmith env가 없거나 비활성화된 환경에서는 LangSmith sink만 꺼진다. local artifact sink가 설정되어 있으면 계속 동작한다.
 - LangSmith 호출 실패는 material/question product response, material store 상태, 기존 exception propagation을 바꾸지 않는다.
 
 ## Rules
@@ -363,13 +363,13 @@ LANGSMITH_API_KEY=...
 LANGSMITH_PROJECT=...
 ```
 
-- `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy가 아니면 no-op이다.
-- enable env가 있어도 `LANGSMITH_API_KEY`가 없으면 no-op처럼 동작한다.
+- `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy가 아니면 LangSmith sink만 비활성화된다.
+- enable env가 있어도 `LANGSMITH_API_KEY`가 없으면 LangSmith sink만 비활성화된다. 이때 `TRIPPROOF_OBSERVATION_EXPORT_DIR`가 있으면 local artifact export는 계속 동작한다.
+- `TRIPPROOF_OBSERVATION_EXPORT_DIR`와 LangSmith env가 모두 유효하면 같은 `ObservationExportEnvelope`를 local artifact와 LangSmith 양쪽에 fanout한다.
 - `LANGSMITH_PROJECT`는 있으면 사용한다. 없을 때 SDK default project를 쓸지, TripProof default project를 둘지는 구현 시 작게 결정하되, API key가 없는 상태에서 startup이나 request를 실패시키지 않는다.
 - LangSmith SDK import는 disabled 환경에서 startup failure를 만들면 안 된다. 가능하면 lazy import 또는 factory guard로 둔다.
 - LangSmith client/run posting failure는 `ObservationExporter.export_observation()` 안에서 삼키고 product response를 바꾸지 않는다.
-
-기존 `TRIPPROOF_OBSERVATION_EXPORT_DIR`와 LangSmith를 동시에 켤 fanout은 이 spec에서 구현하지 않는다. 첫 LangSmith adapter는 단일 `ObservationExporter` 구현체로 닫는다.
+- Fanout에서는 한 sink가 실패해도 나머지 sink export를 계속 시도하고 product response를 바꾸지 않는다.
 
 ## 구현 결과
 
@@ -394,9 +394,11 @@ ObservationExportEnvelope
 
 실제 SDK 호출은 `LangSmithRunTreeWriter`가 담당한다. writer는 root `RunTree` 아래에 `create_child()`로 parent/leaf child runs를 만들고, root run에는 runtime config metadata를 붙인다. `langsmith.run_trees.RunTree`는 writer 안에서 lazy import하므로, LangSmith export가 비활성화된 환경에서 SDK import가 startup failure를 만들지 않는다.
 
-app factory는 `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy이고 `LANGSMITH_API_KEY`가 있을 때 LangSmith exporter를 선택한다. enable env가 있지만 API key가 없으면 `NoopObservationExporter`를 사용한다. LangSmith가 꺼져 있으면 기존 `TRIPPROOF_OBSERVATION_EXPORT_DIR` 기반 local artifact/no-op 선택을 유지한다.
+app factory는 local artifact exporter와 LangSmith exporter를 독립적으로 모은다. `TRIPPROOF_OBSERVATION_EXPORT_DIR`가 있으면 local artifact exporter를 활성화하고, `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy이고 `LANGSMITH_API_KEY`가 있으면 LangSmith exporter를 활성화한다. 활성 exporter가 없으면 `NoopObservationExporter`, 하나면 해당 exporter, 둘 이상이면 `FanoutObservationExporter`를 사용한다.
 
-테스트는 fake writer로 `material_upload`와 `question_answer` root run payload가 status/count/hash/config 중심으로 만들어지고, child run tree가 parent/leaf step 구조와 관련 runtime hint를 갖는지 확인한다. question text, source text, evidence snippet, answer body, 원문 file name이 들어가지 않는지와 writer failure를 주입해도 product response가 바뀌지 않는지도 확인한다.
+`FanoutObservationExporter`는 같은 `ObservationExportEnvelope`를 등록된 exporter들에 순서대로 보낸다. 한 exporter가 실패해도 다음 exporter 호출을 계속하며, 실패를 product response로 전파하지 않는다.
+
+테스트는 fake writer로 `material_upload`와 `question_answer` root run payload가 status/count/hash/config 중심으로 만들어지고, child run tree가 parent/leaf step 구조와 관련 runtime hint를 갖는지 확인한다. question text, source text, evidence snippet, answer body, 원문 file name이 들어가지 않는지와 writer failure를 주입해도 product response가 바뀌지 않는지도 확인한다. 또한 local artifact와 LangSmith가 함께 설정되면 fanout exporter가 선택되고, 한 sink 실패 후에도 다른 sink가 같은 envelope를 받는지 확인한다.
 
 ## 구현 slice
 
@@ -433,9 +435,10 @@ app factory는 `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy이고 `LANGSM
 1. 06 spec은 LangSmith adapter가 내부 record가 아니라 `observation_export.v1` envelope만 소비한다고 정한다.
 2. `material_upload`와 `question_answer`는 각각 LangSmith root run 하나로 매핑되고, root inputs/outputs는 safe summary만 가진다.
 3. parent/leaf step은 synthetic child run tree, ordered events, root metadata step summary로 남긴다.
-4. runtime config snapshot은 root metadata depth에만 둔다.
+4. full runtime config snapshot은 root metadata depth에 두고, child run에는 해당 step을 해석하는 데 필요한 runtime hint만 선별해 둔다.
 5. LangSmith 기본 payload는 실행 조건과 원인 범주를 설명하는 신호 중심으로 유지하고, 사용자 자료나 답변 내용을 재구성하기 위한 값은 기본 전송하지 않는다.
 6. LangSmith env가 없거나 호출이 실패해도 product response는 no-op exporter와 동일해야 한다.
+7. local artifact와 LangSmith가 모두 켜진 경우 같은 envelope가 양쪽 sink로 fanout되어야 한다.
 
 ## 확인 방법
 
@@ -444,6 +447,7 @@ app factory는 `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy이고 `LANGSM
 3. fake LangSmith client로 `question_answer` envelope export 시 question text, answer body, source text, evidence snippet 없이도 status/count/hash/config 중심 payload가 만들어지는지 확인한다.
 4. fake LangSmith client failure를 주입해 material upload와 question answer public response가 바뀌지 않는지 확인한다.
 5. 기존 local artifact exporter 테스트가 깨지지 않는지 확인한다.
+6. local artifact와 LangSmith가 모두 설정된 환경에서 app factory가 fanout exporter를 선택하고, 한 sink 실패가 다른 sink export를 막지 않는지 확인한다.
 
 현재 확인된 테스트:
 
@@ -452,7 +456,6 @@ app factory는 `TRIPPROOF_LANGSMITH_OBSERVATION_ENABLED`가 truthy이고 `LANGSM
 
 ## 남은 판단
 
-- local artifact와 LangSmith를 동시에 켤 fanout exporter가 필요한가.
 - request id 또는 correlation id를 export envelope에 추가할 필요가 있는가.
 - LangSmith project default를 TripProof에서 정할지, SDK default에 맡길지.
 - step timing이 생기면 어떤 parent/leaf step을 child span으로 승격할지.

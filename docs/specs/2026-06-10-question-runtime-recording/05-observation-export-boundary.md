@@ -230,7 +230,7 @@ local artifact projection은 내부 record의 step tree와 runtime config snapsh
 
 ## 남은 판단
 
-- operation-specific sink에서 exporter로 바로 보낼지, in-memory와 exporter를 함께 쓰는 fanout sink를 둘지.
+- operation-specific sink에서 exporter로 바로 보내는 구조는 유지하고, local artifact와 LangSmith 동시 전송은 06 보강의 `FanoutObservationExporter`로 닫았다.
 - local artifact 파일을 operation별로 나눌지, 하나의 JSONL stream으로 둘지.
 - LangSmith에서 parent step을 span으로 둘지, leaf step만 event/metadata로 둘지.
 - `exported_at`만 둘지, 내부 record 생성 시각도 record 자체에 추가할지.
