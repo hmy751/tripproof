@@ -47,6 +47,7 @@ def test_upload_text_pdf_returns_ready_material() -> None:
     assert "observation" not in material
     assert "debug" not in material
     assert "raw" not in material
+    assert "runtimeConfig" not in material
 
     records = observation_sink.records
     assert len(records) == 1
@@ -94,6 +95,16 @@ def test_upload_text_pdf_returns_ready_material() -> None:
     assert record.step("material_status").facts == {"status": "ready"}
     assert record.final_material_status == "ready"
     assert record.failure_kind is None
+    assert record.runtime_config_snapshot is not None
+    assert record.runtime_config_snapshot.retrieval.backend == "memory"
+    assert record.runtime_config_snapshot.retrieval.top_k == 3
+    assert record.runtime_config_snapshot.retrieval.similarity_threshold == 0.0
+    assert record.runtime_config_snapshot.embedding.auto_generate is False
+    assert record.runtime_config_snapshot.embedding.provider == "ollama"
+    assert record.runtime_config_snapshot.embedding.model == "nomic-embed-text-v2-moe"
+    assert record.runtime_config_snapshot.embedding.dimensions == 768
+    assert record.runtime_config_snapshot.prompt is None
+    assert record.runtime_config_snapshot.answer_model is None
 
 
 def test_upload_blank_pdf_returns_failed_material() -> None:
@@ -283,6 +294,7 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert "observation" not in body
     assert "debug" not in body
     assert "raw" not in body
+    assert "runtimeConfig" not in body
     assert "excerpt" not in body
     assert "facts" not in body
 
@@ -364,6 +376,16 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert record.step("question_status").facts == {"status": "accepted"}
     assert record.final_question_status == "accepted"
     assert record.failure_kind is None
+    assert record.runtime_config_snapshot is not None
+    assert record.runtime_config_snapshot.retrieval.backend == "memory"
+    assert record.runtime_config_snapshot.retrieval.top_k == 3
+    assert record.runtime_config_snapshot.retrieval.similarity_threshold == 0.0
+    assert record.runtime_config_snapshot.embedding.auto_generate is False
+    assert record.runtime_config_snapshot.embedding.provider == "ollama"
+    assert record.runtime_config_snapshot.embedding.model == "nomic-embed-text-v2-moe"
+    assert record.runtime_config_snapshot.embedding.dimensions == 768
+    assert record.runtime_config_snapshot.prompt is None
+    assert record.runtime_config_snapshot.answer_model is None
 
 
 def test_question_observation_records_repository_vector_source_retrieval() -> None:
@@ -372,14 +394,17 @@ def test_question_observation_records_repository_vector_source_retrieval() -> No
         body="체크인 시작 시각은 15:00입니다.",
         snippet="Check-in starts at 15:00.",
     )
+    repository = TrackingRetrievalRepository()
     store = MaterialStore(
         embedding_provider=FakeEmbeddingProvider(dimensions=3),
         embedding_auto_generate=True,
-        retrieval_repository=InMemoryRetrievalRepository(),
+        retrieval_repository=repository,
     )
     client = TestClient(
         create_app(
             store=store,
+            retrieval_top_k=1,
+            retrieval_similarity_threshold=0.25,
             library_chat_answer_composer=composer,
             question_observation_sink=question_observation_sink,
         )
@@ -400,6 +425,8 @@ def test_question_observation_records_repository_vector_source_retrieval() -> No
 
     assert response.status_code == 200
     record = question_observation_sink.records[0]
+    assert repository.seen_limit == 1
+    assert repository.seen_similarity_threshold == 0.25
     assert record.step("source_retrieval").facts == {
         "executed": True,
         "strategy": "repository_vector",
@@ -411,6 +438,14 @@ def test_question_observation_records_repository_vector_source_retrieval() -> No
     }
     assert record.step("candidate_summary").facts["candidate_count"] == 1
     assert record.step("candidate_summary").facts["candidates_with_vector_score"] == 1
+    assert record.runtime_config_snapshot is not None
+    assert record.runtime_config_snapshot.retrieval.backend == "memory"
+    assert record.runtime_config_snapshot.retrieval.top_k == 1
+    assert record.runtime_config_snapshot.retrieval.similarity_threshold == 0.25
+    assert record.runtime_config_snapshot.embedding.auto_generate is True
+    assert record.runtime_config_snapshot.embedding.provider == "ollama"
+    assert record.runtime_config_snapshot.embedding.model == "nomic-embed-text-v2-moe"
+    assert record.runtime_config_snapshot.embedding.dimensions == 3
     assert composer.last_context is not None
     assert composer.last_context.candidates[0].vector_score is not None
 
@@ -473,6 +508,17 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     assert response.status_code == 200
     prompt_snapshot = load_library_chat_answer_prompt().snapshot()
     record = question_observation_sink.records[0]
+    assert record.runtime_config_snapshot is not None
+    assert record.runtime_config_snapshot.prompt is not None
+    assert record.runtime_config_snapshot.prompt.domain == "answer"
+    assert record.runtime_config_snapshot.prompt.name == "library_chat_answer"
+    assert record.runtime_config_snapshot.prompt.version == "2026-06-10"
+    assert record.runtime_config_snapshot.prompt.body_hash == prompt_snapshot["bodyHash"]
+    assert record.runtime_config_snapshot.prompt.file_hash == prompt_snapshot["fileHash"]
+    assert (
+        record.runtime_config_snapshot.prompt.asset_path
+        == "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
+    )
     assert record.step("prompt_snapshot").facts == {
         "available": True,
         "prompt_domain": "answer",
@@ -486,6 +532,35 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     assert "observation" not in body
     assert "debug" not in body
     assert "raw" not in body
+    assert "runtimeConfig" not in body
+
+
+def test_question_runtime_config_snapshot_records_configured_answer_model() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            fact_proposer_backend="disabled",
+            question_observation_sink=question_observation_sink,
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "runtimeConfig" not in body
+    record = question_observation_sink.records[0]
+    assert record.runtime_config_snapshot is not None
+    assert record.runtime_config_snapshot.answer_model is not None
+    assert record.runtime_config_snapshot.answer_model.backend == "disabled"
+    assert record.runtime_config_snapshot.answer_model.model is None
 
 
 def test_ready_material_builds_source_units_and_pending_embeddings() -> None:
@@ -954,6 +1029,23 @@ class FailingReadRetrievalRepository:
 
     def clear(self) -> None:
         self._delegate.clear()
+
+
+class TrackingRetrievalRepository(InMemoryRetrievalRepository):
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen_limit = None
+        self.seen_similarity_threshold = None
+
+    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+        self.seen_limit = limit
+        self.seen_similarity_threshold = similarity_threshold
+        return super().match_source_units(
+            material_ids=material_ids,
+            query_embedding=query_embedding,
+            limit=limit,
+            similarity_threshold=similarity_threshold,
+        )
 
 
 class FailingObservationSink:

@@ -51,16 +51,37 @@ class MaterialStore:
         embedding_profile: EmbeddingProfile | None = None,
         embedding_auto_generate: bool = False,
         retrieval_repository: RetrievalRepository | None = None,
+        retrieval_backend: str | None = None,
     ) -> None:
         self._materials: dict[str, StoredMaterial] = {}
         self._embedding_provider = embedding_provider
         self._embedding_profile = embedding_profile or default_embedding_profile()
         self._embedding_auto_generate = embedding_auto_generate
         self._retrieval_repository = retrieval_repository or InMemoryRetrievalRepository()
+        if retrieval_backend is not None:
+            self._retrieval_backend = retrieval_backend
+        elif retrieval_repository is None or isinstance(retrieval_repository, InMemoryRetrievalRepository):
+            self._retrieval_backend = "memory"
+        else:
+            self._retrieval_backend = "custom"
 
     @property
     def embedding_provider(self) -> EmbeddingProvider | None:
         return self._embedding_provider
+
+    @property
+    def embedding_profile(self) -> EmbeddingProfile:
+        if self._embedding_provider is not None:
+            return self._embedding_provider.profile
+        return self._embedding_profile
+
+    @property
+    def embedding_auto_generate(self) -> bool:
+        return self._embedding_auto_generate
+
+    @property
+    def retrieval_backend(self) -> str:
+        return self._retrieval_backend
 
     @property
     def retrieval_repository(self) -> RetrievalRepository:

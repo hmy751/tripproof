@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from server.retrieval.models import ContextPack
 from server.retrieval.search import SourceRetrievalTrace
+from server.runtime.config_snapshot import PromptRuntimeConfigSnapshot, RuntimeConfigSnapshot
 from server.schemas.answers import ChatAnswerResponse
 from server.schemas.questions import QuestionStatus
 
@@ -122,6 +123,7 @@ class QuestionObservationRecord:
     steps: list[QuestionObservationStep]
     final_question_status: QuestionStatus | None
     failure_kind: QuestionObservationFailureKind | None
+    runtime_config_snapshot: RuntimeConfigSnapshot | None = None
 
     def step(self, name: QuestionObservationStepName) -> QuestionObservationStep:
         for step in self.steps:
@@ -154,8 +156,9 @@ class InMemoryQuestionObservationSink:
 
 
 class QuestionObservationRecorder:
-    def __init__(self) -> None:
+    def __init__(self, *, runtime_config_snapshot: RuntimeConfigSnapshot | None = None) -> None:
         self._record_id = f"obs_question_{uuid4().hex[:12]}"
+        self._runtime_config_snapshot = runtime_config_snapshot
         self._steps = {
             step_name: QuestionObservationStep(name=step_name, status="not_started")
             for step_name in _ALL_STEP_NAMES
@@ -209,6 +212,7 @@ class QuestionObservationRecorder:
             steps=[self._build_step(step_name) for step_name in _STEP_ROOTS],
             final_question_status=self._final_question_status,
             failure_kind=self._failure_kind,
+            runtime_config_snapshot=self._runtime_config_snapshot,
         )
 
     def _build_step(self, step_name: QuestionObservationStepName) -> QuestionObservationStep:
@@ -225,23 +229,19 @@ class QuestionObservationRecorder:
         )
 
 
-def prompt_snapshot_facts(answer_composer: object) -> dict[str, QuestionObservationFactValue]:
-    try:
-        prompt = getattr(answer_composer, "prompt", None)
-        snapshot = prompt.snapshot() if prompt is not None and hasattr(prompt, "snapshot") else None
-    except Exception:
+def prompt_snapshot_facts(
+    prompt: PromptRuntimeConfigSnapshot | None,
+) -> dict[str, QuestionObservationFactValue]:
+    if prompt is None:
         return {"available": False}
-    if not isinstance(snapshot, dict):
-        return {"available": False}
-
     return {
         "available": True,
-        "prompt_domain": _string_snapshot_value(snapshot, "domain"),
-        "prompt_name": _string_snapshot_value(snapshot, "name"),
-        "prompt_version": _string_snapshot_value(snapshot, "version"),
-        "prompt_body_hash": _string_snapshot_value(snapshot, "bodyHash"),
-        "prompt_file_hash": _string_snapshot_value(snapshot, "fileHash"),
-        "prompt_asset_path": _string_snapshot_value(snapshot, "assetPath"),
+        "prompt_domain": prompt.domain,
+        "prompt_name": prompt.name,
+        "prompt_version": prompt.version,
+        "prompt_body_hash": prompt.body_hash,
+        "prompt_file_hash": prompt.file_hash,
+        "prompt_asset_path": prompt.asset_path,
     }
 
 
@@ -317,11 +317,6 @@ def _find_step(
         if match is not None:
             return match
     return None
-
-
-def _string_snapshot_value(snapshot: dict[object, object], key: str) -> str | None:
-    value = snapshot.get(key)
-    return value if isinstance(value, str) else None
 
 
 def _safe_facts(

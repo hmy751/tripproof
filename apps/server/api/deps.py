@@ -6,6 +6,7 @@ from server.answers.library_chat import LibraryChatAnswerComposer
 from server.materials.observation import MaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.questions.observation import QuestionObservationSink
+from server.runtime.config_snapshot import RuntimeConfigSettings
 
 
 def get_material_store(request: Request) -> MaterialStore:
@@ -22,3 +23,7 @@ def get_question_observation_sink(request: Request) -> QuestionObservationSink:
 
 def get_library_chat_answer_composer(request: Request) -> LibraryChatAnswerComposer:
     return request.app.state.library_chat_answer_composer
+
+
+def get_runtime_config_settings(request: Request) -> RuntimeConfigSettings:
+    return request.app.state.runtime_config_settings

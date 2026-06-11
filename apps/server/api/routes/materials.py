@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from server.api.deps import get_material_store, get_material_upload_observation_sink
+from server.api.deps import get_material_store, get_material_upload_observation_sink, get_runtime_config_settings
 from server.core.config import MAX_UPLOAD_BYTES
 from server.materials.observation import (
     MaterialUploadObservationRecorder,
@@ -14,6 +14,7 @@ from server.materials.observation import (
 )
 from server.materials.pdf import PdfParseError, parse_pdf
 from server.materials.store import MaterialStore
+from server.runtime.config_snapshot import RuntimeConfigSettings, runtime_config_snapshot_from_settings
 from server.schemas.materials import Material
 
 router = APIRouter(prefix="/api/materials", tags=["materials"])
@@ -28,6 +29,7 @@ def list_materials(store: Annotated[MaterialStore, Depends(get_material_store)])
 async def upload_material(
     store: Annotated[MaterialStore, Depends(get_material_store)],
     observation_sink: Annotated[MaterialUploadObservationSink, Depends(get_material_upload_observation_sink)],
+    runtime_config: Annotated[RuntimeConfigSettings, Depends(get_runtime_config_settings)],
     file: UploadFile = File(...),
     display_name: str | None = Form(default=None, alias="displayName"),
 ) -> Material:
@@ -40,6 +42,7 @@ async def upload_material(
         content_type=content_type,
         size_bytes=len(raw),
         size_limit_bytes=MAX_UPLOAD_BYTES,
+        runtime_config_snapshot=runtime_config_snapshot_from_settings(runtime_config),
     )
 
     if len(raw) > MAX_UPLOAD_BYTES:

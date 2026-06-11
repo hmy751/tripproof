@@ -6,6 +6,7 @@ from typing import Literal, Protocol
 from uuid import uuid4
 
 from server.retrieval.models import EmbeddingRecord, EmbeddingStatus
+from server.runtime.config_snapshot import RuntimeConfigSnapshot
 from server.schemas.materials import MaterialStatus
 
 ObservationStepStatus = Literal["not_started", "succeeded", "failed"]
@@ -94,6 +95,7 @@ class MaterialUploadObservationRecord:
     steps: list[MaterialUploadObservationStep]
     final_material_status: MaterialStatus | None
     failure_kind: MaterialUploadFailureKind | None
+    runtime_config_snapshot: RuntimeConfigSnapshot | None = None
 
     def step(self, name: MaterialUploadStepName) -> MaterialUploadObservationStep:
         for step in self.steps:
@@ -133,9 +135,11 @@ class MaterialUploadObservationRecorder:
         content_type: str | None,
         size_bytes: int,
         size_limit_bytes: int,
+        runtime_config_snapshot: RuntimeConfigSnapshot | None = None,
     ) -> None:
         self._record_id = f"obs_mat_upload_{uuid4().hex[:12]}"
         self._material_id: str | None = None
+        self._runtime_config_snapshot = runtime_config_snapshot
         self._steps = {
             step_name: MaterialUploadObservationStep(name=step_name, status="not_started")
             for step_name in _ALL_STEP_NAMES
@@ -206,6 +210,7 @@ class MaterialUploadObservationRecorder:
             steps=[self._build_step(step_name) for step_name in _STEP_ROOTS],
             final_material_status=self._final_material_status,
             failure_kind=self._failure_kind,
+            runtime_config_snapshot=self._runtime_config_snapshot,
         )
 
     def _build_step(self, step_name: MaterialUploadStepName) -> MaterialUploadObservationStep:

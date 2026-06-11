@@ -9,8 +9,10 @@ from server.core.config import ALLOWED_ORIGINS, EMBEDDING_AUTO_GENERATE, RETRIEV
 from server.materials.observation import MaterialUploadObservationSink, NoopMaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.questions.observation import NoopQuestionObservationSink, QuestionObservationSink
+from server.retrieval.search import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
+from server.runtime.config_snapshot import RuntimeConfigSettings
 
 
 def create_app(
@@ -18,6 +20,8 @@ def create_app(
     *,
     embedding_auto_generate: bool | None = None,
     retrieval_backend: str | None = None,
+    retrieval_top_k: int | None = None,
+    retrieval_similarity_threshold: float | None = None,
     library_chat_answer_composer: LibraryChatAnswerComposer | None = None,
     fact_proposer_backend: str | None = None,
     material_upload_observation_sink: MaterialUploadObservationSink | None = None,
@@ -41,7 +45,19 @@ def create_app(
             embedding_provider=embedding_provider,
             embedding_auto_generate=active_embedding_auto_generate,
             retrieval_repository=retrieval_repository,
+            retrieval_backend=active_retrieval_backend,
         )
+    app.state.runtime_config_settings = RuntimeConfigSettings(
+        retrieval_backend=app.state.material_store.retrieval_backend,
+        retrieval_top_k=RAG_TOP_K if retrieval_top_k is None else retrieval_top_k,
+        retrieval_similarity_threshold=(
+            RAG_SIMILARITY_THRESHOLD
+            if retrieval_similarity_threshold is None
+            else retrieval_similarity_threshold
+        ),
+        embedding_auto_generate=app.state.material_store.embedding_auto_generate,
+        embedding_profile=app.state.material_store.embedding_profile,
+    )
     app.state.library_chat_answer_composer = (
         library_chat_answer_composer
         or create_library_chat_answer_composer_from_config(backend=fact_proposer_backend)

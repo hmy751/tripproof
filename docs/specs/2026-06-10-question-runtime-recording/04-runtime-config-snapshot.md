@@ -2,7 +2,7 @@
 
 작성일: 2026-06-11
 
-상태: 다음 하위 작업 spec. material upload와 question answer 결과를 바꿀 수 있는 runtime knob을 내부 snapshot으로 남기는 기준을 정한다.
+상태: 구현된 하위 작업 spec. material upload와 question answer 결과를 바꿀 수 있는 runtime knob을 내부 snapshot으로 남기는 기준을 정한다.
 
 ## 왜 지금
 
@@ -52,6 +52,8 @@
 - `apps/server/app.py`: config 값을 app state의 material store, retrieval repository, answer composer로 wiring한다.
 - `apps/server/materials/store.py`: embedding provider/profile/auto-generate와 retrieval repository를 사용해 ready material을 만든다.
 - `apps/server/retrieval/search.py`: `RAG_TOP_K`, `RAG_SIMILARITY_THRESHOLD`, retrieval strategy 경계다.
+- `apps/server/runtime/config_snapshot.py`: runtime config settings와 safe snapshot dataclass를 정의한다.
+- `apps/server/materials/observation.py`: material upload observation record가 runtime config snapshot을 직접 가진다.
 - `apps/server/questions/observation.py`: question observation의 prompt snapshot safe facts 패턴이다.
 - `apps/server/prompts/runtime/prompt_document.py`: prompt document snapshot의 identity 원천이다.
 - `apps/server/answers/library_chat.py`: 현재 answer composer backend/model config를 소비하는 경계다.
@@ -60,7 +62,7 @@
 
 | 구현 요소 | 필요한 이유 | 현재 코드/문서 | 처음 닫을 기준 |
 | --- | --- | --- | --- |
-| Runtime config snapshot model | material/question record가 같은 실행 조건을 참조해야 한다 | 아직 별도 model이 없다 | result-changing knob만 담는 내부 snapshot record가 있다 |
+| Runtime config snapshot model | material/question record가 같은 실행 조건을 참조해야 한다 | `runtime/config_snapshot.py`에 safe snapshot dataclass가 있다 | result-changing knob만 담는 내부 snapshot record가 있다 |
 | Config source boundary | 기록용 값과 실행용 값이 갈라지면 snapshot이 거짓이 된다 | `core/config.py`의 flat constant를 app/store/retrieval/composer가 나눠 소비한다 | product code가 실제 소비한 값에서 snapshot을 만든다 |
 | Material upload 연결 | upload 결과는 embedding 생성과 repository backend 조건에 영향을 받는다 | material observation은 source/embedding/upsert fact를 남긴다 | material upload record가 embedding/retrieval config snapshot과 연결된다 |
 | Question answer 연결 | 답변 결과는 retrieval limit/threshold/backend, prompt identity에 영향을 받는다 | question observation은 retrieval fact와 prompt snapshot fact를 남긴다 | question record가 retrieval/prompt/runtime config snapshot과 연결된다 |
@@ -104,11 +106,46 @@ runtime_config_snapshot
 4. snapshot에는 secret, raw prompt body, source unit text, retrieval candidate 전문, embedding vector, raw provider response가 들어가지 않는다.
 5. LangSmith/export adapter 없이도 snapshot 생성과 observation 연결이 닫힌다.
 
+## 구현 결과
+
+2026-06-11 현재 이 slice는 `apps/server/runtime/config_snapshot.py`, app state wiring, material/question observation record 연결로 구현됐다.
+
+`RuntimeConfigSettings`는 app이 실제로 사용할 retrieval backend, retrieval top-k, similarity threshold, embedding auto-generate, embedding profile을 담는다. `POST /api/questions`는 이 settings의 top-k와 threshold를 `retrieve_context_with_trace()`에 직접 넘기므로, snapshot 값과 실제 retrieval 실행 값이 갈라지지 않는다.
+
+material/question observation record는 `runtime_config_snapshot`을 직접 가진다. 아직 별도 snapshot store나 export adapter가 없으므로 id만 연결하지 않고, record 안에 safe snapshot을 embed한다.
+
+snapshot 구조는 다음 값만 포함한다.
+
+```text
+runtime_config_snapshot
+  retrieval
+    backend
+    top_k
+    similarity_threshold
+  embedding
+    auto_generate
+    provider
+    model
+    dimensions
+  prompt
+    domain
+    name
+    version
+    body_hash
+    file_hash
+    asset_path
+  answer_model
+    backend
+    model
+```
+
+`prompt`와 `answer_model`은 해당 runtime이 identity를 노출할 때만 채운다. fake/test composer처럼 identity를 노출하지 않는 경우에는 `None`으로 둔다. API 응답에는 `runtimeConfig`, `observation`, `debug`, `raw`를 추가하지 않는다.
+
 ## 구현 중 주의할 점
 
 - snapshot을 API 응답의 개발자 전용 필드로 넣지 않는다.
 - 먼저 snapshot 내용물을 닫고, local artifact나 LangSmith export는 이후 sink/export slice로 둔다.
-- retrieval top-k와 similarity threshold는 현재 `retrieval/search.py` default 값으로 흩어져 있으므로, question path가 실제로 쓴 값을 snapshot에 담을 수 있는 연결이 필요하다.
+- retrieval top-k와 similarity threshold는 app state의 `RuntimeConfigSettings`에서 question route와 snapshot builder가 같이 읽는다.
 - embedding auto-generate가 꺼진 경우에도 provider/model/dimensions profile은 pending embedding record의 identity를 바꿀 수 있으므로 snapshot에 남긴다.
 - prompt snapshot은 03의 `prompt_snapshot` leaf와 중복될 수 있다. 중복 저장보다 같은 identity를 같은 safe field로 맞추는 것이 중요하다.
 
@@ -119,10 +156,13 @@ runtime_config_snapshot
 3. app/store override로 retrieval backend, top-k/threshold, embedding auto-generate/profile을 바꿨을 때 internal snapshot 값만 바뀌는지 확인한다.
 4. API 응답 payload에 `observation`, `runtimeConfig`, `debug`, raw retrieval candidate, raw LLM JSON field가 추가되지 않았는지 확인한다.
 
+현재 확인된 테스트:
+
+- `uv run pytest apps/server/tests/test_materials_api.py`
+- `uv run pytest apps/server/tests`
+
 ## 남은 판단
 
-- snapshot을 observation record 안에 직접 embed할지, 별도 `runtime_config_snapshot_id`로 연결할지.
 - material/question이 같은 snapshot instance를 공유할지, operation마다 snapshot을 만들지.
-- `FACT_PROPOSER_BACKEND`와 `OLLAMA_FACT_MODEL`을 04에서 바로 `answer_model`로 남길지, answer composer runtime identity가 생긴 뒤 연결할지.
 - upload size limit처럼 material acceptance를 바꾸는 값까지 첫 snapshot에 포함할지.
 - external exporter에서 file name, prompt asset path 같은 safe field를 더 줄여야 하는지.

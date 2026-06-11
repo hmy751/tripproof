@@ -4,7 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from server.api.deps import get_library_chat_answer_composer, get_material_store, get_question_observation_sink
+from server.api.deps import (
+    get_library_chat_answer_composer,
+    get_material_store,
+    get_question_observation_sink,
+    get_runtime_config_settings,
+)
 from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID, LibraryChatAnswerComposer
 from server.materials.store import MaterialStore
 from server.questions.observation import (
@@ -17,6 +22,12 @@ from server.questions.observation import (
     source_retrieval_facts,
 )
 from server.retrieval.search import retrieve_context_with_trace
+from server.runtime.config_snapshot import (
+    RuntimeConfigSettings,
+    answer_model_runtime_config_snapshot_from_composer,
+    prompt_runtime_config_snapshot_from_composer,
+    runtime_config_snapshot_from_settings,
+)
 from server.schemas.answers import ChatAnswerResponse
 from server.schemas.questions import QuestionRequest, QuestionResponse
 
@@ -29,8 +40,16 @@ def ask_question(
     store: Annotated[MaterialStore, Depends(get_material_store)],
     answer_composer: Annotated[LibraryChatAnswerComposer, Depends(get_library_chat_answer_composer)],
     observation_sink: Annotated[QuestionObservationSink, Depends(get_question_observation_sink)],
+    runtime_config: Annotated[RuntimeConfigSettings, Depends(get_runtime_config_settings)],
 ) -> QuestionResponse:
-    observation = QuestionObservationRecorder()
+    prompt_snapshot = prompt_runtime_config_snapshot_from_composer(answer_composer)
+    observation = QuestionObservationRecorder(
+        runtime_config_snapshot=runtime_config_snapshot_from_settings(
+            runtime_config,
+            prompt=prompt_snapshot,
+            answer_model=answer_model_runtime_config_snapshot_from_composer(answer_composer),
+        )
+    )
     question = payload.question.strip()
     if not question:
         observation.fail("query_snapshot", "empty_question", facts={"question_length": 0})
@@ -96,6 +115,8 @@ def ask_question(
             embedding_provider=store.embedding_provider,
             retrieval_repository=store.retrieval_repository,
             material_ids=ready_material_ids,
+            top_k=runtime_config.retrieval_top_k,
+            similarity_threshold=runtime_config.retrieval_similarity_threshold,
         )
     except Exception:
         observation.fail("source_retrieval", "retrieval_failed", facts={"executed": True})
@@ -107,7 +128,7 @@ def ask_question(
     observation.succeed("context_assembly", facts={"executed": True, "target_id": LIBRARY_CHAT_TARGET_ID})
     observation.succeed("candidate_summary", facts=retrieval_candidate_facts(context))
 
-    observation.succeed("prompt_snapshot", facts=prompt_snapshot_facts(answer_composer))
+    observation.succeed("prompt_snapshot", facts=prompt_snapshot_facts(prompt_snapshot))
 
     try:
         answer = answer_composer.compose(question=question, context=context)

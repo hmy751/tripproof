@@ -30,17 +30,36 @@ class LibraryChatAnswerComposer(Protocol):
 
 
 class MissingLibraryChatAnswerComposer:
-    def __init__(self, *, reason: str = "답변 생성기가 비활성화되어 있습니다.") -> None:
+    def __init__(
+        self,
+        *,
+        reason: str = "답변 생성기가 비활성화되어 있습니다.",
+        backend: str = "missing",
+    ) -> None:
         self._reason = reason
+        self._backend = backend
 
     def compose(self, *, question: str, context: ContextPack) -> ChatAnswerResponse:
         return _missing_answer(reason=self._reason)
 
+    def runtime_answer_model_snapshot(self) -> dict[str, str | None]:
+        return {
+            "backend": self._backend,
+            "model": None,
+        }
+
 
 class OllamaLibraryChatAnswerComposer:
-    def __init__(self, *, client: OllamaChatJsonClient, prompt: LibraryChatAnswerPrompt | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        client: OllamaChatJsonClient,
+        prompt: LibraryChatAnswerPrompt | None = None,
+        model: str | None = None,
+    ) -> None:
         self._client = client
         self._prompt = prompt or load_library_chat_answer_prompt()
+        self._model = model
 
     @property
     def prompt(self) -> LibraryChatAnswerPrompt:
@@ -60,6 +79,12 @@ class OllamaLibraryChatAnswerComposer:
 
         return _answer_from_payload(question=question, payload=payload, context=context)
 
+    def runtime_answer_model_snapshot(self) -> dict[str, str | None]:
+        return {
+            "backend": "ollama",
+            "model": self._model,
+        }
+
 
 def create_library_chat_answer_composer_from_config(
     *,
@@ -74,10 +99,11 @@ def create_library_chat_answer_composer_from_config(
                     model=OLLAMA_FACT_MODEL,
                     timeout_seconds=OLLAMA_FACT_TIMEOUT_SECONDS,
                 )
-            )
+            ),
+            model=OLLAMA_FACT_MODEL,
         )
     if active_backend in {"disabled", "missing"}:
-        return MissingLibraryChatAnswerComposer()
+        return MissingLibraryChatAnswerComposer(backend=active_backend)
     raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
 
 
