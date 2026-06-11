@@ -74,6 +74,8 @@ tripproof.eval_run.question_runtime_recording.v1
 - runner는 `LocalArtifactObservationExporter`를 임시 run directory에 붙여 `observations/observation-export.jsonl`을 만든다.
 - question request에는 `X-TripProof-Correlation-Id`를 보낸다.
 - `run.json`에는 `correlation_id`, request/response header id, observation export path, operation별 export 요약, public answer summary/count/check 결과를 남긴다.
+- 기본 output directory인 `eval/runs/question-runtime-recording/`은 local run artifact 경로라 `.gitignore`에 포함했다.
+- `eval/README.md`와 `eval/runs/README.md`는 기본 runner 산출물이 로컬 전용이고, 공유/commit은 별도 판단으로 다룬다는 점을 명시한다.
 - `apps/server/tests/test_eval_question_runtime_recording_smoke.py`는 runner가 artifact와 observation JSONL을 만들고, question observation export가 같은 correlation id를 갖는지 확인한다.
 
 ## Non-goals
@@ -90,6 +92,7 @@ tripproof.eval_run.question_runtime_recording.v1
 3. local observation JSONL은 `material_upload`, `question_answer` 두 record를 남겨야 한다.
 4. product JSON body에는 request/correlation id가 없어야 한다.
 5. runner와 artifact는 eval 영역에만 있고 product code는 eval을 import하지 않는다.
+6. 기본 output directory에 생기는 local run artifact는 git status를 더럽히지 않아야 한다.
 
 ## 확인 방법
 
@@ -110,6 +113,12 @@ uv run python eval/question_runtime_recording_smoke.py \
 
 ```bash
 uv run pytest apps/server/tests -q
+```
+
+기본 산출물 경로가 ignore되는지 확인:
+
+```bash
+git check-ignore eval/runs/question-runtime-recording/example/run.json
 ```
 
 ## 남은 판단

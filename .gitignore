@@ -25,6 +25,9 @@ out/
 # Local observation export artifacts
 .tripproof-observations/
 
+# Local eval run artifacts
+eval/runs/question-runtime-recording/
+
 /doc
 
 # Local research material. May contain email IDs or source handles.
