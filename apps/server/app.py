@@ -8,6 +8,9 @@ from server.answers.library_chat import LibraryChatAnswerComposer, create_librar
 from server.core.config import (
     ALLOWED_ORIGINS,
     EMBEDDING_AUTO_GENERATE,
+    LANGSMITH_API_KEY,
+    LANGSMITH_OBSERVATION_ENABLED,
+    LANGSMITH_PROJECT,
     OBSERVATION_EXPORT_DIR,
     RETRIEVAL_BACKEND,
 )
@@ -15,10 +18,12 @@ from server.materials.observation import MaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.observations.export import (
     MaterialUploadObservationExportSink,
+    NoopObservationExporter,
     ObservationExporter,
     QuestionObservationExportSink,
     create_observation_exporter_from_directory,
 )
+from server.observations.langsmith import LangSmithObservationExporter, LangSmithRunTreeWriter
 from server.questions.observation import QuestionObservationSink
 from server.retrieval.search import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
@@ -74,9 +79,7 @@ def create_app(
         library_chat_answer_composer
         or create_library_chat_answer_composer_from_config(backend=fact_proposer_backend)
     )
-    active_observation_exporter = observation_exporter or create_observation_exporter_from_directory(
-        OBSERVATION_EXPORT_DIR
-    )
+    active_observation_exporter = observation_exporter or _create_default_observation_exporter()
     app.state.observation_exporter = active_observation_exporter
     app.state.material_upload_observation_sink = (
         material_upload_observation_sink
@@ -99,6 +102,16 @@ def create_app(
     app.include_router(questions.router)
 
     return app
+
+
+def _create_default_observation_exporter() -> ObservationExporter:
+    if LANGSMITH_OBSERVATION_ENABLED:
+        if not LANGSMITH_API_KEY:
+            return NoopObservationExporter()
+        return LangSmithObservationExporter(
+            LangSmithRunTreeWriter(project_name=LANGSMITH_PROJECT or None)
+        )
+    return create_observation_exporter_from_directory(OBSERVATION_EXPORT_DIR)
 
 
 app = create_app()

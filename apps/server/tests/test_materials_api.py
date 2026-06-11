@@ -14,7 +14,8 @@ from server.app import create_app
 from server.extraction.models import EvidenceRef, EvidenceState
 from server.materials.observation import InMemoryMaterialUploadObservationSink
 from server.materials.store import MaterialStore
-from server.observations.export import LocalArtifactObservationExporter
+from server.observations.export import LocalArtifactObservationExporter, NoopObservationExporter
+from server.observations.langsmith import LangSmithObservationExporter
 from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
 from server.questions.observation import InMemoryQuestionObservationSink
 from server.retrieval.embeddings import EmbeddingProfile
@@ -321,6 +322,173 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert "check-in time?" not in exported_json
     assert "Hotel address is Hakata" not in exported_json
     assert "체크인 시작 시각은 15:00입니다." not in exported_json
+
+
+def test_langsmith_observation_exporter_records_safe_material_and_question_runs() -> None:
+    writer = SpyLangSmithRunWriter()
+    exporter = LangSmithObservationExporter(writer)
+    composer = FakeLibraryChatAnswerComposer(
+        body="체크인 시작 시각은 15:00입니다.",
+        snippet="Check-in starts at 15:00.",
+    )
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=composer,
+            observation_exporter=exporter,
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={
+            "file": (
+                "booking-secret-name.pdf",
+                _pdf_with_text("Hotel address is Hakata. Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
+    )
+    material_id = upload.json()["id"]
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+
+    assert upload.status_code == 200
+    assert response.status_code == 200
+    assert response.json()["status"] == "accepted"
+    assert [run["name"] for run in writer.runs] == [
+        "tripproof.material_upload",
+        "tripproof.question_answer",
+    ]
+
+    material_run = writer.runs[0]
+    assert material_run["run_type"] == "chain"
+    assert material_run["inputs"] == {
+        "operation": "material_upload",
+        "subject": {"material_id": material_id},
+    }
+    assert material_run["outputs"] == {"final_status": "ready", "failure_kind": None}
+    assert material_run["metadata"]["tripproof.schema_version"] == "tripproof.observation_export.v1"
+    assert material_run["metadata"]["tripproof.retrieval_backend"] == "memory"
+    assert material_run["metadata"]["tripproof.embedding_provider"] == "ollama"
+    assert [child["name"] for child in material_run["child_runs"]] == [
+        "material_intake",
+        "content_extraction",
+        "retrieval_preparation",
+        "finalization",
+    ]
+    material_intake = _langsmith_child_run(material_run, "material_intake")
+    assert material_intake["metadata"]["tripproof.synthetic_observation_step"] is True
+    assert material_intake["metadata"]["tripproof.step.kind"] == "parent_step"
+    assert [child["name"] for child in material_intake["children"]] == ["upload_snapshot"]
+    upload_child = _langsmith_child_run(material_intake, "upload_snapshot")
+    assert upload_child["outputs"]["status"] == "succeeded"
+    assert upload_child["outputs"]["failure_kind"] is None
+    assert upload_child["outputs"]["facts"]["file_name_present"] is True
+    assert upload_child["outputs"]["facts"]["file_extension"] == "pdf"
+    assert upload_child["metadata"]["tripproof.step.kind"] == "leaf_step"
+    assert upload_child["metadata"]["tripproof.step.facts"]["file_name_present"] is True
+    assert upload_child["metadata"]["tripproof.step.facts"]["file_extension"] == "pdf"
+    assert "file_name" not in upload_child["metadata"]["tripproof.step.facts"]
+    retrieval_preparation = _langsmith_child_run(material_run, "retrieval_preparation")
+    assert retrieval_preparation["metadata"]["tripproof.runtime_hint.retrieval_backend"] == "memory"
+    embedding_record_build = _langsmith_child_run(material_run, "embedding_record_build")
+    assert embedding_record_build["metadata"]["tripproof.runtime_hint.embedding_provider"] == "ollama"
+    assert (
+        embedding_record_build["metadata"]["tripproof.runtime_hint.embedding_model"]
+        == "nomic-embed-text-v2-moe"
+    )
+    upload_event = _langsmith_event(material_run, "upload_snapshot")
+    assert upload_event["kwargs"]["kind"] == "leaf_step"
+    assert upload_event["kwargs"]["facts"]["file_name_present"] is True
+    assert upload_event["kwargs"]["facts"]["file_extension"] == "pdf"
+    assert "file_name" not in upload_event["kwargs"]["facts"]
+
+    question_run = writer.runs[1]
+    assert question_run["inputs"] == {"operation": "question_answer", "subject": {}}
+    assert question_run["outputs"] == {"final_status": "accepted", "failure_kind": None}
+    assert [child["name"] for child in question_run["child_runs"]] == [
+        "question_preparation",
+        "material_scope",
+        "retrieval_pipeline",
+        "answer_pipeline",
+        "finalization",
+    ]
+    answer_pipeline = _langsmith_child_run(question_run, "answer_pipeline")
+    assert [child["name"] for child in answer_pipeline["children"]] == [
+        "prompt_snapshot",
+        "composer_call",
+        "answer_projection",
+    ]
+    answer_projection = _langsmith_child_run(answer_pipeline, "answer_projection")
+    assert answer_projection["outputs"]["facts"] == {
+        "item_count": 1,
+        "evidence_state_counts": {"supported": 1},
+    }
+    assert answer_projection["metadata"]["tripproof.step.facts"] == {
+        "item_count": 1,
+        "evidence_state_counts": {"supported": 1},
+    }
+    retrieval_pipeline = _langsmith_child_run(question_run, "retrieval_pipeline")
+    assert retrieval_pipeline["metadata"]["tripproof.runtime_hint.retrieval_backend"] == "memory"
+    source_retrieval = _langsmith_child_run(question_run, "source_retrieval")
+    assert source_retrieval["metadata"]["tripproof.runtime_hint.embedding_provider"] == "ollama"
+    assert _langsmith_event(question_run, "query_snapshot")["kwargs"]["facts"] == {
+        "question_length": len("check-in time?"),
+    }
+    assert _langsmith_event(question_run, "ready_material_selection")["kwargs"]["facts"] == {
+        "ready_material_count": 1,
+        "ready_material_ids": [material_id],
+    }
+    assert _langsmith_event(question_run, "answer_projection")["kwargs"]["facts"] == {
+        "item_count": 1,
+        "evidence_state_counts": {"supported": 1},
+    }
+
+    exported_json = json.dumps(writer.runs, ensure_ascii=False)
+    assert "booking-secret-name.pdf" not in exported_json
+    assert "check-in time?" not in exported_json
+    assert "Hotel address is Hakata" not in exported_json
+    assert "Check-in starts at 15:00." not in exported_json
+    assert "체크인 시작 시각은 15:00입니다." not in exported_json
+
+
+def test_langsmith_observation_exporter_failure_does_not_change_product_responses() -> None:
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
+            observation_exporter=LangSmithObservationExporter(FailingLangSmithRunWriter()),
+        )
+    )
+    upload = client.post(
+        "/api/materials",
+        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+    )
+    material = upload.json()
+
+    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material["id"]]})
+
+    assert upload.status_code == 200
+    assert material["status"] == "ready"
+    assert "observation" not in material
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "accepted"
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
+
+
+def test_default_observation_exporter_uses_noop_when_langsmith_enabled_without_api_key(monkeypatch) -> None:
+    monkeypatch.setattr(server_app, "LANGSMITH_OBSERVATION_ENABLED", True)
+    monkeypatch.setattr(server_app, "LANGSMITH_API_KEY", "")
+    monkeypatch.setattr(server_app, "OBSERVATION_EXPORT_DIR", "")
+
+    exporter = server_app._create_default_observation_exporter()
+
+    assert isinstance(exporter, NoopObservationExporter)
 
 
 def test_observation_exporter_failure_does_not_change_product_responses() -> None:
@@ -1036,6 +1204,26 @@ def _find_export_step(step, name: str):
     return None
 
 
+def _langsmith_event(run, step_name: str):
+    for event in run["events"]:
+        if event["kwargs"]["name"] == step_name:
+            return event
+    raise KeyError(step_name)
+
+
+def _langsmith_child_run(run, step_name: str):
+    children = run.get("child_runs", run.get("children", []))
+    for child in children:
+        if child["name"] == step_name:
+            return child
+    for child in children:
+        try:
+            return _langsmith_child_run(child, step_name)
+        except KeyError:
+            continue
+    raise KeyError(step_name)
+
+
 class FakeEmbeddingProvider:
     def __init__(self, *, dimensions: int) -> None:
         self.profile = EmbeddingProfile(
@@ -1181,3 +1369,16 @@ class FailingQuestionObservationSink:
 class FailingObservationExporter:
     def export_observation(self, envelope) -> None:
         raise RuntimeError("observation export failed")
+
+
+class SpyLangSmithRunWriter:
+    def __init__(self) -> None:
+        self.runs = []
+
+    def write_run(self, **kwargs) -> None:
+        self.runs.append(kwargs)
+
+
+class FailingLangSmithRunWriter:
+    def write_run(self, **kwargs) -> None:
+        raise RuntimeError("langsmith write failed")
