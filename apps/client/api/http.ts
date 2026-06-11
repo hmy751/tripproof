@@ -5,6 +5,25 @@ export class ApiError extends Error {
   }
 }
 
+export const TRIPPROOF_CORRELATION_ID_HEADER = "X-TripProof-Correlation-Id";
+
+export function createCorrelationId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `flow_${crypto.randomUUID()}`;
+  }
+
+  return `flow_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function correlationHeaders(correlationId: string | null | undefined): HeadersInit | undefined {
+  if (!correlationId) {
+    return undefined;
+  }
+  return {
+    [TRIPPROOF_CORRELATION_ID_HEADER]: correlationId,
+  };
+}
+
 export async function readJson<T>(response: Response): Promise<T> {
   if (response.ok) {
     return (await response.json()) as T;

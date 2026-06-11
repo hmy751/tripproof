@@ -203,6 +203,7 @@ HTTP request
 - local JSONL serialization은 `request_id`, `correlation_id`를 envelope top-level field로 남긴다.
 - `apps/server/observations/langsmith.py`는 LangSmith root metadata에 `tripproof.request_id`, `tripproof.correlation_id`, `tripproof.correlation_id_source`를 넣고, tag에 `tripproof.correlation:<correlation_id>`를 남긴다.
 - `apps/server/tests/test_materials_api.py`는 header fallback, invalid header fallback, local artifact, LangSmith metadata/tag, product JSON body 미노출, CORS expose header를 확인한다.
+- 첫 client 연결은 `apps/client/App.tsx`에서 App mount/browser tab 단위 correlation id를 만들고, `apps/client/api/materials.ts`와 `apps/client/api/questions.ts`가 upload/question 요청에 같은 `X-TripProof-Correlation-Id` header를 보내도록 했다.
 
 ## Non-goals
 
@@ -234,7 +235,7 @@ HTTP request
 
 ## 남은 판단
 
-- 프론트엔드가 언제 새 correlation id를 생성하고 언제 기존 id를 이어 쓸지.
+- 새 material batch, explicit session reset, route 전환 같은 product 경계가 생기면 App mount/browser tab 단위 correlation id를 더 좁힐지.
 - eval run artifact가 `correlation_id`를 직접 소유할지, observation export envelope를 통해 연결할지.
 - LangSmith correlation tag의 cardinality가 불편해지면 metadata-only로 줄일지.
 - upstream proxy나 external gateway의 request id를 별도 필드로 받을 필요가 있는지.

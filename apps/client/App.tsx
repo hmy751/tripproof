@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError } from "./api/http";
+import { ApiError, createCorrelationId } from "./api/http";
 import { fetchMaterials, uploadMaterial } from "./api/materials";
 import { askQuestion } from "./api/questions";
 import { canConfirmDraft, createDashboardCardFromDraft, markCardForField } from "./cards";
@@ -22,6 +22,7 @@ export function App() {
   const [question, setQuestion] = useState("");
   const [toast, setToast] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const correlationId = useMemo(() => createCorrelationId(), []);
 
   const readyMaterials = useMemo(() => materials.filter((material) => material.status === "ready"), [materials]);
   const fieldCards = useMemo(() => dashboardCards.filter((card) => card.fieldSavedAt), [dashboardCards]);
@@ -42,7 +43,7 @@ export function App() {
   async function addMaterial(file: File) {
     setIsUploading(true);
     try {
-      const material = await uploadMaterial(file);
+      const material = await uploadMaterial(file, correlationId);
       setMaterials((current) => [...current, material]);
       flash(material.status === "ready" ? "PDF를 읽었습니다." : material.error ?? "PDF를 읽지 못했습니다.");
     } catch (error) {
@@ -72,6 +73,7 @@ export function App() {
       const response = await askQuestion(
         trimmed,
         readyMaterials.map((material) => material.id),
+        correlationId,
       );
       setMessages((current) => [
         ...current,
