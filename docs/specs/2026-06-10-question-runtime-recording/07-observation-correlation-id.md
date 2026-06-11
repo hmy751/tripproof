@@ -2,7 +2,7 @@
 
 작성일: 2026-06-11
 
-상태: 작성된 하위 작업 spec. 구현 전. `material_upload`와 `question_answer` export trace를 개별 요청과 사용자 흐름 기준으로 묶기 위한 request/correlation id 계약을 정한다.
+상태: 구현된 하위 작업 spec. `material_upload`와 `question_answer` export trace를 개별 요청과 사용자 흐름 기준으로 묶기 위한 request/correlation id 계약을 정한다.
 
 ## 왜 지금
 
@@ -168,7 +168,7 @@ local artifact 안에서 같은 사용자 흐름을 찾을 때는 `correlation_i
 
 ## 구현 방향
 
-첫 구현은 request context를 만드는 얇은 server layer로 시작한다.
+첫 구현은 request context를 만드는 얇은 server layer로 시작했다.
 
 ```text
 HTTP request
@@ -192,6 +192,17 @@ HTTP request
 - `MaterialUploadObservationRecord`와 `QuestionObservationRecord`는 product runtime fact를 소유한다.
 - request/correlation id는 transport/export context다.
 - route handler마다 id를 직접 전달하기보다 middleware/context provider 또는 dependency로 한 번에 묶는다.
+
+## 구현 결과
+
+- `apps/server/app.py`에서 HTTP middleware가 매 요청 `request_id`를 만들고, `X-TripProof-Correlation-Id`가 유효하면 `correlation_id`로 사용한다.
+- header가 없거나 invalid이면 `correlation_id=request_id`로 fallback한다.
+- response header에는 `X-TripProof-Request-Id`, `X-TripProof-Correlation-Id`를 붙인다.
+- `apps/server/core/config.py`의 CORS expose header 설정으로 browser client가 두 response header를 읽을 수 있게 했다.
+- `apps/server/observations/export.py`는 현재 request context를 `ObservationExportEnvelope` 최상위 `request_id`, `correlation_id`로 projection한다.
+- local JSONL serialization은 `request_id`, `correlation_id`를 envelope top-level field로 남긴다.
+- `apps/server/observations/langsmith.py`는 LangSmith root metadata에 `tripproof.request_id`, `tripproof.correlation_id`, `tripproof.correlation_id_source`를 넣고, tag에 `tripproof.correlation:<correlation_id>`를 남긴다.
+- `apps/server/tests/test_materials_api.py`는 header fallback, invalid header fallback, local artifact, LangSmith metadata/tag, product JSON body 미노출, CORS expose header를 확인한다.
 
 ## Non-goals
 
