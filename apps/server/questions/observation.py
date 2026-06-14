@@ -229,6 +229,98 @@ class QuestionObservationRecorder:
         )
 
 
+class QuestionObservationReporter:
+    def __init__(
+        self,
+        *,
+        sink: QuestionObservationSink,
+        runtime_config_snapshot: RuntimeConfigSnapshot | None = None,
+    ) -> None:
+        self._sink = sink
+        self._recorder = QuestionObservationRecorder(
+            runtime_config_snapshot=runtime_config_snapshot,
+        )
+
+    def query_succeeded(self, question: str) -> None:
+        self._recorder.succeed("query_snapshot", facts={"question_length": len(question)})
+
+    def query_empty(self) -> None:
+        self._recorder.fail("query_snapshot", "empty_question", facts={"question_length": 0})
+        self._recorder.finalize(None, failure_kind="empty_question")
+
+    def ready_materials_selected(self, *, ready_material_ids: list[str]) -> None:
+        self._recorder.succeed(
+            "ready_material_selection",
+            facts={
+                "ready_material_count": len(ready_material_ids),
+                "ready_material_ids": ready_material_ids,
+            },
+        )
+
+    def ready_materials_missing(self) -> None:
+        self._recorder.fail(
+            "ready_material_selection",
+            "no_ready_materials",
+            facts={"ready_material_count": 0, "ready_material_ids": []},
+        )
+        self._recorder.succeed("question_status", facts={"status": "blocked"})
+        self._recorder.finalize("blocked", failure_kind="no_ready_materials")
+
+    def retrieval_records_loaded(
+        self,
+        *,
+        source_unit_count: int,
+        embedding_record_count: int,
+    ) -> None:
+        self._recorder.succeed(
+            "retrieval_record_load",
+            facts={
+                "executed": True,
+                "source_unit_count": source_unit_count,
+                "embedding_record_count": embedding_record_count,
+            },
+        )
+
+    def retrieval_records_failed(self) -> None:
+        self._recorder.fail("retrieval_record_load", "retrieval_failed", facts={"executed": True})
+        self._recorder.finalize(None, failure_kind="retrieval_failed")
+
+    def source_context_retrieved(
+        self,
+        *,
+        source_retrieval: SourceRetrievalTrace,
+        answer_context: ContextPack,
+    ) -> None:
+        self._recorder.succeed("source_retrieval", facts=source_retrieval_facts(source_retrieval))
+        self._recorder.succeed(
+            "context_assembly",
+            facts={"executed": True, "target_id": answer_context.target_id},
+        )
+        self._recorder.succeed("candidate_summary", facts=retrieval_candidate_facts(answer_context))
+
+    def source_retrieval_failed(self) -> None:
+        self._recorder.fail("source_retrieval", "retrieval_failed", facts={"executed": True})
+        self._recorder.finalize(None, failure_kind="retrieval_failed")
+
+    def prompt_snapshotted(self, prompt: PromptRuntimeConfigSnapshot | None) -> None:
+        self._recorder.succeed("prompt_snapshot", facts=prompt_snapshot_facts(prompt))
+
+    def answer_composed(self, answer: ChatAnswerResponse) -> None:
+        self._recorder.succeed("composer_call", facts={"result": "succeeded"})
+        self._recorder.succeed("answer_projection", facts=answer_projection_facts(answer))
+
+    def answer_composer_failed(self) -> None:
+        self._recorder.fail("composer_call", "answer_composer_failed")
+        self._recorder.finalize(None, failure_kind="answer_composer_failed")
+
+    def question_accepted(self) -> None:
+        self._recorder.succeed("question_status", facts={"status": "accepted"})
+        self._recorder.finalize("accepted")
+
+    def emit(self) -> None:
+        emit_question_observation(sink=self._sink, recorder=self._recorder)
+
+
 def prompt_snapshot_facts(
     prompt: PromptRuntimeConfigSnapshot | None,
 ) -> dict[str, QuestionObservationFactValue]:
