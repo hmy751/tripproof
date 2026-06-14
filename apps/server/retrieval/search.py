@@ -8,7 +8,7 @@ from typing import Literal
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.chunking import chunk_text
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
-from server.retrieval.models import ContextPack, EmbeddingRecord, RetrievalCandidate, SourceUnit
+from server.retrieval.models import AnswerContext, EmbeddingRecord, RetrievedSource, SourceUnit
 from server.retrieval.repository import RetrievalRepository
 
 
@@ -44,7 +44,7 @@ class SourceRetrievalTrace:
 
 @dataclass(frozen=True)
 class RetrievedContext:
-    context: ContextPack
+    context: AnswerContext
     source_retrieval: SourceRetrievalTrace
 
 
@@ -90,7 +90,7 @@ def retrieve_context(
     material_ids: Iterable[str] | None = None,
     top_k: int = RAG_TOP_K,
     similarity_threshold: float = RAG_SIMILARITY_THRESHOLD,
-) -> ContextPack:
+) -> AnswerContext:
     return retrieve_context_with_trace(
         target_id=target_id,
         query=query,
@@ -142,11 +142,11 @@ def retrieve_context_with_trace(
         )
         if vector_matches:
             terms = _query_terms(query)
-            context = ContextPack(
+            context = AnswerContext(
                 target_id=target_id,
                 query=query,
                 candidates=[
-                    RetrievalCandidate(
+                    RetrievedSource(
                         target_id=target_id,
                         query=query,
                         source_unit=match.source_unit,
@@ -178,7 +178,7 @@ def retrieve_context_with_trace(
         resolve_query_vector=False,
     )
     candidates = [
-        RetrievalCandidate(
+        RetrievedSource(
             target_id=target_id,
             query=query,
             source_unit=match.source_unit,
@@ -202,7 +202,7 @@ def retrieve_context_with_trace(
         strategy = "none"
 
     return RetrievedContext(
-        context=ContextPack(target_id=target_id, query=query, candidates=candidates),
+        context=AnswerContext(target_id=target_id, query=query, candidates=candidates),
         source_retrieval=SourceRetrievalTrace(
             strategy=strategy,
             query_embedding_attempted=query_embedding_attempted,

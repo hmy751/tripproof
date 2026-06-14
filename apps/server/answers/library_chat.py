@@ -16,7 +16,7 @@ from server.prompts.renderers.answer.library_chat_answer import (
     LibraryChatAnswerPrompt,
     load_library_chat_answer_prompt,
 )
-from server.retrieval.models import ContextPack, SourceUnit
+from server.retrieval.models import AnswerContext, SourceUnit
 from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse
 from server.schemas.facts import EvidenceRefResponse
 
@@ -25,7 +25,7 @@ LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 
 
 class LibraryChatAnswerComposer(Protocol):
-    def compose(self, *, question: str, context: ContextPack) -> ChatAnswerResponse:
+    def compose(self, *, question: str, context: AnswerContext) -> ChatAnswerResponse:
         """Build a user-facing answer from retrieved source units."""
 
 
@@ -39,7 +39,7 @@ class MissingLibraryChatAnswerComposer:
         self._reason = reason
         self._backend = backend
 
-    def compose(self, *, question: str, context: ContextPack) -> ChatAnswerResponse:
+    def compose(self, *, question: str, context: AnswerContext) -> ChatAnswerResponse:
         return _missing_answer(reason=self._reason)
 
     def runtime_answer_model_snapshot(self) -> dict[str, str | None]:
@@ -65,7 +65,7 @@ class OllamaLibraryChatAnswerComposer:
     def prompt(self) -> LibraryChatAnswerPrompt:
         return self._prompt
 
-    def compose(self, *, question: str, context: ContextPack) -> ChatAnswerResponse:
+    def compose(self, *, question: str, context: AnswerContext) -> ChatAnswerResponse:
         if not context.candidates:
             return _missing_answer(reason="질문과 관련된 source unit 후보를 찾지 못했습니다.")
 
@@ -107,7 +107,7 @@ def create_library_chat_answer_composer_from_config(
     raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
 
 
-def _user_prompt(*, question: str, context: ContextPack, prompt: LibraryChatAnswerPrompt) -> str:
+def _user_prompt(*, question: str, context: AnswerContext, prompt: LibraryChatAnswerPrompt) -> str:
     source_blocks = "\n\n".join(
         (
             f"source_unit_id: {candidate.source_unit.id}\n"
@@ -119,7 +119,7 @@ def _user_prompt(*, question: str, context: ContextPack, prompt: LibraryChatAnsw
     return prompt.user_message(question=question, source_blocks=source_blocks)
 
 
-def _answer_from_payload(*, question: str, payload: object, context: ContextPack) -> ChatAnswerResponse:
+def _answer_from_payload(*, question: str, payload: object, context: AnswerContext) -> ChatAnswerResponse:
     if not isinstance(payload, dict):
         return _missing_answer(reason="답변 생성기가 JSON object를 반환하지 않았습니다.")
 
@@ -143,7 +143,7 @@ def _item_from_payload(
     index: int,
     question: str,
     payload: object,
-    context: ContextPack,
+    context: AnswerContext,
 ) -> ChatAnswerItemResponse | None:
     if not isinstance(payload, dict):
         return None
@@ -240,7 +240,7 @@ def _ungrounded_item(*, index: int, label: str) -> ChatAnswerItemResponse:
     )
 
 
-def _source_unit_by_id(*, context: ContextPack, source_unit_id: str) -> SourceUnit | None:
+def _source_unit_by_id(*, context: AnswerContext, source_unit_id: str) -> SourceUnit | None:
     for candidate in context.candidates:
         if candidate.source_unit.id == source_unit_id:
             return candidate.source_unit

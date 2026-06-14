@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 from uuid import uuid4
 
-from server.retrieval.models import ContextPack
+from server.retrieval.models import AnswerContext
 from server.retrieval.search import SourceRetrievalTrace
 from server.runtime.config_snapshot import PromptRuntimeConfigSnapshot, RuntimeConfigSnapshot
 from server.schemas.answers import ChatAnswerResponse
@@ -289,7 +289,7 @@ class QuestionObservationReporter:
         self,
         *,
         source_retrieval: SourceRetrievalTrace,
-        answer_context: ContextPack,
+        answer_context: AnswerContext,
     ) -> None:
         self._recorder.succeed("source_retrieval", facts=source_retrieval_facts(source_retrieval))
         self._recorder.succeed(
@@ -337,7 +337,7 @@ def prompt_snapshot_facts(
     }
 
 
-def retrieval_candidate_facts(context: ContextPack) -> dict[str, QuestionObservationFactValue]:
+def retrieval_candidate_facts(context: AnswerContext) -> dict[str, QuestionObservationFactValue]:
     return {
         "candidate_count": len(context.candidates),
         "candidates_with_vector_score": sum(

@@ -20,7 +20,7 @@ class SourceUnit:
 
 
 @dataclass(frozen=True)
-class RetrievalCandidate:
+class RetrievedSource:
     target_id: str
     query: str
     source_unit: SourceUnit
@@ -30,10 +30,14 @@ class RetrievalCandidate:
 
 
 @dataclass(frozen=True)
-class ContextPack:
+class AnswerContext:
     target_id: str
     query: str
-    candidates: list[RetrievalCandidate]
+    candidates: list[RetrievedSource]
+
+
+RetrievalCandidate = RetrievedSource
+ContextPack = AnswerContext
 
 
 EmbeddingStatus = Literal["pending", "ready", "failed"]

@@ -6,7 +6,7 @@ from pathlib import Path
 from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID, OllamaLibraryChatAnswerComposer
 from server.extraction.models import EvidenceState
 from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
-from server.retrieval.models import ContextPack, RetrievalCandidate, SourceUnit
+from server.retrieval.models import AnswerContext, RetrievedSource, SourceUnit
 
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[3] / "fixtures" / "accommodation-checkin"
@@ -279,12 +279,12 @@ def _source_unit(text: str) -> SourceUnit:
     )
 
 
-def _context(unit: SourceUnit, *, query: str = "체크인 날짜가 어떻게 돼?") -> ContextPack:
-    return ContextPack(
+def _context(unit: SourceUnit, *, query: str = "체크인 날짜가 어떻게 돼?") -> AnswerContext:
+    return AnswerContext(
         target_id=LIBRARY_CHAT_TARGET_ID,
         query=query,
         candidates=[
-            RetrievalCandidate(
+            RetrievedSource(
                 target_id=LIBRARY_CHAT_TARGET_ID,
                 query=query,
                 source_unit=unit,
