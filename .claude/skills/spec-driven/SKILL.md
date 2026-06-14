@@ -1,6 +1,6 @@
 ---
 name: spec-driven
-description: TripProof repo 전용 light spec-driven 실행 판단 스킬. 현재 요청이 spec/AC/product contract를 만들거나, 읽거나, 기준으로 적용·수정하는 작업일 때 사용한다. 일반 구현 설명, 코드 탐색, 제품 흐름 설명은 spec 기준으로 판단하라는 요청이 아닌 한 발동하지 않는다.
+description: TripProof repo 전용 light spec-driven 실행 판단 스킬. 현재 사용자 요청이 spec 문서, AC, 또는 명시된 product contract를 만들기/읽기/적용/수정 대상으로 삼을 때만 사용한다. TripProof repo 안의 작업이라는 이유, 제품 흐름이 중요해 보인다는 이유, 코드 탐색 중 spec 파일을 발견했다는 이유만으로는 발동하지 않는다. 일반 구현 설명, 코드 탐색, 제품 흐름 설명은 사용자가 spec 기준으로 판단하라고 한 경우에만 대상이다.
 ---
 
 # Spec-driven
