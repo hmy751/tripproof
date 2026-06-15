@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from server.answers.library_chat import (
-    LIBRARY_CHAT_TARGET_ID,
-    LibraryChatAnswerComposer,
-)
+from server.answers.library_chat import LibraryChatAnswerComposer
 from server.materials.store import MaterialStore
 from server.questions.observation import (
     QuestionObservationFailureKind,
@@ -19,8 +16,10 @@ from server.runtime.config_snapshot import (
     prompt_runtime_config_snapshot_from_composer,
     runtime_config_snapshot_from_settings,
 )
-from server.schemas.answers import ChatAnswerResponse
-from server.schemas.questions import QuestionResponse, QuestionStatus
+from server.questions.models import QuestionAnswerResult, QuestionStatus
+from server.use_cases.question_responses import QuestionAnswerPresenter
+from server.use_cases.question_retrieval import QuestionContextRetriever
+from server.use_cases.question_scope import MaterialScopeSelector
 
 
 @dataclass(frozen=True)
@@ -46,7 +45,7 @@ class AskQuestionTrace:
 
 @dataclass(frozen=True)
 class AskQuestionResult:
-    response: QuestionResponse
+    response: QuestionAnswerResult
     trace: AskQuestionTrace
 
 
@@ -69,6 +68,11 @@ class AskQuestionUseCase:
         self._answer_composer = answer_composer
         self._observation_sink = observation_sink
         self._runtime_config = runtime_config
+        self._material_scope_selector = MaterialScopeSelector(store)
+        self._context_retriever = QuestionContextRetriever(
+            store=store, runtime_config=runtime_config
+        )
+        self._presenter = QuestionAnswerPresenter()
 
     def run(self, command: AskQuestionCommand) -> AskQuestionResult:
         prompt_snapshot = prompt_runtime_config_snapshot_from_composer(
@@ -99,20 +103,12 @@ class AskQuestionUseCase:
             raise EmptyQuestionError(trace)
         reporter.query_succeeded(question_text)
 
-        ready_materials = self._store.ready_materials(command.material_ids)
-        ready_material_ids = [material.id for material in ready_materials]
-        if not ready_materials:
+        selection = self._material_scope_selector.select(command.material_ids)
+        ready_material_ids = selection.ready_material_ids
+        if selection.is_empty:
             reporter.ready_materials_missing()
             reporter.emit()
-            response = QuestionResponse(
-                status="blocked",
-                message=_blocked_answer_summary(),
-                answer=ChatAnswerResponse(summary=_blocked_answer_summary()),
-                material_ids=[],
-                material_count=0,
-                page_count=0,
-                char_count=0,
-            )
+            response = self._presenter.blocked()
             return AskQuestionResult(
                 response=response,
                 trace=AskQuestionTrace(
@@ -125,12 +121,12 @@ class AskQuestionUseCase:
                 ),
             )
 
-        page_count = sum(material.page_count for material in ready_materials)
-        char_count = sum(len(material.text) for material in ready_materials)
         reporter.ready_materials_selected(ready_material_ids=ready_material_ids)
 
         try:
-            retrieval_records = self._store.retrieval_records(command.material_ids)
+            retrieval_records = self._context_retriever.load_records(
+                command.material_ids
+            )
         except Exception:
             reporter.retrieval_records_failed()
             reporter.emit()
@@ -141,16 +137,10 @@ class AskQuestionUseCase:
         )
 
         try:
-            retrieved_context = retrieve_context_with_trace(
-                target_id=LIBRARY_CHAT_TARGET_ID,
-                query=question_text,
-                source_units=retrieval_records.source_units,
-                embedding_records=retrieval_records.embedding_records,
-                embedding_provider=self._store.embedding_provider,
-                retrieval_repository=self._store.retrieval_repository,
-                material_ids=ready_material_ids,
-                top_k=self._runtime_config.retrieval_top_k,
-                similarity_threshold=self._runtime_config.retrieval_similarity_threshold,
+            retrieved_context = self._context_retriever.retrieve(
+                question=question_text,
+                ready_material_ids=ready_material_ids,
+                retrieval_records=retrieval_records,
             )
         except Exception:
             reporter.source_retrieval_failed()
@@ -174,15 +164,7 @@ class AskQuestionUseCase:
             raise
         reporter.answer_composed(answer)
 
-        response = QuestionResponse(
-            status="accepted",
-            message=answer.summary,
-            answer=answer,
-            material_ids=ready_material_ids,
-            material_count=len(ready_materials),
-            page_count=page_count,
-            char_count=char_count,
-        )
+        response = self._presenter.accepted(answer=answer, selection=selection)
         reporter.question_accepted()
         reporter.emit()
         return AskQuestionResult(
@@ -190,8 +172,8 @@ class AskQuestionUseCase:
             trace=AskQuestionTrace(
                 question_length=len(question_text),
                 ready_material_ids=ready_material_ids,
-                page_count=page_count,
-                char_count=char_count,
+                page_count=selection.page_count,
+                char_count=selection.char_count,
                 source_unit_count=len(retrieval_records.source_units),
                 embedding_record_count=len(retrieval_records.embedding_records),
                 retrieval_strategy=retrieved_context.source_retrieval.strategy,
@@ -200,7 +182,3 @@ class AskQuestionUseCase:
                 final_status="accepted",
             ),
         )
-
-
-def _blocked_answer_summary() -> str:
-    return "읽기 완료된 자료가 없어 답할 수 없습니다."

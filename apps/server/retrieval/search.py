@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from math import sqrt
 from typing import Literal
 
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
@@ -15,6 +14,7 @@ from server.retrieval.models import (
     SourceUnit,
 )
 from server.retrieval.repository import RetrievalRepository
+from server.retrieval.vector_math import cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -369,7 +369,7 @@ def _rank_source_units(
         if query_vector is not None:
             document_vector = vectors_by_source_unit_id.get(unit.id)
             if document_vector is not None:
-                vector_score = _cosine_similarity(query_vector, document_vector)
+                vector_score = cosine_similarity(query_vector, document_vector)
 
         if vector_score is not None:
             score = vector_score
@@ -508,18 +508,3 @@ def _query_vector(
         return embedding_provider.embed_query(query)
     except EmbeddingProviderError:
         return None
-
-
-def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
-    if len(left) != len(right) or not left:
-        return None
-
-    dot = sum(
-        left_value * right_value
-        for left_value, right_value in zip(left, right, strict=True)
-    )
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        return None
-    return dot / (left_norm * right_norm)

@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/materials", tags=["materials"])
 def list_materials(
     store: Annotated[MaterialStore, Depends(get_material_store)],
 ) -> list[Material]:
-    return store.list_public()
+    return [Material.from_domain(material) for material in store.list_public()]
 
 
 @router.post("", response_model=Material)
@@ -62,4 +62,4 @@ async def upload_material(
         raise HTTPException(
             status_code=413, detail="PDF 파일이 너무 큽니다."
         ) from error
-    return result.material
+    return Material.from_domain(result.material)

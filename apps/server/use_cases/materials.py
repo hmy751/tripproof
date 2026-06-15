@@ -8,13 +8,13 @@ from server.materials.observation import (
     MaterialUploadObservationReporter,
     MaterialUploadObservationSink,
 )
+from server.materials.models import MaterialStatus, PublicMaterial
 from server.materials.pdf import PdfParseError, parse_pdf
 from server.materials.store import MaterialStore
 from server.runtime.config_snapshot import (
     RuntimeConfigSettings,
     runtime_config_snapshot_from_settings,
 )
-from server.schemas.materials import Material, MaterialStatus
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class UploadMaterialTrace:
 
 @dataclass(frozen=True)
 class UploadMaterialResult:
-    material: Material
+    material: PublicMaterial
     trace: UploadMaterialTrace
 
 

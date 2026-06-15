@@ -10,6 +10,7 @@ from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 import server.app as server_app
 import server.api.routes.materials as materials_route
+from server.answers.models import ChatAnswer, ChatAnswerItem
 from server.app import create_app
 from server.extraction.models import EvidenceRef, EvidenceState
 from server.materials.observation import InMemoryMaterialUploadObservationSink
@@ -27,8 +28,6 @@ from server.prompts.renderers.answer.library_chat_answer import (
 from server.questions.observation import InMemoryQuestionObservationSink
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
-from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse
-from server.schemas.facts import EvidenceRefResponse
 
 
 def test_upload_text_pdf_returns_ready_material() -> None:
@@ -367,6 +366,7 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     material_export = rows[0]
     assert material_export["request_id"] == upload_request_id
     assert material_export["correlation_id"] == upload_request_id
+    assert material_export["correlation_id_source"] == "request_id_fallback"
     assert material_export["payload"]["final_status"] == "ready"
     assert material_export["payload"]["failure_kind"] is None
     assert material_export["payload"]["subject"] == {"material_id": material_id}
@@ -384,6 +384,7 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     question_export = rows[1]
     assert question_export["request_id"] == question_request_id
     assert question_export["correlation_id"] == "flow_test"
+    assert question_export["correlation_id_source"] == "header"
     assert question_export["payload"]["final_status"] == "accepted"
     assert question_export["payload"]["failure_kind"] is None
     assert _export_step(question_export, "ready_material_selection")["facts"] == {
@@ -744,6 +745,15 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert set(body) == {
+        "status",
+        "message",
+        "answer",
+        "materialIds",
+        "materialCount",
+        "pageCount",
+        "charCount",
+    }
     assert body["status"] == "accepted"
     assert body["materialIds"] == [material_id]
     assert body["materialCount"] == 1
@@ -856,6 +866,67 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert record.runtime_config_snapshot.embedding.dimensions == 768
     assert record.runtime_config_snapshot.prompt is None
     assert record.runtime_config_snapshot.answer_model is None
+
+
+def test_question_treats_empty_material_ids_as_empty_scope() -> None:
+    question_observation_sink = InMemoryQuestionObservationSink()
+    composer = FakeLibraryChatAnswerComposer(
+        body="체크인 시작 시각은 15:00입니다.",
+        snippet="Check-in starts at 15:00.",
+    )
+    client = TestClient(
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_backend="memory",
+            library_chat_answer_composer=composer,
+            question_observation_sink=question_observation_sink,
+        )
+    )
+    client.post(
+        "/api/materials",
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Hotel address is Hakata. Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
+    )
+
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": []},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "status",
+        "message",
+        "answer",
+        "materialIds",
+        "materialCount",
+        "pageCount",
+        "charCount",
+    }
+    assert body["status"] == "blocked"
+    assert body["materialIds"] == []
+    assert body["materialCount"] == 0
+    assert body["pageCount"] == 0
+    assert body["charCount"] == 0
+    assert composer.last_question is None
+    assert "observation" not in body
+    assert "debug" not in body
+    assert "raw" not in body
+    assert "runtimeConfig" not in body
+
+    record = question_observation_sink.records[0]
+    assert record.step("ready_material_selection").facts == {
+        "ready_material_count": 0,
+        "ready_material_ids": [],
+    }
+    assert record.step("retrieval_pipeline").status == "not_started"
+    assert record.final_question_status == "blocked"
 
 
 def test_question_observation_records_repository_vector_source_retrieval() -> None:
@@ -1552,16 +1623,16 @@ class FakeLibraryChatAnswerComposer:
             locator=source_unit.locator,
             snippet=self._snippet,
         )
-        return ChatAnswerResponse(
+        return ChatAnswer(
             summary="자료에서 확인한 답변입니다.",
             items=[
-                ChatAnswerItemResponse(
+                ChatAnswerItem(
                     id="answer",
                     label="답변",
                     body=self._body,
                     evidence_state=EvidenceState.SUPPORTED,
                     value=None,
-                    evidence=[EvidenceRefResponse.from_domain(evidence_ref)],
+                    evidence=[evidence_ref],
                 )
             ],
         )
@@ -1577,10 +1648,10 @@ class SpyLibraryChatAnswerComposer:
         self.calls += 1
         self.last_question = question
         self.last_context = context
-        return ChatAnswerResponse(
+        return ChatAnswer(
             summary="composer contract reached",
             items=[
-                ChatAnswerItemResponse(
+                ChatAnswerItem(
                     id="answer",
                     label="답변",
                     body="route called LibraryChatAnswerComposer.compose",

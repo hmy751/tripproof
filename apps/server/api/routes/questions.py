@@ -54,4 +54,4 @@ def ask_question(
         raise HTTPException(
             status_code=400, detail="질문을 입력해야 합니다."
         ) from error
-    return result.response
+    return QuestionResponse.from_domain(result.response)

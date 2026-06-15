@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import Field
 
+from server.materials.models import MaterialStatus, PublicMaterial
 from server.schemas.base import ApiModel
-
-MaterialStatus = Literal["ready", "failed"]
 
 
 class Material(ApiModel):
@@ -18,3 +15,16 @@ class Material(ApiModel):
     page_count: int | None = Field(default=None, alias="pageCount")
     preview: str | None = None
     error: str | None = None
+
+    @classmethod
+    def from_domain(cls, material: PublicMaterial) -> "Material":
+        return cls(
+            id=material.id,
+            name=material.name,
+            file_name=material.file_name,
+            content_type=material.content_type,
+            status=material.status,
+            page_count=material.page_count,
+            preview=material.preview,
+            error=material.error,
+        )

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from math import sqrt
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from server.retrieval.models import EmbeddingRecord, SourceUnit
+from server.retrieval.vector_math import cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,9 @@ class RetrievalRepository(Protocol):
     ) -> list[VectorSourceUnitMatch]:
         raise NotImplementedError
 
+
+@runtime_checkable
+class ClearableRetrievalRepository(Protocol):
     def clear(self) -> None:
         raise NotImplementedError
 
@@ -88,7 +91,7 @@ class InMemoryRetrievalRepository:
             source_unit = units_by_id.get(embedding_record.source_unit_id)
             if source_unit is None:
                 continue
-            similarity = _cosine_similarity(query_embedding, embedding_record.vector)
+            similarity = cosine_similarity(query_embedding, embedding_record.vector)
             if similarity is None or similarity < similarity_threshold:
                 continue
             matches.append(
@@ -103,18 +106,3 @@ class InMemoryRetrievalRepository:
 
     def clear(self) -> None:
         self._records_by_material_id.clear()
-
-
-def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
-    if len(left) != len(right) or not left:
-        return None
-
-    dot = sum(
-        left_value * right_value
-        for left_value, right_value in zip(left, right, strict=True)
-    )
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    if left_norm == 0 or right_norm == 0:
-        return None
-    return dot / (left_norm * right_norm)

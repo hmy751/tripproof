@@ -15,7 +15,6 @@ from server.core.config import (
 from server.retrieval.models import EmbeddingRecord, SourceUnit
 from server.retrieval.repository import (
     RetrievalRecords,
-    RetrievalRepository,
     VectorSourceUnitMatch,
 )
 
@@ -118,11 +117,6 @@ class SupabaseRetrievalRepository:
             )
             for row in rows
         ]
-
-    def clear(self) -> None:
-        raise SupabaseRetrievalError(
-            "Supabase retrieval repository does not support global clear()."
-        )
 
     def _insert_batches(self, *, table: str, rows: list[dict[str, Any]]) -> None:
         if not rows:

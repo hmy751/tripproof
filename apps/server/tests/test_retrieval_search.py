@@ -309,9 +309,6 @@ class FakeRetrievalRepository:
         self.seen_query_embedding = query_embedding
         return [self._match]
 
-    def clear(self) -> None:
-        raise AssertionError("not used")
-
 
 class EmptyRetrievalRepository:
     def upsert_material_records(
@@ -326,6 +323,3 @@ class EmptyRetrievalRepository:
         self, *, material_ids, query_embedding, limit, similarity_threshold
     ):
         return []
-
-    def clear(self) -> None:
-        raise AssertionError("not used")

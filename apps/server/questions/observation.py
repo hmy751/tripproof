@@ -5,14 +5,20 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 from uuid import uuid4
 
+from server.observations.steps import (
+    derive_parent_status,
+    find_step,
+    first_child_failure,
+    merge_safe_facts,
+)
+from server.answers.models import ChatAnswer
 from server.retrieval.models import AnswerContext
 from server.retrieval.search import SourceRetrievalTrace
 from server.runtime.config_snapshot import (
     PromptRuntimeConfigSnapshot,
     RuntimeConfigSnapshot,
 )
-from server.schemas.answers import ChatAnswerResponse
-from server.schemas.questions import QuestionStatus
+from server.questions.models import QuestionStatus
 
 QuestionObservationStepStatus = Literal["not_started", "succeeded", "failed"]
 QuestionObservationStepName = Literal[
@@ -138,7 +144,7 @@ class QuestionObservationRecord:
 
     def step(self, name: QuestionObservationStepName) -> QuestionObservationStep:
         for step in self.steps:
-            match = _find_step(step, name)
+            match = find_step(step, name)
             if match is not None:
                 return match
         raise KeyError(name)
@@ -185,8 +191,11 @@ class QuestionObservationRecorder:
         *,
         facts: dict[str, QuestionObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(
-            step_name, self._steps[step_name].facts, facts or {}
+        safe_facts = merge_safe_facts(
+            allowed_keys=_ALLOWED_FACT_KEYS[step_name],
+            current=self._steps[step_name].facts,
+            updates=facts or {},
+            allow_string_lists=True,
         )
         self._steps[step_name] = QuestionObservationStep(
             name=step_name,
@@ -201,8 +210,11 @@ class QuestionObservationRecorder:
         *,
         facts: dict[str, QuestionObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(
-            step_name, self._steps[step_name].facts, facts or {}
+        safe_facts = merge_safe_facts(
+            allowed_keys=_ALLOWED_FACT_KEYS[step_name],
+            current=self._steps[step_name].facts,
+            updates=facts or {},
+            allow_string_lists=True,
         )
         self._steps[step_name] = QuestionObservationStep(
             name=step_name,
@@ -244,9 +256,9 @@ class QuestionObservationRecorder:
             return current
         return QuestionObservationStep(
             name=current.name,
-            status=_derive_parent_status(children),
+            status=derive_parent_status(children),
             facts=current.facts,
-            failure_kind=_first_child_failure(children),
+            failure_kind=first_child_failure(children),
             children=children,
         )
 
@@ -339,7 +351,7 @@ class QuestionObservationReporter:
     def prompt_snapshotted(self, prompt: PromptRuntimeConfigSnapshot | None) -> None:
         self._recorder.succeed("prompt_snapshot", facts=prompt_snapshot_facts(prompt))
 
-    def answer_composed(self, answer: ChatAnswerResponse) -> None:
+    def answer_composed(self, answer: ChatAnswer) -> None:
         self._recorder.succeed("composer_call", facts={"result": "succeeded"})
         self._recorder.succeed(
             "answer_projection", facts=answer_projection_facts(answer)
@@ -402,7 +414,7 @@ def source_retrieval_facts(
 
 
 def answer_projection_facts(
-    answer: ChatAnswerResponse,
+    answer: ChatAnswer,
 ) -> dict[str, QuestionObservationFactValue]:
     evidence_state_counts = dict(
         Counter(item.evidence_state.value for item in answer.items)
@@ -422,74 +434,3 @@ def emit_question_observation(
         sink.record_question_answer(recorder.build())
     except Exception:
         return None
-
-
-def _derive_parent_status(
-    children: list[QuestionObservationStep],
-) -> QuestionObservationStepStatus:
-    if any(child.status == "failed" for child in children):
-        return "failed"
-    if any(child.status == "succeeded" for child in children):
-        return "succeeded"
-    return "not_started"
-
-
-def _first_child_failure(
-    children: list[QuestionObservationStep],
-) -> QuestionObservationFailureKind | None:
-    for child in children:
-        if child.failure_kind is not None:
-            return child.failure_kind
-        nested = _first_child_failure(child.children)
-        if nested is not None:
-            return nested
-    return None
-
-
-def _find_step(
-    step: QuestionObservationStep,
-    name: QuestionObservationStepName,
-) -> QuestionObservationStep | None:
-    if step.name == name:
-        return step
-    for child in step.children:
-        match = _find_step(child, name)
-        if match is not None:
-            return match
-    return None
-
-
-def _safe_facts(
-    step_name: QuestionObservationStepName,
-    facts: dict[str, QuestionObservationFactValue],
-) -> dict[str, QuestionObservationFactValue]:
-    allowed_keys = _ALLOWED_FACT_KEYS[step_name]
-    return {
-        key: value
-        for key, value in facts.items()
-        if key in allowed_keys and _is_safe_fact_value(value)
-    }
-
-
-def _merge_safe_facts(
-    step_name: QuestionObservationStepName,
-    current: dict[str, QuestionObservationFactValue],
-    updates: dict[str, QuestionObservationFactValue],
-) -> dict[str, QuestionObservationFactValue]:
-    return {
-        **_safe_facts(step_name, current),
-        **_safe_facts(step_name, updates),
-    }
-
-
-def _is_safe_fact_value(value: QuestionObservationFactValue) -> bool:
-    if value is None or isinstance(value, str | int | float | bool):
-        return True
-    if isinstance(value, dict):
-        return all(
-            isinstance(key, str) and isinstance(item, int)
-            for key, item in value.items()
-        )
-    if isinstance(value, list):
-        return all(isinstance(item, str) for item in value)
-    return False

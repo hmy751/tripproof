@@ -62,6 +62,7 @@ POST /api/questions
 - 여러 HTTP 요청을 같은 사용자 흐름으로 묶는 id다.
 - client가 `X-TripProof-Correlation-Id`로 보내면 그 값을 사용한다.
 - header가 없거나 빈 값이거나 유효하지 않으면 server-generated `request_id`를 fallback 값으로 사용한다.
+- `correlation_id_source`는 `header` 또는 `request_id_fallback`으로, 현재 correlation id가 client header에서 왔는지 request id fallback인지 설명한다.
 - 같은 material을 대상으로 하는 모든 질문이 항상 같은 correlation id를 가져야 하는 것은 아니다. 자료 단위 연결은 `material_id`가 담당한다.
 
 `material_id`:
@@ -119,15 +120,16 @@ JSON body:
   "record_id": "obs_question_...",
   "request_id": "req_...",
   "correlation_id": "flow_...",
+  "correlation_id_source": "header",
   "payload": {}
 }
 ```
 
-- `request_id`와 `correlation_id`는 `payload` 안에 넣지 않는다.
+- `request_id`, `correlation_id`, `correlation_id_source`는 `payload` 안에 넣지 않는다.
 - `payload.subject.material_id`와 `correlation_id`는 서로 다른 축이다.
 - 기존 local observation artifact reader가 과거 JSONL을 읽을 수 있도록, consumer는 missing id를 허용해야 한다.
 - schema version은 `tripproof.observation_export.v1`을 유지한다. 이번 변경은 additive top-level metadata로 본다.
-- 구현 이후 새 export envelope는 두 id를 non-null string으로 채워야 한다.
+- 구현 이후 새 export envelope는 두 id를 non-null string으로 채우고, `correlation_id_source`를 `header` 또는 `request_id_fallback`으로 채워야 한다.
 
 ## LangSmith mapping
 
@@ -160,11 +162,12 @@ local JSONL은 envelope 최상위에 id를 그대로 쓴다.
 {
   "request_id": "req_...",
   "correlation_id": "flow_...",
+  "correlation_id_source": "header",
   "payload": {}
 }
 ```
 
-local observation artifact 안에서 같은 사용자 흐름을 찾을 때는 `correlation_id`, 특정 요청을 찾을 때는 `request_id`, 같은 자료를 찾을 때는 `payload.subject.material_id` 또는 step facts의 material ids를 사용한다.
+local observation artifact 안에서 같은 사용자 흐름을 찾을 때는 `correlation_id`, 특정 요청을 찾을 때는 `request_id`, client header와 fallback 경로를 구분할 때는 `correlation_id_source`, 같은 자료를 찾을 때는 `payload.subject.material_id` 또는 step facts의 material ids를 사용한다.
 
 ## 구현 방향
 
@@ -183,7 +186,9 @@ HTTP request
 
 - `apps/server/app.py`: middleware 또는 equivalent request context wiring
 - `apps/server/core/config.py`: CORS expose header 설정이 config에 있으면 함께 정리
-- `apps/server/observations/export.py`: `ObservationExportEnvelope` top-level id 추가
+- `apps/server/observations/context.py`: request/correlation context 생성과 현재 context 보관
+- `apps/server/observations/envelope.py`: `ObservationExportEnvelope` top-level id/source field 정의
+- `apps/server/observations/serializers.py`: 현재 request context를 export envelope로 projection
 - `apps/server/observations/langsmith.py`: metadata/tag mapping 추가
 - `apps/server/tests/test_materials_api.py`: material/question response header, local export, LangSmith mapping 테스트
 
@@ -199,8 +204,8 @@ HTTP request
 - header가 없거나 invalid이면 `correlation_id=request_id`로 fallback한다.
 - response header에는 `X-TripProof-Request-Id`, `X-TripProof-Correlation-Id`를 붙인다.
 - `apps/server/core/config.py`의 CORS expose header 설정으로 browser client가 두 response header를 읽을 수 있게 했다.
-- `apps/server/observations/export.py`는 현재 request context를 `ObservationExportEnvelope` 최상위 `request_id`, `correlation_id`로 projection한다.
-- local JSONL serialization은 `request_id`, `correlation_id`를 envelope top-level field로 남긴다.
+- `apps/server/observations/context.py`, `apps/server/observations/envelope.py`, `apps/server/observations/serializers.py`는 현재 request context를 `ObservationExportEnvelope` 최상위 `request_id`, `correlation_id`, `correlation_id_source`로 projection한다.
+- local JSONL serialization은 `request_id`, `correlation_id`, `correlation_id_source`를 envelope top-level field로 남긴다.
 - `apps/server/observations/langsmith.py`는 LangSmith root metadata에 `tripproof.request_id`, `tripproof.correlation_id`, `tripproof.correlation_id_source`를 넣고, tag에 `tripproof.correlation:<correlation_id>`를 남긴다.
 - `apps/server/tests/test_materials_api.py`는 header fallback, invalid header fallback, local observation artifact, LangSmith metadata/tag, product JSON body 미노출, CORS expose header를 확인한다.
 - 첫 client 연결은 `apps/client/App.tsx`에서 App mount/browser tab 단위 correlation id를 만들고, `apps/client/api/materials.ts`와 `apps/client/api/questions.ts`가 upload/question 요청에 같은 `X-TripProof-Correlation-Id` header를 보내도록 했다.
@@ -218,17 +223,18 @@ HTTP request
 1. 07 spec은 `request_id`, `correlation_id`, `material_id`의 의미와 경계를 구분한다.
 2. server는 매 요청 `request_id`를 생성하고, `X-TripProof-Correlation-Id`가 없으면 `correlation_id=request_id`로 fallback한다.
 3. `request_id`와 `correlation_id`는 `ObservationExportEnvelope` 최상위 필드로 export된다.
-4. response JSON body에는 id를 추가하지 않고, response header로 `X-TripProof-Request-Id`, `X-TripProof-Correlation-Id`를 노출한다.
-5. CORS는 browser client가 두 response header를 읽을 수 있게 expose한다.
-6. LangSmith root metadata에는 두 id를 넣고, correlation id는 tag로도 남긴다.
-7. missing 또는 invalid correlation header는 product response를 실패시키지 않는다.
+4. `correlation_id_source`는 `header` 또는 `request_id_fallback`으로 export되고 local artifact와 LangSmith metadata 양쪽에 보존된다.
+5. response JSON body에는 id를 추가하지 않고, response header로 `X-TripProof-Request-Id`, `X-TripProof-Correlation-Id`를 노출한다.
+6. CORS는 browser client가 두 response header를 읽을 수 있게 expose한다.
+7. LangSmith root metadata에는 두 id와 source를 넣고, correlation id는 tag로도 남긴다.
+8. missing 또는 invalid correlation header는 product response를 실패시키지 않는다.
 
 ## 확인 방법
 
 1. `POST /api/materials`를 correlation header 없이 호출하면 response header에 `X-TripProof-Request-Id`와 같은 값의 `X-TripProof-Correlation-Id`가 있어야 한다.
 2. `POST /api/questions`를 `X-TripProof-Correlation-Id: flow_test`로 호출하면 response header와 export envelope의 `correlation_id`가 `flow_test`여야 한다.
-3. local observation artifact JSONL에는 `request_id`, `correlation_id`가 top-level field로 남아야 한다.
-4. fake LangSmith writer는 root metadata의 `tripproof.request_id`, `tripproof.correlation_id`, correlation tag를 받아야 한다.
+3. local observation artifact JSONL에는 `request_id`, `correlation_id`, `correlation_id_source`가 top-level field로 남아야 한다.
+4. fake LangSmith writer는 root metadata의 `tripproof.request_id`, `tripproof.correlation_id`, `tripproof.correlation_id_source`, correlation tag를 받아야 한다.
 5. invalid correlation header를 보내도 material/question product status와 response body schema는 기존과 같아야 한다.
 6. browser-origin request에서 response가 `X-TripProof-Request-Id`, `X-TripProof-Correlation-Id`를 expose해야 한다.
 

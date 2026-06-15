@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from uuid import uuid4
 
+from server.materials.ids import new_material_id
 from server.materials.ingestion import (
+    MaterialIngestionPipeline,
     MaterialIngestionEvents,
     NoopMaterialIngestionEvents,
 )
-from server.retrieval.chunking import build_source_units
+from server.materials.models import MaterialStatus, PublicMaterial
+from server.materials.scope import MaterialScope
 from server.retrieval.embeddings import (
     EmbeddingProfile,
     EmbeddingProvider,
-    build_embedding_records,
     default_embedding_profile,
 )
 from server.retrieval.models import EmbeddingRecord, SourceUnit
 from server.retrieval.repository import (
+    ClearableRetrievalRepository,
     InMemoryRetrievalRepository,
     RetrievalRecords,
     RetrievalRepository,
 )
-from server.schemas.materials import Material, MaterialStatus
 
 
 @dataclass(frozen=True)
@@ -37,8 +38,8 @@ class StoredMaterial:
     source_units: list[SourceUnit]
     embedding_records: list[EmbeddingRecord]
 
-    def public(self) -> Material:
-        return Material(
+    def public(self) -> PublicMaterial:
+        return PublicMaterial(
             id=self.id,
             name=self.name,
             file_name=self.file_name,
@@ -75,6 +76,12 @@ class MaterialStore:
             self._retrieval_backend = "memory"
         else:
             self._retrieval_backend = "custom"
+        self._ingestion_pipeline = MaterialIngestionPipeline(
+            embedding_provider=self._embedding_provider,
+            embedding_profile=self._embedding_profile,
+            embedding_auto_generate=self._embedding_auto_generate,
+            retrieval_repository=self._retrieval_repository,
+        )
 
     @property
     def embedding_provider(self) -> EmbeddingProvider | None:
@@ -108,37 +115,15 @@ class MaterialStore:
         text: str,
         preview: str,
         ingestion_events: MaterialIngestionEvents | None = None,
-    ) -> Material:
+    ) -> PublicMaterial:
         events = ingestion_events or NoopMaterialIngestionEvents()
-        material_id = _new_material_id()
-        events.material_id_assigned(material_id)
-        try:
-            source_units = build_source_units(
-                material_id=material_id, file_name=file_name, text=text
-            )
-        except Exception:
-            events.source_unit_build_failed()
-            raise
-        events.source_units_built(count=len(source_units))
-
-        try:
-            embedding_records = build_embedding_records(
-                source_units,
-                provider=self._embedding_provider,
-                profile=self._embedding_profile,
-                generate=self._embedding_auto_generate,
-            )
-        except Exception:
-            events.embedding_record_build_failed()
-            raise
-        events.embedding_records_built(records=embedding_records)
-
-        retrieval_records = RetrievalRecords(
-            source_units=source_units,
-            embedding_records=embedding_records,
+        ingestion_result = self._ingestion_pipeline.prepare_ready_material(
+            file_name=file_name,
+            text=text,
+            events=events,
         )
         material = StoredMaterial(
-            id=material_id,
+            id=ingestion_result.material_id,
             name=name,
             file_name=file_name,
             content_type=content_type,
@@ -147,22 +132,8 @@ class MaterialStore:
             text=text,
             preview=preview,
             error=None,
-            source_units=source_units,
-            embedding_records=embedding_records,
-        )
-        try:
-            self._retrieval_repository.upsert_material_records(
-                material_id=material.id, records=retrieval_records
-            )
-        except Exception:
-            events.retrieval_records_upsert_failed(
-                source_unit_count=len(source_units),
-                embedding_record_count=len(embedding_records),
-            )
-            raise
-        events.retrieval_records_upserted(
-            source_unit_count=len(source_units),
-            embedding_record_count=len(embedding_records),
+            source_units=ingestion_result.source_units,
+            embedding_records=ingestion_result.embedding_records,
         )
         events.material_ready()
         self._materials[material.id] = material
@@ -175,9 +146,9 @@ class MaterialStore:
         file_name: str,
         content_type: str | None,
         error: str,
-    ) -> Material:
+    ) -> PublicMaterial:
         material = StoredMaterial(
-            id=_new_material_id(),
+            id=new_material_id(),
             name=name,
             file_name=file_name,
             content_type=content_type,
@@ -192,18 +163,17 @@ class MaterialStore:
         self._materials[material.id] = material
         return material.public()
 
-    def list_public(self) -> list[Material]:
+    def list_public(self) -> list[PublicMaterial]:
         return [material.public() for material in self._materials.values()]
 
     def ready_materials(
         self, material_ids: list[str] | None = None
     ) -> list[StoredMaterial]:
-        requested = set(material_ids or [])
+        scope = MaterialScope.from_material_ids(material_ids)
         return [
             material
             for material in self._materials.values()
-            if material.status == "ready"
-            and (not requested or material.id in requested)
+            if material.status == "ready" and scope.includes(material.id)
         ]
 
     def retrieval_records(
@@ -216,8 +186,5 @@ class MaterialStore:
 
     def clear(self) -> None:
         self._materials.clear()
-        self._retrieval_repository.clear()
-
-
-def _new_material_id() -> str:
-    return f"mat_{uuid4().hex[:12]}"
+        if isinstance(self._retrieval_repository, ClearableRetrievalRepository):
+            self._retrieval_repository.clear()

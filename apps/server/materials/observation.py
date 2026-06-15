@@ -5,9 +5,15 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 from uuid import uuid4
 
+from server.materials.models import MaterialStatus
 from server.retrieval.models import EmbeddingRecord, EmbeddingStatus
+from server.observations.steps import (
+    derive_parent_status,
+    find_step,
+    first_child_failure,
+    merge_safe_facts,
+)
 from server.runtime.config_snapshot import RuntimeConfigSnapshot
-from server.schemas.materials import MaterialStatus
 
 ObservationStepStatus = Literal["not_started", "succeeded", "failed"]
 MaterialUploadStepName = Literal[
@@ -99,7 +105,7 @@ class MaterialUploadObservationRecord:
 
     def step(self, name: MaterialUploadStepName) -> MaterialUploadObservationStep:
         for step in self.steps:
-            match = _find_step(step, name)
+            match = find_step(step, name)
             if match is not None:
                 return match
         raise KeyError(name)
@@ -167,8 +173,10 @@ class MaterialUploadObservationRecorder:
         *,
         facts: dict[str, ObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(
-            step_name, self._steps[step_name].facts, facts or {}
+        safe_facts = merge_safe_facts(
+            allowed_keys=_ALLOWED_FACT_KEYS[step_name],
+            current=self._steps[step_name].facts,
+            updates=facts or {},
         )
         self._steps[step_name] = MaterialUploadObservationStep(
             name=step_name,
@@ -183,8 +191,10 @@ class MaterialUploadObservationRecorder:
         *,
         facts: dict[str, ObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(
-            step_name, self._steps[step_name].facts, facts or {}
+        safe_facts = merge_safe_facts(
+            allowed_keys=_ALLOWED_FACT_KEYS[step_name],
+            current=self._steps[step_name].facts,
+            updates=facts or {},
         )
         self._steps[step_name] = MaterialUploadObservationStep(
             name=step_name,
@@ -231,9 +241,9 @@ class MaterialUploadObservationRecorder:
             return current
         return MaterialUploadObservationStep(
             name=current.name,
-            status=_derive_parent_status(children),
+            status=derive_parent_status(children),
             facts=current.facts,
-            failure_kind=_first_child_failure(children),
+            failure_kind=first_child_failure(children),
             children=children,
         )
 
@@ -360,72 +370,3 @@ def emit_material_upload_observation(
         sink.record_material_upload(recorder.build())
     except Exception:
         return None
-
-
-def _derive_parent_status(
-    children: list[MaterialUploadObservationStep],
-) -> ObservationStepStatus:
-    if any(child.status == "failed" for child in children):
-        return "failed"
-    if any(child.status == "succeeded" for child in children):
-        return "succeeded"
-    return "not_started"
-
-
-def _first_child_failure(
-    children: list[MaterialUploadObservationStep],
-) -> MaterialUploadFailureKind | None:
-    for child in children:
-        if child.failure_kind is not None:
-            return child.failure_kind
-        nested = _first_child_failure(child.children)
-        if nested is not None:
-            return nested
-    return None
-
-
-def _find_step(
-    step: MaterialUploadObservationStep,
-    name: MaterialUploadStepName,
-) -> MaterialUploadObservationStep | None:
-    if step.name == name:
-        return step
-    for child in step.children:
-        match = _find_step(child, name)
-        if match is not None:
-            return match
-    return None
-
-
-def _safe_facts(
-    step_name: MaterialUploadStepName,
-    facts: dict[str, ObservationFactValue],
-) -> dict[str, ObservationFactValue]:
-    allowed_keys = _ALLOWED_FACT_KEYS[step_name]
-    return {
-        key: value
-        for key, value in facts.items()
-        if key in allowed_keys and _is_safe_fact_value(value)
-    }
-
-
-def _merge_safe_facts(
-    step_name: MaterialUploadStepName,
-    current: dict[str, ObservationFactValue],
-    updates: dict[str, ObservationFactValue],
-) -> dict[str, ObservationFactValue]:
-    return {
-        **_safe_facts(step_name, current),
-        **_safe_facts(step_name, updates),
-    }
-
-
-def _is_safe_fact_value(value: ObservationFactValue) -> bool:
-    if value is None or isinstance(value, str | int | float | bool):
-        return True
-    if isinstance(value, dict):
-        return all(
-            isinstance(key, str) and isinstance(item, int)
-            for key, item in value.items()
-        )
-    return False
