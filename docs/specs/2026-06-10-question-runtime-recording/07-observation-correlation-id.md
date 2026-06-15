@@ -6,7 +6,7 @@
 
 ## 왜 지금
 
-01-06에서 내부 observation record, runtime config snapshot, local artifact export, LangSmith adapter, fanout exporter가 닫혔다. 이제 같은 `ObservationExportEnvelope`가 local JSONL과 LangSmith 양쪽에 남지만, 서로 다른 operation trace를 같은 사용자 흐름으로 묶는 공통 id는 없다.
+01-06에서 내부 observation record, runtime config snapshot, local observation artifact export, LangSmith adapter, fanout exporter가 닫혔다. 이제 같은 `ObservationExportEnvelope`가 local JSONL과 LangSmith 양쪽에 남지만, 서로 다른 operation trace를 같은 사용자 흐름으로 묶는 공통 id는 없다.
 
 특히 TripProof에서는 업로드 한 번 뒤 질문을 여러 번 할 수 있다. 이때 `material_id`는 같은 자료를 가리키는 id지만, 같은 브라우저 작업 흐름이나 대화 흐름을 뜻하지 않는다.
 
@@ -44,7 +44,7 @@ POST /api/questions
 - `request_id`와 `correlation_id`는 `ObservationExportEnvelope` 최상위 필드에 둔다.
 - product JSON body에는 기본 노출하지 않는다.
 - 대신 response header로 `request_id`와 `correlation_id`를 노출한다.
-- LangSmith와 local artifact는 같은 id 값을 소비한다.
+- LangSmith와 local observation artifact는 같은 id 값을 소비한다.
 
 ## Rules
 
@@ -125,7 +125,7 @@ JSON body:
 
 - `request_id`와 `correlation_id`는 `payload` 안에 넣지 않는다.
 - `payload.subject.material_id`와 `correlation_id`는 서로 다른 축이다.
-- 기존 local artifact reader가 과거 JSONL을 읽을 수 있도록, consumer는 missing id를 허용해야 한다.
+- 기존 local observation artifact reader가 과거 JSONL을 읽을 수 있도록, consumer는 missing id를 허용해야 한다.
 - schema version은 `tripproof.observation_export.v1`을 유지한다. 이번 변경은 additive top-level metadata로 본다.
 - 구현 이후 새 export envelope는 두 id를 non-null string으로 채워야 한다.
 
@@ -164,7 +164,7 @@ local JSONL은 envelope 최상위에 id를 그대로 쓴다.
 }
 ```
 
-local artifact 안에서 같은 사용자 흐름을 찾을 때는 `correlation_id`, 특정 요청을 찾을 때는 `request_id`, 같은 자료를 찾을 때는 `payload.subject.material_id` 또는 step facts의 material ids를 사용한다.
+local observation artifact 안에서 같은 사용자 흐름을 찾을 때는 `correlation_id`, 특정 요청을 찾을 때는 `request_id`, 같은 자료를 찾을 때는 `payload.subject.material_id` 또는 step facts의 material ids를 사용한다.
 
 ## 구현 방향
 
@@ -202,7 +202,7 @@ HTTP request
 - `apps/server/observations/export.py`는 현재 request context를 `ObservationExportEnvelope` 최상위 `request_id`, `correlation_id`로 projection한다.
 - local JSONL serialization은 `request_id`, `correlation_id`를 envelope top-level field로 남긴다.
 - `apps/server/observations/langsmith.py`는 LangSmith root metadata에 `tripproof.request_id`, `tripproof.correlation_id`, `tripproof.correlation_id_source`를 넣고, tag에 `tripproof.correlation:<correlation_id>`를 남긴다.
-- `apps/server/tests/test_materials_api.py`는 header fallback, invalid header fallback, local artifact, LangSmith metadata/tag, product JSON body 미노출, CORS expose header를 확인한다.
+- `apps/server/tests/test_materials_api.py`는 header fallback, invalid header fallback, local observation artifact, LangSmith metadata/tag, product JSON body 미노출, CORS expose header를 확인한다.
 - 첫 client 연결은 `apps/client/App.tsx`에서 App mount/browser tab 단위 correlation id를 만들고, `apps/client/api/materials.ts`와 `apps/client/api/questions.ts`가 upload/question 요청에 같은 `X-TripProof-Correlation-Id` header를 보내도록 했다.
 
 ## Non-goals
@@ -227,7 +227,7 @@ HTTP request
 
 1. `POST /api/materials`를 correlation header 없이 호출하면 response header에 `X-TripProof-Request-Id`와 같은 값의 `X-TripProof-Correlation-Id`가 있어야 한다.
 2. `POST /api/questions`를 `X-TripProof-Correlation-Id: flow_test`로 호출하면 response header와 export envelope의 `correlation_id`가 `flow_test`여야 한다.
-3. local artifact JSONL에는 `request_id`, `correlation_id`가 top-level field로 남아야 한다.
+3. local observation artifact JSONL에는 `request_id`, `correlation_id`가 top-level field로 남아야 한다.
 4. fake LangSmith writer는 root metadata의 `tripproof.request_id`, `tripproof.correlation_id`, correlation tag를 받아야 한다.
 5. invalid correlation header를 보내도 material/question product status와 response body schema는 기존과 같아야 한다.
 6. browser-origin request에서 response가 `X-TripProof-Request-Id`, `X-TripProof-Correlation-Id`를 expose해야 한다.

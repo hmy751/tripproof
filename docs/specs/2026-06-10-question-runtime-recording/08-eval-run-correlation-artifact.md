@@ -30,8 +30,8 @@ eval runner
 - material upload request와 question request의 response header `request_id`/`correlation_id`를 기록한다.
 - local observation JSONL 경로와 record 요약을 artifact에서 찾을 수 있게 한다.
 - `correlation_id`로 local observation JSONL record를 다시 찾는 helper를 둔다.
-- artifact는 raw source text, raw question, raw LLM payload, secret을 저장하지 않는다.
-- product code는 eval runner나 eval artifact를 import하지 않는다.
+- eval run artifact는 raw SourceUnit text, raw question, raw LLM payload, secret을 저장하지 않는다.
+- product code는 eval runner나 eval run artifact를 import하지 않는다.
 
 ## Rules
 
@@ -39,10 +39,10 @@ eval runner
 - 첫 구현은 외부 server process나 LangSmith API key 없이 재현 가능한 `FastAPI TestClient` smoke run으로 둔다.
 - static composer를 쓰는 경우 artifact에 `answer_composer=eval_static_evidence`로 명시한다. 이 run은 모델 품질 평가가 아니라 correlation/export 연결 smoke다.
 - product response JSON에는 `requestId`, `correlationId`를 추가하지 않는다.
-- eval artifact는 public response의 요약, 상태, item count, evidence state count처럼 안전한 관찰 요약만 남긴다.
-- observation export JSONL은 기존 `observation_export.v1` envelope를 그대로 쓴다. eval artifact는 그 파일을 소유하지 않고 경로와 record 요약만 참조한다.
+- eval run artifact는 public response의 요약, 상태, item count, evidence state count처럼 안전한 관찰 요약만 남긴다.
+- observation export JSONL은 기존 `observation_export.v1` envelope를 그대로 쓴다. eval run artifact는 그 파일을 소유하지 않고 경로와 record 요약만 참조한다.
 
-## Artifact shape
+## Eval run artifact shape
 
 첫 schema version:
 
@@ -79,13 +79,13 @@ tripproof.eval_run.question_runtime_recording.v1
 - `eval/README.md`와 `eval/runs/README.md`는 기본 runner 산출물이 로컬 전용이고, 공유/commit은 별도 판단으로 다룬다는 점을 명시한다.
 - `apps/server/tests/test_eval_question_runtime_recording_smoke.py`는 runner가 artifact와 observation JSONL을 만들고, question observation export가 같은 correlation id를 갖는지 확인한다.
 - `eval/find_observation_by_correlation.py`는 `.tripproof-observations/`와 `eval/runs/question-runtime-recording/` 아래 JSONL export를 검색해 correlation id가 같은 record를 찾는다.
-- lookup helper 출력은 operation, request id, final status, failure kind, material id, source path/line 같은 안전한 요약만 포함한다.
+- lookup helper 출력은 operation, request id, final status, failure kind, material id, observation source file path/line 같은 안전한 요약만 포함한다.
 
 ## Non-goals
 
 - metric score, pass/fail threshold, benchmark dataset을 만들지 않는다.
 - real LangSmith API 호출을 필수로 만들지 않는다.
-- raw source text, raw question, answer body, evidence snippet을 eval artifact에 저장하지 않는다.
+- raw SourceUnit text, raw question, answer body, evidence snippet을 eval run artifact에 저장하지 않는다.
 - product code가 eval runner나 run artifact를 읽게 만들지 않는다.
 
 ## 이번 AC
@@ -96,7 +96,7 @@ tripproof.eval_run.question_runtime_recording.v1
 4. product JSON body에는 request/correlation id가 없어야 한다.
 5. runner와 artifact는 eval 영역에만 있고 product code는 eval을 import하지 않는다.
 6. 기본 output directory에 생기는 local run artifact는 git status를 더럽히지 않아야 한다.
-7. lookup helper는 `correlation_id`로 local observation export record를 찾되 raw step facts나 source/question/LLM payload를 출력하지 않아야 한다.
+7. lookup helper는 `correlation_id`로 local observation export record를 찾되 raw step facts, raw SourceUnit text, raw question, raw LLM payload를 출력하지 않아야 한다.
 
 ## 확인 방법
 
@@ -135,4 +135,4 @@ uv run python eval/find_observation_by_correlation.py flow_eval_test
 
 - 실제 수동 자료 run artifact를 commit할지, 로컬 산출물로만 둘지.
 - LangSmith trace URL/id를 artifact나 lookup 결과에 나중에 붙일지.
-- eval artifact retention/cleanup을 local observation artifact rotation과 같이 다룰지.
+- eval run artifact retention/cleanup을 local observation artifact rotation과 같이 다룰지.
