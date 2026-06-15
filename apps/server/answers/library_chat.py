@@ -156,43 +156,97 @@ def _item_from_payload(
     body = _display_body(question=question, label=label, body=body, value=value)
 
     if evidence_state == EvidenceState.SUPPORTED:
-        source_unit_id = _optional_string(_field(payload, "source_unit_id", "sourceUnitId"))
-        evidence_snippet = _optional_string(_field(payload, "evidence_snippet", "evidenceSnippet"))
-        if not body or source_unit_id is None or evidence_snippet is None:
-            return _ungrounded_item(index=index, label=label)
-        if not _supported_value_matches_question(question=question, value=value, body=body):
-            return _ungrounded_item(index=index, label=label)
-
-        source_unit = _source_unit_by_id(context=context, source_unit_id=source_unit_id)
-        if source_unit is None:
-            return _ungrounded_item(index=index, label=label)
-
-        try:
-            evidence_ref = evidence_ref_from_snippet(source_unit=source_unit, snippet=evidence_snippet)
-        except EvidenceGroundingError:
-            evidence_ref = _evidence_ref_from_value(source_unit=source_unit, value=value)
-            if evidence_ref is None:
-                return _ungrounded_item(index=index, label=label)
-
-        return ChatAnswerItemResponse(
-            id=_item_id(payload=payload, index=index),
+        return _supported_item_from_payload(
+            index=index,
+            question=question,
+            payload=payload,
+            context=context,
             label=label,
             body=body,
-            evidence_state=EvidenceState.SUPPORTED,
             value=value,
-            evidence=[EvidenceRefResponse.from_domain(evidence_ref)],
         )
 
     if evidence_state == EvidenceState.NEEDS_REVIEW:
-        return ChatAnswerItemResponse(
-            id=_item_id(payload=payload, index=index),
+        return _needs_review_item_from_payload(
+            index=index,
+            payload=payload,
             label=label,
-            body=body or f"{label}은 원문 확인이 필요합니다.",
-            evidence_state=EvidenceState.NEEDS_REVIEW,
+            body=body,
             value=value,
-            evidence=[],
         )
 
+    return _missing_item_from_payload(
+        index=index,
+        payload=payload,
+        label=label,
+        body=body,
+    )
+
+
+def _supported_item_from_payload(
+    *,
+    index: int,
+    question: str,
+    payload: dict[object, object],
+    context: AnswerContext,
+    label: str,
+    body: str,
+    value: str | None,
+) -> ChatAnswerItemResponse:
+    source_unit_id = _optional_string(_field(payload, "source_unit_id", "sourceUnitId"))
+    evidence_snippet = _optional_string(_field(payload, "evidence_snippet", "evidenceSnippet"))
+    if not body or source_unit_id is None or evidence_snippet is None:
+        return _ungrounded_item(index=index, label=label)
+    if not _supported_value_matches_question(question=question, value=value, body=body):
+        return _ungrounded_item(index=index, label=label)
+
+    source_unit = _source_unit_by_id(context=context, source_unit_id=source_unit_id)
+    if source_unit is None:
+        return _ungrounded_item(index=index, label=label)
+
+    evidence_ref = _ground_evidence_ref(
+        source_unit=source_unit,
+        evidence_snippet=evidence_snippet,
+        value=value,
+    )
+    if evidence_ref is None:
+        return _ungrounded_item(index=index, label=label)
+
+    return ChatAnswerItemResponse(
+        id=_item_id(payload=payload, index=index),
+        label=label,
+        body=body,
+        evidence_state=EvidenceState.SUPPORTED,
+        value=value,
+        evidence=[EvidenceRefResponse.from_domain(evidence_ref)],
+    )
+
+
+def _needs_review_item_from_payload(
+    *,
+    index: int,
+    payload: dict[object, object],
+    label: str,
+    body: str,
+    value: str | None,
+) -> ChatAnswerItemResponse:
+    return ChatAnswerItemResponse(
+        id=_item_id(payload=payload, index=index),
+        label=label,
+        body=body or f"{label}은 원문 확인이 필요합니다.",
+        evidence_state=EvidenceState.NEEDS_REVIEW,
+        value=value,
+        evidence=[],
+    )
+
+
+def _missing_item_from_payload(
+    *,
+    index: int,
+    payload: dict[object, object],
+    label: str,
+    body: str,
+) -> ChatAnswerItemResponse:
     return ChatAnswerItemResponse(
         id=_item_id(payload=payload, index=index),
         label=label,
@@ -201,6 +255,18 @@ def _item_from_payload(
         value=None,
         evidence=[],
     )
+
+
+def _ground_evidence_ref(
+    *,
+    source_unit: SourceUnit,
+    evidence_snippet: str,
+    value: str | None,
+) -> EvidenceRef | None:
+    try:
+        return evidence_ref_from_snippet(source_unit=source_unit, snippet=evidence_snippet)
+    except EvidenceGroundingError:
+        return _evidence_ref_from_value(source_unit=source_unit, value=value)
 
 
 def _summary_for_items(items: list[ChatAnswerItemResponse]) -> str:
