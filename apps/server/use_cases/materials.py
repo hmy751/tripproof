@@ -5,9 +5,8 @@ from pathlib import Path
 
 from server.materials.observation import (
     MaterialUploadFailureKind,
-    MaterialUploadObservationRecorder,
+    MaterialUploadObservationReporter,
     MaterialUploadObservationSink,
-    emit_material_upload_observation,
 )
 from server.materials.pdf import PdfParseError, parse_pdf
 from server.materials.store import MaterialStore
@@ -64,7 +63,8 @@ class UploadMaterialUseCase:
 
     def run(self, command: UploadMaterialCommand) -> UploadMaterialResult:
         material_name = _material_name(command.display_name, command.file_name)
-        observation = MaterialUploadObservationRecorder(
+        observation = MaterialUploadObservationReporter(
+            sink=self._observation_sink,
             file_name=command.file_name,
             content_type=command.content_type,
             size_bytes=len(command.uploaded_bytes),
@@ -82,9 +82,8 @@ class UploadMaterialUseCase:
                 final_status="failed",
                 failure_kind="size_limit_exceeded",
             )
-            observation.fail("upload_snapshot", "size_limit_exceeded")
-            observation.finalize("failed", failure_kind="size_limit_exceeded")
-            emit_material_upload_observation(sink=self._observation_sink, recorder=observation)
+            observation.upload_too_large()
+            observation.emit()
             raise MaterialUploadTooLargeError(trace)
 
         if not _looks_like_pdf(command.file_name, command.content_type):
@@ -94,9 +93,8 @@ class UploadMaterialUseCase:
                 content_type=command.content_type,
                 error="PDF 파일만 지원합니다.",
             )
-            observation.fail("upload_snapshot", "unsupported_file")
-            observation.finalize("failed", material_id=material.id, failure_kind="unsupported_file")
-            emit_material_upload_observation(sink=self._observation_sink, recorder=observation)
+            observation.unsupported_file(material_id=material.id)
+            observation.emit()
             return UploadMaterialResult(
                 material=material,
                 trace=UploadMaterialTrace(
@@ -120,9 +118,8 @@ class UploadMaterialUseCase:
                 content_type=command.content_type,
                 error=str(error),
             )
-            observation.fail("pdf_parse", "parse_failed")
-            observation.finalize("failed", material_id=material.id, failure_kind="parse_failed")
-            emit_material_upload_observation(sink=self._observation_sink, recorder=observation)
+            observation.pdf_parse_failed(material_id=material.id)
+            observation.emit()
             return UploadMaterialResult(
                 material=material,
                 trace=UploadMaterialTrace(
@@ -137,7 +134,7 @@ class UploadMaterialUseCase:
                 ),
             )
 
-        observation.succeed("pdf_parse", facts={"page_count": parsed_pdf.page_count})
+        observation.pdf_parsed(page_count=parsed_pdf.page_count)
 
         try:
             material = self._store.add_ready(
@@ -147,13 +144,13 @@ class UploadMaterialUseCase:
                 page_count=parsed_pdf.page_count,
                 text=parsed_pdf.text,
                 preview=parsed_pdf.preview,
-                observation=observation,
+                observation=observation.recorder_for_material_store(),
             )
         except Exception:
-            emit_material_upload_observation(sink=self._observation_sink, recorder=observation)
+            observation.emit()
             raise
 
-        emit_material_upload_observation(sink=self._observation_sink, recorder=observation)
+        observation.emit()
         return UploadMaterialResult(
             material=material,
             trace=UploadMaterialTrace(

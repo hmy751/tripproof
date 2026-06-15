@@ -227,6 +227,56 @@ class MaterialUploadObservationRecorder:
         )
 
 
+class MaterialUploadObservationReporter:
+    def __init__(
+        self,
+        *,
+        sink: MaterialUploadObservationSink,
+        file_name: str,
+        content_type: str | None,
+        size_bytes: int,
+        size_limit_bytes: int,
+        runtime_config_snapshot: RuntimeConfigSnapshot | None = None,
+    ) -> None:
+        self._sink = sink
+        self._recorder = MaterialUploadObservationRecorder(
+            file_name=file_name,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            size_limit_bytes=size_limit_bytes,
+            runtime_config_snapshot=runtime_config_snapshot,
+        )
+
+    def upload_too_large(self) -> None:
+        self._recorder.fail("upload_snapshot", "size_limit_exceeded")
+        self._recorder.finalize("failed", failure_kind="size_limit_exceeded")
+
+    def unsupported_file(self, *, material_id: str) -> None:
+        self._recorder.fail("upload_snapshot", "unsupported_file")
+        self._recorder.finalize(
+            "failed",
+            material_id=material_id,
+            failure_kind="unsupported_file",
+        )
+
+    def pdf_parse_failed(self, *, material_id: str) -> None:
+        self._recorder.fail("pdf_parse", "parse_failed")
+        self._recorder.finalize(
+            "failed",
+            material_id=material_id,
+            failure_kind="parse_failed",
+        )
+
+    def pdf_parsed(self, *, page_count: int) -> None:
+        self._recorder.succeed("pdf_parse", facts={"page_count": page_count})
+
+    def recorder_for_material_store(self) -> MaterialUploadObservationRecorder:
+        return self._recorder
+
+    def emit(self) -> None:
+        emit_material_upload_observation(sink=self._sink, recorder=self._recorder)
+
+
 def embedding_record_build_facts(records: list[EmbeddingRecord]) -> dict[str, ObservationFactValue]:
     status_counts: dict[EmbeddingStatus, int] = dict(Counter(record.status for record in records))
     return {
