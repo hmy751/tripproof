@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from math import sqrt
-from collections.abc import Iterable
 from typing import Literal
 
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
@@ -46,6 +46,16 @@ class SourceRetrievalTrace:
 class RetrievedContext:
     context: AnswerContext
     source_retrieval: SourceRetrievalTrace
+
+
+@dataclass(frozen=True)
+class QueryEmbeddingAttempt:
+    attempted: bool
+    vector: list[float] | None
+
+    @property
+    def available(self) -> bool:
+        return self.vector is not None
 
 
 def select_excerpt(texts: Iterable[str], query: str, *, max_chars: int = 420) -> str | None:
@@ -119,62 +129,135 @@ def retrieve_context_with_trace(
     units = list(source_units)
     records = list(embedding_records)
     material_id_list = list(material_ids) if material_ids is not None else None
-    query_embedding_attempted = _can_attempt_query_vector(
-        embedding_records=records,
-        embedding_provider=embedding_provider,
-    )
-    query_vector = _query_vector(
+    query_embedding = _resolve_query_embedding(
         query=query,
         embedding_records=records,
         embedding_provider=embedding_provider,
     )
-    query_embedding_available = query_vector is not None
-    repository_vector_attempted = (
-        query_vector is not None and retrieval_repository is not None and material_id_list is not None
+    repository_vector_attempted = _can_attempt_repository_vector(
+        query_embedding=query_embedding,
+        retrieval_repository=retrieval_repository,
+        material_ids=material_id_list,
     )
 
     if repository_vector_attempted:
-        vector_matches = retrieval_repository.match_source_units(
+        repository_context = _retrieve_repository_vector_context(
+            target_id=target_id,
+            query=query,
+            query_embedding=query_embedding,
+            retrieval_repository=retrieval_repository,
             material_ids=material_id_list,
-            query_embedding=query_vector,
-            limit=top_k,
+            top_k=top_k,
             similarity_threshold=similarity_threshold,
         )
-        if vector_matches:
-            terms = _query_terms(query)
-            context = AnswerContext(
-                target_id=target_id,
-                query=query,
-                candidates=[
-                    RetrievedSource(
-                        target_id=target_id,
-                        query=query,
-                        source_unit=match.source_unit,
-                        score=match.similarity,
-                        lexical_score=_score_text(match.source_unit.search_text, terms),
-                        vector_score=match.similarity,
-                    )
-                    for match in vector_matches
-                ],
-            )
-            return RetrievedContext(
-                context=context,
-                source_retrieval=SourceRetrievalTrace(
-                    strategy="repository_vector",
-                    query_embedding_attempted=query_embedding_attempted,
-                    query_embedding_available=query_embedding_available,
-                    vector_attempted=True,
-                    vector_candidate_count=len(vector_matches),
-                    fallback_used=False,
-                ),
-            )
+        if repository_context is not None:
+            return repository_context
 
-    matches = _rank_source_units(
+    return _retrieve_ranked_context(
+        target_id=target_id,
+        query=query,
         source_units=units,
+        embedding_records=records,
+        embedding_provider=embedding_provider,
+        query_embedding=query_embedding,
+        repository_vector_attempted=repository_vector_attempted,
+        top_k=top_k,
+    )
+
+
+def _resolve_query_embedding(
+    *,
+    query: str,
+    embedding_records: Iterable[EmbeddingRecord],
+    embedding_provider: EmbeddingProvider | None,
+) -> QueryEmbeddingAttempt:
+    records = list(embedding_records)
+    attempted = _can_attempt_query_vector(
+        embedding_records=records,
+        embedding_provider=embedding_provider,
+    )
+    vector = _query_vector(
+        query=query,
+        embedding_records=records,
+        embedding_provider=embedding_provider,
+    )
+    return QueryEmbeddingAttempt(attempted=attempted, vector=vector)
+
+
+def _can_attempt_repository_vector(
+    *,
+    query_embedding: QueryEmbeddingAttempt,
+    retrieval_repository: RetrievalRepository | None,
+    material_ids: list[str] | None,
+) -> bool:
+    return query_embedding.available and retrieval_repository is not None and material_ids is not None
+
+
+def _retrieve_repository_vector_context(
+    *,
+    target_id: str,
+    query: str,
+    query_embedding: QueryEmbeddingAttempt,
+    retrieval_repository: RetrievalRepository | None,
+    material_ids: list[str] | None,
+    top_k: int,
+    similarity_threshold: float,
+) -> RetrievedContext | None:
+    if query_embedding.vector is None or retrieval_repository is None or material_ids is None:
+        return None
+
+    vector_matches = retrieval_repository.match_source_units(
+        material_ids=material_ids,
+        query_embedding=query_embedding.vector,
+        limit=top_k,
+        similarity_threshold=similarity_threshold,
+    )
+    if not vector_matches:
+        return None
+
+    terms = _query_terms(query)
+    candidates = [
+        RetrievedSource(
+            target_id=target_id,
+            query=query,
+            source_unit=match.source_unit,
+            score=match.similarity,
+            lexical_score=_score_text(match.source_unit.search_text, terms),
+            vector_score=match.similarity,
+        )
+        for match in vector_matches
+    ]
+    return RetrievedContext(
+        context=AnswerContext(target_id=target_id, query=query, candidates=candidates),
+        source_retrieval=SourceRetrievalTrace(
+            strategy="repository_vector",
+            query_embedding_attempted=query_embedding.attempted,
+            query_embedding_available=query_embedding.available,
+            vector_attempted=True,
+            vector_candidate_count=len(vector_matches),
+            fallback_used=False,
+        ),
+    )
+
+
+def _retrieve_ranked_context(
+    *,
+    target_id: str,
+    query: str,
+    source_units: Iterable[SourceUnit],
+    embedding_records: Iterable[EmbeddingRecord],
+    embedding_provider: EmbeddingProvider | None,
+    query_embedding: QueryEmbeddingAttempt,
+    repository_vector_attempted: bool,
+    top_k: int,
+) -> RetrievedContext:
+    records = list(embedding_records)
+    matches = _rank_source_units(
+        source_units=source_units,
         embedding_records=records,
         query=query,
         embedding_provider=embedding_provider,
-        query_vector=query_vector,
+        query_vector=query_embedding.vector,
         resolve_query_vector=False,
     )
     candidates = [
@@ -190,27 +273,46 @@ def retrieve_context_with_trace(
         if match.score > 0
     ]
     vector_candidate_count = sum(candidate.vector_score is not None for candidate in candidates)
-    vector_attempted = repository_vector_attempted or (
-        query_vector is not None
-        and any(record.status == "ready" and record.vector for record in records)
+    strategy = _ranked_retrieval_strategy(
+        candidates=candidates,
+        vector_candidate_count=vector_candidate_count,
     )
-    if vector_candidate_count > 0:
-        strategy: SourceRetrievalStrategy = "local_vector"
-    elif candidates:
-        strategy = "lexical"
-    else:
-        strategy = "none"
-
+    local_vector_attempted = _can_use_local_vectors(
+        query_embedding=query_embedding,
+        embedding_records=records,
+    )
     return RetrievedContext(
         context=AnswerContext(target_id=target_id, query=query, candidates=candidates),
         source_retrieval=SourceRetrievalTrace(
             strategy=strategy,
-            query_embedding_attempted=query_embedding_attempted,
-            query_embedding_available=query_embedding_available,
-            vector_attempted=vector_attempted,
+            query_embedding_attempted=query_embedding.attempted,
+            query_embedding_available=query_embedding.available,
+            vector_attempted=repository_vector_attempted or local_vector_attempted,
             vector_candidate_count=vector_candidate_count,
             fallback_used=repository_vector_attempted,
         ),
+    )
+
+
+def _ranked_retrieval_strategy(
+    *,
+    candidates: list[RetrievedSource],
+    vector_candidate_count: int,
+) -> SourceRetrievalStrategy:
+    if vector_candidate_count > 0:
+        return "local_vector"
+    if candidates:
+        return "lexical"
+    return "none"
+
+
+def _can_use_local_vectors(
+    *,
+    query_embedding: QueryEmbeddingAttempt,
+    embedding_records: Iterable[EmbeddingRecord],
+) -> bool:
+    return query_embedding.available and any(
+        record.status == "ready" and record.vector for record in embedding_records
     )
 
 
