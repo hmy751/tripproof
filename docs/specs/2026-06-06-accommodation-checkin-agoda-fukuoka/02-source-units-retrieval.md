@@ -8,7 +8,7 @@
 
 PDF 본문을 긴 문자열 하나로 AI나 extractor에 넘기면, 나중에 답변과 fact가 실제 원문 어디에서 왔는지 추적하기 어렵다. 이번 단계는 01에서 파싱한 PDF 본문을 locator가 있는 source unit으로 나누고, RAG 검색이 source unit 원문으로 되돌아갈 수 있는 boundary를 잡는 데까지 닫는다.
 
-이 단계는 답을 찾거나 근거를 확정하는 단계가 아니다. `SourceUnit`은 원문이고, `searchText`와 embedding/vector는 그 원문을 다시 찾기 위한 파생물이다. Retrieval candidate, accepted evidence, `TripFact`, `EvidenceState` 판단은 03에서 다룬다.
+이 단계는 답을 찾거나 근거를 확정하는 단계가 아니다. `SourceUnit`은 원문이고, `searchText`와 embedding/vector는 그 원문을 다시 찾기 위한 파생물이다. `RetrievedSource` 후보, accepted evidence, `FactCandidate`, `EvidenceState` 판단은 03에서 다룬다.
 
 ## 사용자 장면
 
@@ -27,7 +27,7 @@ StoredMaterial(text, fileName, pageCount)
 -> SourceUnit[]
 -> SourceUnit.searchText + EmbeddingRecord[]
 -> lexical search / vector search
--> RetrievalCandidate[] / ContextPack
+-> RetrievedSource[] / AnswerContext
 -> 03 grounding + Evidence-backed fact
 ```
 
@@ -35,7 +35,7 @@ TripProof에서 이 흐름의 소유권은 아래처럼 나눈다.
 
 - 02는 `SourceUnit`과 `EmbeddingRecord`를 만든다.
 - `SourceUnit.searchText`와 embedding/vector는 source unit을 찾기 위한 파생물이다.
-- retrieval candidate와 context pack은 아직 사용자-facing evidence가 아니다.
+- `RetrievedSource` 후보와 `AnswerContext`는 아직 사용자-facing evidence가 아니다.
 - accepted evidence와 `supported` / `missing` 판단은 03에서 source unit 원문을 다시 확인한 뒤 만든다.
 
 ## Goal
@@ -62,7 +62,7 @@ TripProof에서 이 흐름의 소유권은 아래처럼 나눈다.
 
 - 체크인 제시물, 체크인 날짜, 체크인 시작 시각 판정.
 - evidence source 선택이나 rejected candidate 판정.
-- `TripFact`, `EvidenceRef`, `EvidenceState` 생성.
+- `FactCandidate`, `EvidenceRef`, `EvidenceState` 생성.
 - 답변 문장 생성, 카드 초안, 대시보드, 현장 카드.
 - vector DB 운영 튜닝, background embedding job, 장기 보관 정책 확정.
 - 모든 PDF 형식에 맞는 semantic chunking.
@@ -135,5 +135,5 @@ StoredMaterial(text, fileName, pageCount)
 - `sourceUnitId`는 현재 material id와 page/unit index 기반이다. Supabase 장기 저장 전에 content hash를 섞은 stable id로 바꿀지.
 - Supabase `source_embeddings.material_id` denormalization을 DB constraint로 더 강하게 묶을지.
 - Ollama 실제 호출은 설치된 embedding model과 `.env` model을 맞춘 뒤 수동 또는 integration test로 언제 검증할지.
-- lexical score와 vector score를 같은 retrieval 단계에서 합칠지, 03에서 rerank/context pack으로 넘길지.
-- 03에서 `RetrievalCandidate`와 `EvidenceRef`를 만들 때 현재 `SourceUnitExcerpt` smoke helper를 유지할지, 03 전용 candidate 타입으로 교체할지.
+- lexical score와 vector score를 같은 retrieval 단계에서 합칠지, 03에서 rerank나 `AnswerContext` 구성으로 넘길지.
+- 03에서 `RetrievedSource`와 `EvidenceRef`를 만들 때 현재 `SourceUnitExcerpt` smoke helper를 유지할지, 03 전용 candidate 타입으로 교체할지.

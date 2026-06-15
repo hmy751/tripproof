@@ -69,7 +69,7 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 - `apps/server/questions/observation.py`: question observation record, recorder, sink, safe facts allowlist를 정의한다.
 - `apps/server/materials/observation.py`: material upload observation의 step model, sink protocol, no-op/in-memory sink, safe facts allowlist 패턴이다.
 - `apps/server/materials/store.py`: ready material과 retrieval record를 조회하는 경계다.
-- `apps/server/retrieval/search.py`: `retrieve_context_with_trace`가 answer composer에 넘길 `ContextPack`과 source retrieval summary를 만든다.
+- `apps/server/retrieval/search.py`: `retrieve_context_with_trace`가 answer composer에 넘길 `AnswerContext`와 source retrieval summary를 만든다.
 - `apps/server/answers/library_chat.py`: `LibraryChatAnswerComposer.compose` 계약과 `ChatAnswerResponse` 생성 경계다.
 - `apps/server/schemas/questions.py`: public `QuestionResponse` status 계약이다.
 - `apps/server/tests/test_materials_api.py`: 현재 question route 테스트와 material observation 테스트가 함께 있다.
@@ -209,7 +209,7 @@ question_answer
 ## 구현 중 주의할 점
 
 - route-level `composer_call` result는 composer 내부 provider 성공 여부가 아니라 `compose()` 호출이 `ChatAnswerResponse`를 반환했는지에 대한 관측이다.
-- retrieved candidate count는 `ContextPack.candidates` 길이로 시작한다. vector/lexical 세부는 `source_retrieval`의 strategy/count/fallback summary와 `candidate_summary`의 count까지만 남긴다.
+- retrieved candidate count는 `AnswerContext.candidates` 길이로 시작한다. vector/lexical 세부는 `source_retrieval`의 strategy/count/fallback summary와 `candidate_summary`의 count까지만 남긴다.
 - material id 목록은 ready material id만 남긴다. 요청 payload에 들어왔지만 failed이거나 존재하지 않는 material id를 별도 진단하는 것은 다음 slice다.
 - prompt snapshot은 composer가 prompt identity를 노출할 때만 version/hash/asset path summary를 남긴다. prompt 전문은 저장하지 않는다.
 - config snapshot은 이 record와 나중에 연결할 수 있지만, 이번 record가 config snapshot 없이도 닫히도록 둔다.

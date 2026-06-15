@@ -6,11 +6,11 @@
 
 ## 왜 지금
 
-02에서 source unit과 RAG search boundary가 준비되어도, 그것만으로 제품 답변이 되지는 않는다. 이번 단계는 질문이나 extraction target으로 retrieval candidate를 찾고, LLM/extractor가 후보 원문을 읽어 체크인 fact 후보를 만들며, backend validator가 source unit 원문으로 evidence snippet과 상태를 검증해 04 `ChatAnswer` 입력을 만든다.
+02에서 source unit과 RAG search boundary가 준비되어도, 그것만으로 제품 답변이 되지는 않는다. 이번 단계는 질문이나 extraction target으로 `RetrievedSource` 후보를 만들고, LLM/extractor가 후보 원문을 읽어 체크인 fact 후보를 만들며, backend validator가 source unit 원문으로 evidence snippet과 상태를 검증해 04 `ChatAnswer` 입력을 만든다.
 
-`TripFact`, `EvidenceRef`, `EvidenceState`는 제품 도메인 어휘로 유지한다. 다만 03의 첫 구현 산출물은 카드나 대시보드까지 확정된 완성 `TripFact`가 아니라, 04 채팅이 소비할 수 있는 evidence-backed fact candidate/item이다.
+`EvidenceRef`와 `EvidenceState`는 답변 근거 계약의 어휘로 유지한다. 다만 03의 첫 구현 산출물은 카드나 대시보드까지 확정된 제품 결과가 아니라, 04 채팅이 소비할 수 있는 내부 `FactCandidate`/evidence-backed item이다.
 
-Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extractor 출력도 검증 전에는 accepted evidence가 아니다. `supported` candidate는 source unit 원문 일부를 `EvidenceRef`로 붙일 수 있을 때만 나온다.
+`RetrievedSource`는 관련 있어 보이는 후보일 뿐이다. LLM/extractor 출력도 검증 전에는 accepted evidence가 아니다. `supported` candidate는 source unit 원문 일부를 `EvidenceRef`로 붙일 수 있을 때만 나온다.
 
 ## 사용자 장면
 
@@ -19,7 +19,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 ## Goal
 
 - evidence-backed fact candidate 생성 입력은 02의 source unit, embedding record, 그리고 질문 또는 extraction target을 받는다.
-- retrieval/RAG는 LLM/extractor가 읽을 source unit 후보나 context pack을 만든다.
+- retrieval/RAG는 LLM/extractor가 읽을 `RetrievedSource` 후보와 `AnswerContext`를 만든다.
 - LLM/extractor는 후보 원문을 읽고 label, value 또는 value 없음, evidence snippet, reason을 제안한다.
 - backend validator는 제안된 evidence snippet이 실제 source unit 원문 일부인지 확인한 뒤에만 `supported`로 받아들인다.
 - 체크인 시 예약 확정서 전자 사본 또는 인쇄본을 제시해야 한다는 fact candidate가 나온다.
@@ -41,7 +41,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 - `EvidenceRef.locator`는 처음에는 파일명과 page 정도로 충분하다.
 - `missing` fact는 value가 없고 evidence가 비어 있을 수 있다.
 - 애매한 값은 `needs_review`로 둘 수 있다.
-- retrieval candidate를 그대로 `EvidenceRef`로 쓰지 않는다. candidate는 source unit 원문 확인을 거쳐야 한다.
+- `RetrievedSource`를 그대로 `EvidenceRef`로 쓰지 않는다. candidate는 source unit 원문 확인을 거쳐야 한다.
 - 외부 LLM을 붙일 때도 같은 입력과 출력 기준을 유지한다. provider를 바꿔도 `자료 -> retrieval 후보 -> LLM/extractor 판단 -> 원문 검증 -> 상태` 인과는 유지한다.
 - 삭제한 `src/server/trip-facts/extractTripFacts.ts`의 late arrival 고정값은 이 장면 기준과 맞지 않는다. Python backend 전환 중 유지하지 않는다.
 
@@ -58,7 +58,7 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 
 - `apps/server/api/routes/questions.py`: source unit 기반 excerpt와 locator/source unit id를 반환하고, check-in fact candidate 생성을 호출한다. excerpt 경로의 결과를 accepted evidence로 바로 쓰지 않는다.
 - `apps/server/materials/pdf.py`: PDF 본문 추출 경계.
-- `apps/server/retrieval/`: source unit, embedding record, retrieval repository, Supabase vector match, lexical fallback으로 `ContextPack` 후보를 만든다.
+- `apps/server/retrieval/`: source unit, embedding record, retrieval repository, Supabase vector match, lexical fallback으로 `AnswerContext` 후보를 만든다.
 - `apps/server/extraction/checkin.py`: check-in fact candidate 생성 경로가 있다. retrieval repository를 통해 context 후보를 받고, Ollama JSON proposer가 fact proposal을 만든 뒤 validator가 grounding한다. 테스트에서는 deterministic proposer를 주입한다.
 - `apps/server/extraction/evidence.py`: proposer가 낸 snippet이 source unit 원문에 실제로 포함되는지 validator가 확인한다.
 - `apps/server/schemas/`: backend API 응답 스키마.
@@ -68,16 +68,16 @@ Retrieval candidate는 관련 있어 보이는 후보일 뿐이다. LLM/extracto
 
 ```text
 SourceUnit[] / EmbeddingRecord[] / question or extraction target
--> RetrievalCandidate[] / ContextPack
+-> RetrievedSource[] / AnswerContext
 -> LLM/extractor proposes fact candidates from candidate source text
 -> validator grounds evidence snippets against SourceUnit.text
--> Evidence-backed fact item / TripFact-shaped candidate(label, value, evidenceState, evidence, reason)
+-> Evidence-backed FactCandidate(label, value, evidenceState, evidence, reason)
 -> 04 ChatAnswer 입력
 ```
 
 ## 이번 slice의 실행 관찰
 
-- 02의 source unit과 embedding record를 입력으로 받아 target별 `ContextPack`을 만든다.
+- 02의 source unit과 embedding record를 입력으로 받아 target별 `AnswerContext`를 만든다.
 - `TRIPPROOF_RETRIEVAL_BACKEND=supabase`에서는 ready vector가 있으면 Supabase `match_tripproof_source_units` RPC 후보를 우선 사용하고, ready vector나 match 결과가 없으면 lexical fallback 후보를 사용한다.
 - `TRIPPROOF_FACT_PROPOSER_BACKEND=ollama`에서는 Ollama chat JSON proposer가 retrieval 후보 source unit만 읽어 fact proposal을 만든다.
 - validator는 fact proposal의 evidence snippet이 source unit 원문에 포함될 때만 `supported` evidence로 받아들인다.

@@ -36,10 +36,6 @@ class AnswerContext:
     candidates: list[RetrievedSource]
 
 
-RetrievalCandidate = RetrievedSource
-ContextPack = AnswerContext
-
-
 EmbeddingStatus = Literal["pending", "ready", "failed"]
 
 
