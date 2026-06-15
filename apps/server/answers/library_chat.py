@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Protocol
 
 from server.core.config import (
@@ -27,6 +28,20 @@ LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 class LibraryChatAnswerComposer(Protocol):
     def compose(self, *, question: str, context: AnswerContext) -> ChatAnswerResponse:
         """Build a user-facing answer from retrieved source units."""
+
+
+@dataclass(frozen=True)
+class NormalizedAnswerItemPayload:
+    raw: dict[object, object]
+    evidence_state: EvidenceState
+    label: str
+    body: str
+    value: str | None
+    source_unit_id: str | None
+    evidence_snippet: str | None
+
+    def response_id(self, *, index: int) -> str:
+        return _item_id(payload=self.raw, index=index)
 
 
 class MissingLibraryChatAnswerComposer:
@@ -145,41 +160,54 @@ def _item_from_payload(
     payload: object,
     context: AnswerContext,
 ) -> ChatAnswerItemResponse | None:
-    if not isinstance(payload, dict):
+    item_payload = _normalize_answer_item_payload(question=question, payload=payload)
+    if item_payload is None:
         return None
 
-    evidence_state = _evidence_state_from_value(_field(payload, "evidence_state", "evidenceState"))
-    raw_label = _optional_string(_field(payload, "label"))
-    body = _optional_string(_field(payload, "body")) or ""
-    value = _optional_string(_field(payload, "value"))
-    label = _display_label(raw_label=raw_label, value=value)
-    body = _display_body(question=question, label=label, body=body, value=value)
-
-    if evidence_state == EvidenceState.SUPPORTED:
+    if item_payload.evidence_state == EvidenceState.SUPPORTED:
         return _supported_item_from_payload(
             index=index,
             question=question,
-            payload=payload,
+            payload=item_payload,
             context=context,
-            label=label,
-            body=body,
-            value=value,
         )
 
-    if evidence_state == EvidenceState.NEEDS_REVIEW:
+    if item_payload.evidence_state == EvidenceState.NEEDS_REVIEW:
         return _needs_review_item_from_payload(
             index=index,
-            payload=payload,
-            label=label,
-            body=body,
-            value=value,
+            payload=item_payload,
         )
 
     return _missing_item_from_payload(
         index=index,
-        payload=payload,
+        payload=item_payload,
+    )
+
+
+def _normalize_answer_item_payload(
+    *,
+    question: str,
+    payload: object,
+) -> NormalizedAnswerItemPayload | None:
+    if not isinstance(payload, dict):
+        return None
+
+    value = _optional_string(_field(payload, "value"))
+    label = _display_label(raw_label=_optional_string(_field(payload, "label")), value=value)
+    body = _display_body(
+        question=question,
+        label=label,
+        body=_optional_string(_field(payload, "body")) or "",
+        value=value,
+    )
+    return NormalizedAnswerItemPayload(
+        raw=payload,
+        evidence_state=_evidence_state_from_value(_field(payload, "evidence_state", "evidenceState")),
         label=label,
         body=body,
+        value=value,
+        source_unit_id=_optional_string(_field(payload, "source_unit_id", "sourceUnitId")),
+        evidence_snippet=_optional_string(_field(payload, "evidence_snippet", "evidenceSnippet")),
     )
 
 
@@ -187,37 +215,32 @@ def _supported_item_from_payload(
     *,
     index: int,
     question: str,
-    payload: dict[object, object],
+    payload: NormalizedAnswerItemPayload,
     context: AnswerContext,
-    label: str,
-    body: str,
-    value: str | None,
 ) -> ChatAnswerItemResponse:
-    source_unit_id = _optional_string(_field(payload, "source_unit_id", "sourceUnitId"))
-    evidence_snippet = _optional_string(_field(payload, "evidence_snippet", "evidenceSnippet"))
-    if not body or source_unit_id is None or evidence_snippet is None:
-        return _ungrounded_item(index=index, label=label)
-    if not _supported_value_matches_question(question=question, value=value, body=body):
-        return _ungrounded_item(index=index, label=label)
+    if not payload.body or payload.source_unit_id is None or payload.evidence_snippet is None:
+        return _ungrounded_item(index=index, label=payload.label)
+    if not _supported_value_matches_question(question=question, value=payload.value, body=payload.body):
+        return _ungrounded_item(index=index, label=payload.label)
 
-    source_unit = _source_unit_by_id(context=context, source_unit_id=source_unit_id)
+    source_unit = _source_unit_by_id(context=context, source_unit_id=payload.source_unit_id)
     if source_unit is None:
-        return _ungrounded_item(index=index, label=label)
+        return _ungrounded_item(index=index, label=payload.label)
 
     evidence_ref = _ground_evidence_ref(
         source_unit=source_unit,
-        evidence_snippet=evidence_snippet,
-        value=value,
+        evidence_snippet=payload.evidence_snippet,
+        value=payload.value,
     )
     if evidence_ref is None:
-        return _ungrounded_item(index=index, label=label)
+        return _ungrounded_item(index=index, label=payload.label)
 
     return ChatAnswerItemResponse(
-        id=_item_id(payload=payload, index=index),
-        label=label,
-        body=body,
+        id=payload.response_id(index=index),
+        label=payload.label,
+        body=payload.body,
         evidence_state=EvidenceState.SUPPORTED,
-        value=value,
+        value=payload.value,
         evidence=[EvidenceRefResponse.from_domain(evidence_ref)],
     )
 
@@ -225,17 +248,14 @@ def _supported_item_from_payload(
 def _needs_review_item_from_payload(
     *,
     index: int,
-    payload: dict[object, object],
-    label: str,
-    body: str,
-    value: str | None,
+    payload: NormalizedAnswerItemPayload,
 ) -> ChatAnswerItemResponse:
     return ChatAnswerItemResponse(
-        id=_item_id(payload=payload, index=index),
-        label=label,
-        body=body or f"{label}은 원문 확인이 필요합니다.",
+        id=payload.response_id(index=index),
+        label=payload.label,
+        body=payload.body or f"{payload.label}은 원문 확인이 필요합니다.",
         evidence_state=EvidenceState.NEEDS_REVIEW,
-        value=value,
+        value=payload.value,
         evidence=[],
     )
 
@@ -243,14 +263,12 @@ def _needs_review_item_from_payload(
 def _missing_item_from_payload(
     *,
     index: int,
-    payload: dict[object, object],
-    label: str,
-    body: str,
+    payload: NormalizedAnswerItemPayload,
 ) -> ChatAnswerItemResponse:
     return ChatAnswerItemResponse(
-        id=_item_id(payload=payload, index=index),
-        label=label,
-        body=body or f"현재 등록된 자료에서 {label}을 확인하지 못했습니다.",
+        id=payload.response_id(index=index),
+        label=payload.label,
+        body=payload.body or f"현재 등록된 자료에서 {payload.label}을 확인하지 못했습니다.",
         evidence_state=EvidenceState.MISSING,
         value=None,
         evidence=[],
