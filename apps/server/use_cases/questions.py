@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID, LibraryChatAnswerComposer
+from server.answers.library_chat import (
+    LIBRARY_CHAT_TARGET_ID,
+    LibraryChatAnswerComposer,
+)
 from server.materials.store import MaterialStore
 from server.questions.observation import (
     QuestionObservationFailureKind,
@@ -68,7 +71,9 @@ class AskQuestionUseCase:
         self._runtime_config = runtime_config
 
     def run(self, command: AskQuestionCommand) -> AskQuestionResult:
-        prompt_snapshot = prompt_runtime_config_snapshot_from_composer(self._answer_composer)
+        prompt_snapshot = prompt_runtime_config_snapshot_from_composer(
+            self._answer_composer
+        )
         reporter = QuestionObservationReporter(
             sink=self._observation_sink,
             runtime_config_snapshot=runtime_config_snapshot_from_settings(
@@ -160,7 +165,9 @@ class AskQuestionUseCase:
         reporter.prompt_snapshotted(prompt_snapshot)
 
         try:
-            answer = self._answer_composer.compose(question=question_text, context=answer_context)
+            answer = self._answer_composer.compose(
+                question=question_text, context=answer_context
+            )
         except Exception:
             reporter.answer_composer_failed()
             reporter.emit()

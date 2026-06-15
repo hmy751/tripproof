@@ -4,7 +4,6 @@ from typing import Any, Protocol
 
 from server.observations.export import ObservationExportEnvelope
 
-
 _RUN_NAMES = {
     "material_upload": "tripproof.material_upload",
     "question_answer": "tripproof.question_answer",
@@ -220,7 +219,8 @@ def _step_events(
                         "child_step_names": [
                             child["name"]
                             for child in children
-                            if isinstance(child, dict) and isinstance(child.get("name"), str)
+                            if isinstance(child, dict)
+                            and isinstance(child.get("name"), str)
                         ],
                     },
                 }
@@ -272,7 +272,9 @@ def _step_statuses(
                 "failure_kind": step.get("failure_kind"),
             }
         )
-        statuses.extend(_step_statuses(_list_payload(step.get("children")), parent_path=path))
+        statuses.extend(
+            _step_statuses(_list_payload(step.get("children")), parent_path=path)
+        )
     return statuses
 
 
@@ -292,16 +294,22 @@ def _flat_runtime_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
     )
     _set_if_present(metadata, "tripproof.embedding_provider", embedding.get("provider"))
     _set_if_present(metadata, "tripproof.embedding_model", embedding.get("model"))
-    _set_if_present(metadata, "tripproof.embedding_dimensions", embedding.get("dimensions"))
+    _set_if_present(
+        metadata, "tripproof.embedding_dimensions", embedding.get("dimensions")
+    )
     _set_if_present(metadata, "tripproof.prompt_name", prompt.get("name"))
     _set_if_present(metadata, "tripproof.prompt_version", prompt.get("version"))
     _set_if_present(metadata, "tripproof.prompt_body_hash", prompt.get("body_hash"))
-    _set_if_present(metadata, "tripproof.answer_model_backend", answer_model.get("backend"))
+    _set_if_present(
+        metadata, "tripproof.answer_model_backend", answer_model.get("backend")
+    )
     _set_if_present(metadata, "tripproof.answer_model", answer_model.get("model"))
     return metadata
 
 
-def _step_runtime_hint_metadata(step_name: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+def _step_runtime_hint_metadata(
+    step_name: str, snapshot: dict[str, Any]
+) -> dict[str, Any]:
     hints = _runtime_hints_for_step(step_name, snapshot)
     if not hints:
         return {}
@@ -335,7 +343,11 @@ def _runtime_hints_for_step(step_name: str, snapshot: dict[str, Any]) -> dict[st
             retrieval.get("similarity_threshold"),
         )
 
-    if step_name in {"retrieval_preparation", "embedding_record_build", "source_retrieval"}:
+    if step_name in {
+        "retrieval_preparation",
+        "embedding_record_build",
+        "source_retrieval",
+    }:
         _copy_hint(hints, "embedding_auto_generate", embedding.get("auto_generate"))
         _copy_hint(hints, "embedding_provider", embedding.get("provider"))
         _copy_hint(hints, "embedding_model", embedding.get("model"))

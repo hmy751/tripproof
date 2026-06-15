@@ -52,7 +52,9 @@ def test_upload_material_use_case_returns_ready_trace_without_http_adapter() -> 
     assert record.failure_kind is None
 
 
-def test_upload_material_use_case_records_too_large_failure_without_http_adapter() -> None:
+def test_upload_material_use_case_records_too_large_failure_without_http_adapter() -> (
+    None
+):
     sink = InMemoryMaterialUploadObservationSink()
     store = MaterialStore(retrieval_backend="memory")
     use_case = UploadMaterialUseCase(

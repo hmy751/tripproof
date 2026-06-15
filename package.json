@@ -8,7 +8,12 @@
   },
   "scripts": {
     "dev": "concurrently --kill-others-on-fail -n server,client -c blue,green \"npm:server:dev\" \"npm:client:dev\"",
+    "black": "npm run server:format",
+    "black:check": "npm run server:format:check",
     "build": "npm run client:build",
+    "check": "npm run format:check && npm run client:build && npm test",
+    "format": "npm run server:format",
+    "format:check": "npm run server:format:check",
     "test": "npm run server:test",
     "typecheck": "npm run client:typecheck",
     "preview": "npm run client:preview",
@@ -17,6 +22,8 @@
     "client:typecheck": "tsc --noEmit",
     "client:preview": "vite preview --host 127.0.0.1",
     "server:dev": "PYTHONPATH=apps uv run uvicorn server.app:app --reload --reload-dir apps/server --host 127.0.0.1 --port 8000",
+    "server:format": "uv run black .",
+    "server:format:check": "uv run black --check .",
     "server:test": "uv run pytest"
   },
   "dependencies": {

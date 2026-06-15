@@ -81,7 +81,11 @@ def prompt_runtime_config_snapshot_from_composer(
 ) -> PromptRuntimeConfigSnapshot | None:
     try:
         prompt = getattr(answer_composer, "prompt", None)
-        snapshot = prompt.snapshot() if prompt is not None and hasattr(prompt, "snapshot") else None
+        snapshot = (
+            prompt.snapshot()
+            if prompt is not None and hasattr(prompt, "snapshot")
+            else None
+        )
     except Exception:
         return None
 

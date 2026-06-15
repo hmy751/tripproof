@@ -13,7 +13,11 @@ from server.core.config import (
     SUPABASE_URL,
 )
 from server.retrieval.models import EmbeddingRecord, SourceUnit
-from server.retrieval.repository import RetrievalRecords, RetrievalRepository, VectorSourceUnitMatch
+from server.retrieval.repository import (
+    RetrievalRecords,
+    RetrievalRepository,
+    VectorSourceUnitMatch,
+)
 
 
 class SupabaseRetrievalError(RuntimeError):
@@ -37,7 +41,9 @@ class SupabaseRetrievalRepository:
         self._config = config
         self._base_url = config.url.rstrip("/")
 
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         self._delete_rows(
             table="tripproof_source_units",
             query={"material_id": f"eq.{material_id}"},
@@ -48,7 +54,10 @@ class SupabaseRetrievalRepository:
         )
         self._insert_batches(
             table="tripproof_source_embeddings",
-            rows=[_embedding_record_to_row(record, material_id=material_id) for record in records.embedding_records],
+            rows=[
+                _embedding_record_to_row(record, material_id=material_id)
+                for record in records.embedding_records
+            ],
         )
 
     def records_for_materials(self, material_ids: Iterable[str]) -> RetrievalRecords:
@@ -74,7 +83,9 @@ class SupabaseRetrievalRepository:
 
         return RetrievalRecords(
             source_units=[_source_unit_from_row(row) for row in source_unit_rows],
-            embedding_records=[_embedding_record_from_row(row) for row in embedding_rows],
+            embedding_records=[
+                _embedding_record_from_row(row) for row in embedding_rows
+            ],
         )
 
     def match_source_units(
@@ -109,7 +120,9 @@ class SupabaseRetrievalRepository:
         ]
 
     def clear(self) -> None:
-        raise SupabaseRetrievalError("Supabase retrieval repository does not support global clear().")
+        raise SupabaseRetrievalError(
+            "Supabase retrieval repository does not support global clear()."
+        )
 
     def _insert_batches(self, *, table: str, rows: list[dict[str, Any]]) -> None:
         if not rows:
@@ -124,7 +137,9 @@ class SupabaseRetrievalRepository:
                 extra_headers={"Prefer": "return=minimal"},
             )
 
-    def _select_rows(self, *, table: str, query: dict[str, str]) -> list[dict[str, Any]]:
+    def _select_rows(
+        self, *, table: str, query: dict[str, str]
+    ) -> list[dict[str, Any]]:
         response = self._request(
             path=f"/rest/v1/{table}?{parse.urlencode(query, safe='(),.*')}",
             method="GET",
@@ -172,20 +187,28 @@ class SupabaseRetrievalRepository:
         )
 
         try:
-            with request.urlopen(http_request, timeout=self._config.timeout_seconds) as response:
+            with request.urlopen(
+                http_request, timeout=self._config.timeout_seconds
+            ) as response:
                 raw = response.read()
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise SupabaseRetrievalError(f"Supabase {method} {path} failed: {detail}") from exc
+            raise SupabaseRetrievalError(
+                f"Supabase {method} {path} failed: {detail}"
+            ) from exc
         except error.URLError as exc:
-            raise SupabaseRetrievalError(f"Supabase {method} {path} failed: {exc}") from exc
+            raise SupabaseRetrievalError(
+                f"Supabase {method} {path} failed: {exc}"
+            ) from exc
 
         if not raw:
             return []
         try:
             return json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError as exc:
-            raise SupabaseRetrievalError("Supabase response was not valid JSON.") from exc
+            raise SupabaseRetrievalError(
+                "Supabase response was not valid JSON."
+            ) from exc
 
 
 def create_supabase_retrieval_repository_from_config() -> RetrievalRepository:
@@ -213,7 +236,9 @@ def _source_unit_to_row(unit: SourceUnit) -> dict[str, Any]:
     }
 
 
-def _embedding_record_to_row(record: EmbeddingRecord, *, material_id: str) -> dict[str, Any]:
+def _embedding_record_to_row(
+    record: EmbeddingRecord, *, material_id: str
+) -> dict[str, Any]:
     return {
         "id": record.id,
         "material_id": material_id,

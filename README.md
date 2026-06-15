@@ -59,6 +59,13 @@ npm run client:dev
 검증:
 
 ```sh
+npm run check
+```
+
+개별 검증:
+
+```sh
+npm run format:check
 npm run client:build
 npm run server:test
 ```

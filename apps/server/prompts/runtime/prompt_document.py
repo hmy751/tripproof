@@ -44,11 +44,17 @@ def read_prompt_document(
     metadata_name = _required_metadata_value(metadata=metadata, key="name")
     metadata_version = _required_metadata_value(metadata=metadata, key="version")
     if metadata_domain != domain:
-        raise ValueError(f"프롬프트 문서 domain이 경로와 다릅니다: 기대값={domain}, 실제값={metadata_domain}")
+        raise ValueError(
+            f"프롬프트 문서 domain이 경로와 다릅니다: 기대값={domain}, 실제값={metadata_domain}"
+        )
     if metadata_name != name:
-        raise ValueError(f"프롬프트 문서 이름이 경로와 다릅니다: 기대값={name}, 실제값={metadata_name}")
+        raise ValueError(
+            f"프롬프트 문서 이름이 경로와 다릅니다: 기대값={name}, 실제값={metadata_name}"
+        )
     if metadata_version != version:
-        raise ValueError(f"프롬프트 문서 버전이 경로와 다릅니다: 기대값={version}, 실제값={metadata_version}")
+        raise ValueError(
+            f"프롬프트 문서 버전이 경로와 다릅니다: 기대값={version}, 실제값={metadata_version}"
+        )
 
     title, body_markdown = _split_title(content[body_start:].lstrip())
     if not body_markdown:

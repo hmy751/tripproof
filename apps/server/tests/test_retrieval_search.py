@@ -29,7 +29,10 @@ def test_retrieve_context_prefers_vector_similarity_over_lexical_matches() -> No
         embedding_provider=provider,
     )
 
-    assert [candidate.source_unit.id for candidate in context.candidates] == ["su_relevant", "su_decoy"]
+    assert [candidate.source_unit.id for candidate in context.candidates] == [
+        "su_relevant",
+        "su_decoy",
+    ]
     assert context.candidates[0].vector_score == 1.0
     assert context.candidates[0].lexical_score == 0
     assert context.candidates[1].lexical_score > context.candidates[0].lexical_score
@@ -52,12 +55,16 @@ def test_retrieve_context_uses_lexical_search_when_vectors_are_not_ready() -> No
         embedding_records=[],
     )
 
-    assert [candidate.source_unit.id for candidate in context.candidates] == ["su_relevant"]
+    assert [candidate.source_unit.id for candidate in context.candidates] == [
+        "su_relevant"
+    ]
     assert context.candidates[0].vector_score is None
     assert context.candidates[0].lexical_score > 0
 
 
-def test_lexical_search_does_not_let_repeated_terms_hide_earlier_relevant_source_unit() -> None:
+def test_lexical_search_does_not_let_repeated_terms_hide_earlier_relevant_source_unit() -> (
+    None
+):
     arrival = _source_unit(
         id="su_arrival",
         text="Arrival : 체크인 : 2025년 3월 09일 Departure : 체크아웃 : 2025년 3월 13일",
@@ -77,7 +84,10 @@ def test_lexical_search_does_not_let_repeated_terms_hide_earlier_relevant_source
         embedding_records=[],
     )
 
-    assert [candidate.source_unit.id for candidate in context.candidates] == ["su_arrival", "su_cancellation"]
+    assert [candidate.source_unit.id for candidate in context.candidates] == [
+        "su_arrival",
+        "su_cancellation",
+    ]
 
 
 def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
@@ -105,7 +115,9 @@ def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
         material_ids=["mat_1"],
     )
 
-    assert [candidate.source_unit.id for candidate in context.candidates] == ["su_supabase"]
+    assert [candidate.source_unit.id for candidate in context.candidates] == [
+        "su_supabase"
+    ]
     assert context.candidates[0].score == 0.91
     assert repository.seen_material_ids == ["mat_1"]
     assert repository.seen_query_embedding == [1.0, 0.0]
@@ -136,7 +148,9 @@ def test_retrieve_context_with_trace_records_repository_vector_strategy() -> Non
         material_ids=["mat_1"],
     )
 
-    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == ["su_supabase"]
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
+        "su_supabase"
+    ]
     assert retrieved.source_retrieval.strategy == "repository_vector"
     assert retrieved.source_retrieval.query_embedding_attempted is True
     assert retrieved.source_retrieval.query_embedding_available is True
@@ -145,7 +159,9 @@ def test_retrieve_context_with_trace_records_repository_vector_strategy() -> Non
     assert retrieved.source_retrieval.fallback_used is False
 
 
-def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_empty() -> None:
+def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_empty() -> (
+    None
+):
     source_unit = _source_unit(
         id="su_lexical",
         text="체크인 시 예약 확정서를 제시해 주세요.",
@@ -164,12 +180,16 @@ def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_
         material_ids=["mat_1"],
     )
 
-    assert [candidate.source_unit.id for candidate in context.candidates] == ["su_lexical"]
+    assert [candidate.source_unit.id for candidate in context.candidates] == [
+        "su_lexical"
+    ]
     assert context.candidates[0].vector_score == 1.0
     assert context.candidates[0].lexical_score > 0
 
 
-def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector() -> None:
+def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector() -> (
+    None
+):
     source_unit = _source_unit(
         id="su_local_vector",
         text="체크인 시 예약 확정서를 제시해 주세요.",
@@ -188,7 +208,9 @@ def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector
         material_ids=["mat_1"],
     )
 
-    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == ["su_local_vector"]
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
+        "su_local_vector"
+    ]
     assert retrieved.source_retrieval.strategy == "local_vector"
     assert retrieved.source_retrieval.query_embedding_attempted is True
     assert retrieved.source_retrieval.query_embedding_available is True
@@ -197,7 +219,9 @@ def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector
     assert retrieved.source_retrieval.fallback_used is True
 
 
-def test_retrieve_context_with_trace_records_lexical_strategy_without_query_embedding() -> None:
+def test_retrieve_context_with_trace_records_lexical_strategy_without_query_embedding() -> (
+    None
+):
     source_unit = _source_unit(
         id="su_lexical",
         text="체크인 시 예약 확정서를 제시해 주세요.",
@@ -210,7 +234,9 @@ def test_retrieve_context_with_trace_records_lexical_strategy_without_query_embe
         embedding_records=[],
     )
 
-    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == ["su_lexical"]
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
+        "su_lexical"
+    ]
     assert retrieved.source_retrieval.strategy == "lexical"
     assert retrieved.source_retrieval.query_embedding_attempted is False
     assert retrieved.source_retrieval.query_embedding_available is False
@@ -268,13 +294,17 @@ class FakeRetrievalRepository:
         self.seen_material_ids: list[str] = []
         self.seen_query_embedding: list[float] | None = None
 
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         raise AssertionError("not used")
 
     def records_for_materials(self, material_ids):
         raise AssertionError("not used")
 
-    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+    def match_source_units(
+        self, *, material_ids, query_embedding, limit, similarity_threshold
+    ):
         self.seen_material_ids = list(material_ids)
         self.seen_query_embedding = query_embedding
         return [self._match]
@@ -284,13 +314,17 @@ class FakeRetrievalRepository:
 
 
 class EmptyRetrievalRepository:
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         raise AssertionError("not used")
 
     def records_for_materials(self, material_ids):
         raise AssertionError("not used")
 
-    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+    def match_source_units(
+        self, *, material_ids, query_embedding, limit, similarity_threshold
+    ):
         return []
 
     def clear(self) -> None:

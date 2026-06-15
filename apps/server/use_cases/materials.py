@@ -10,7 +10,10 @@ from server.materials.observation import (
 )
 from server.materials.pdf import PdfParseError, parse_pdf
 from server.materials.store import MaterialStore
-from server.runtime.config_snapshot import RuntimeConfigSettings, runtime_config_snapshot_from_settings
+from server.runtime.config_snapshot import (
+    RuntimeConfigSettings,
+    runtime_config_snapshot_from_settings,
+)
 from server.schemas.materials import Material, MaterialStatus
 
 
@@ -69,7 +72,9 @@ class UploadMaterialUseCase:
             content_type=command.content_type,
             size_bytes=len(command.uploaded_bytes),
             size_limit_bytes=self._max_upload_bytes,
-            runtime_config_snapshot=runtime_config_snapshot_from_settings(self._runtime_config),
+            runtime_config_snapshot=runtime_config_snapshot_from_settings(
+                self._runtime_config
+            ),
         )
 
         if len(command.uploaded_bytes) > self._max_upload_bytes:

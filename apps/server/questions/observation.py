@@ -7,7 +7,10 @@ from uuid import uuid4
 
 from server.retrieval.models import AnswerContext
 from server.retrieval.search import SourceRetrievalTrace
-from server.runtime.config_snapshot import PromptRuntimeConfigSnapshot, RuntimeConfigSnapshot
+from server.runtime.config_snapshot import (
+    PromptRuntimeConfigSnapshot,
+    RuntimeConfigSnapshot,
+)
 from server.schemas.answers import ChatAnswerResponse
 from server.schemas.questions import QuestionStatus
 
@@ -35,7 +38,9 @@ QuestionObservationFailureKind = Literal[
     "retrieval_failed",
     "answer_composer_failed",
 ]
-QuestionObservationFactValue = str | int | float | bool | None | dict[str, int] | list[str]
+QuestionObservationFactValue = (
+    str | int | float | bool | None | dict[str, int] | list[str]
+)
 
 _STEP_ROOTS: tuple[QuestionObservationStepName, ...] = (
     "question_preparation",
@@ -44,7 +49,9 @@ _STEP_ROOTS: tuple[QuestionObservationStepName, ...] = (
     "answer_pipeline",
     "finalization",
 )
-_STEP_CHILDREN: dict[QuestionObservationStepName, tuple[QuestionObservationStepName, ...]] = {
+_STEP_CHILDREN: dict[
+    QuestionObservationStepName, tuple[QuestionObservationStepName, ...]
+] = {
     "question_preparation": ("query_snapshot",),
     "material_scope": ("ready_material_selection", "retrieval_record_load"),
     "retrieval_pipeline": ("source_retrieval", "context_assembly", "candidate_summary"),
@@ -73,7 +80,11 @@ _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
     "query_snapshot": {"question_length"},
     "material_scope": set(),
     "ready_material_selection": {"ready_material_count", "ready_material_ids"},
-    "retrieval_record_load": {"executed", "source_unit_count", "embedding_record_count"},
+    "retrieval_record_load": {
+        "executed",
+        "source_unit_count",
+        "embedding_record_count",
+    },
     "retrieval_pipeline": set(),
     "source_retrieval": {
         "executed",
@@ -156,7 +167,9 @@ class InMemoryQuestionObservationSink:
 
 
 class QuestionObservationRecorder:
-    def __init__(self, *, runtime_config_snapshot: RuntimeConfigSnapshot | None = None) -> None:
+    def __init__(
+        self, *, runtime_config_snapshot: RuntimeConfigSnapshot | None = None
+    ) -> None:
         self._record_id = f"obs_question_{uuid4().hex[:12]}"
         self._runtime_config_snapshot = runtime_config_snapshot
         self._steps = {
@@ -172,7 +185,9 @@ class QuestionObservationRecorder:
         *,
         facts: dict[str, QuestionObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(step_name, self._steps[step_name].facts, facts or {})
+        safe_facts = _merge_safe_facts(
+            step_name, self._steps[step_name].facts, facts or {}
+        )
         self._steps[step_name] = QuestionObservationStep(
             name=step_name,
             status="succeeded",
@@ -186,7 +201,9 @@ class QuestionObservationRecorder:
         *,
         facts: dict[str, QuestionObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(step_name, self._steps[step_name].facts, facts or {})
+        safe_facts = _merge_safe_facts(
+            step_name, self._steps[step_name].facts, facts or {}
+        )
         self._steps[step_name] = QuestionObservationStep(
             name=step_name,
             status="failed",
@@ -215,9 +232,14 @@ class QuestionObservationRecorder:
             runtime_config_snapshot=self._runtime_config_snapshot,
         )
 
-    def _build_step(self, step_name: QuestionObservationStepName) -> QuestionObservationStep:
+    def _build_step(
+        self, step_name: QuestionObservationStepName
+    ) -> QuestionObservationStep:
         current = self._steps[step_name]
-        children = [self._build_step(child_name) for child_name in _STEP_CHILDREN.get(step_name, ())]
+        children = [
+            self._build_step(child_name)
+            for child_name in _STEP_CHILDREN.get(step_name, ())
+        ]
         if not children:
             return current
         return QuestionObservationStep(
@@ -242,10 +264,14 @@ class QuestionObservationReporter:
         )
 
     def query_succeeded(self, question: str) -> None:
-        self._recorder.succeed("query_snapshot", facts={"question_length": len(question)})
+        self._recorder.succeed(
+            "query_snapshot", facts={"question_length": len(question)}
+        )
 
     def query_empty(self) -> None:
-        self._recorder.fail("query_snapshot", "empty_question", facts={"question_length": 0})
+        self._recorder.fail(
+            "query_snapshot", "empty_question", facts={"question_length": 0}
+        )
         self._recorder.finalize(None, failure_kind="empty_question")
 
     def ready_materials_selected(self, *, ready_material_ids: list[str]) -> None:
@@ -282,7 +308,9 @@ class QuestionObservationReporter:
         )
 
     def retrieval_records_failed(self) -> None:
-        self._recorder.fail("retrieval_record_load", "retrieval_failed", facts={"executed": True})
+        self._recorder.fail(
+            "retrieval_record_load", "retrieval_failed", facts={"executed": True}
+        )
         self._recorder.finalize(None, failure_kind="retrieval_failed")
 
     def source_context_retrieved(
@@ -291,15 +319,21 @@ class QuestionObservationReporter:
         source_retrieval: SourceRetrievalTrace,
         answer_context: AnswerContext,
     ) -> None:
-        self._recorder.succeed("source_retrieval", facts=source_retrieval_facts(source_retrieval))
+        self._recorder.succeed(
+            "source_retrieval", facts=source_retrieval_facts(source_retrieval)
+        )
         self._recorder.succeed(
             "context_assembly",
             facts={"executed": True, "target_id": answer_context.target_id},
         )
-        self._recorder.succeed("candidate_summary", facts=retrieval_candidate_facts(answer_context))
+        self._recorder.succeed(
+            "candidate_summary", facts=retrieval_candidate_facts(answer_context)
+        )
 
     def source_retrieval_failed(self) -> None:
-        self._recorder.fail("source_retrieval", "retrieval_failed", facts={"executed": True})
+        self._recorder.fail(
+            "source_retrieval", "retrieval_failed", facts={"executed": True}
+        )
         self._recorder.finalize(None, failure_kind="retrieval_failed")
 
     def prompt_snapshotted(self, prompt: PromptRuntimeConfigSnapshot | None) -> None:
@@ -307,7 +341,9 @@ class QuestionObservationReporter:
 
     def answer_composed(self, answer: ChatAnswerResponse) -> None:
         self._recorder.succeed("composer_call", facts={"result": "succeeded"})
-        self._recorder.succeed("answer_projection", facts=answer_projection_facts(answer))
+        self._recorder.succeed(
+            "answer_projection", facts=answer_projection_facts(answer)
+        )
 
     def answer_composer_failed(self) -> None:
         self._recorder.fail("composer_call", "answer_composer_failed")
@@ -337,7 +373,9 @@ def prompt_snapshot_facts(
     }
 
 
-def retrieval_candidate_facts(context: AnswerContext) -> dict[str, QuestionObservationFactValue]:
+def retrieval_candidate_facts(
+    context: AnswerContext,
+) -> dict[str, QuestionObservationFactValue]:
     return {
         "candidate_count": len(context.candidates),
         "candidates_with_vector_score": sum(
@@ -349,7 +387,9 @@ def retrieval_candidate_facts(context: AnswerContext) -> dict[str, QuestionObser
     }
 
 
-def source_retrieval_facts(trace: SourceRetrievalTrace) -> dict[str, QuestionObservationFactValue]:
+def source_retrieval_facts(
+    trace: SourceRetrievalTrace,
+) -> dict[str, QuestionObservationFactValue]:
     return {
         "executed": True,
         "strategy": trace.strategy,
@@ -361,8 +401,12 @@ def source_retrieval_facts(trace: SourceRetrievalTrace) -> dict[str, QuestionObs
     }
 
 
-def answer_projection_facts(answer: ChatAnswerResponse) -> dict[str, QuestionObservationFactValue]:
-    evidence_state_counts = dict(Counter(item.evidence_state.value for item in answer.items))
+def answer_projection_facts(
+    answer: ChatAnswerResponse,
+) -> dict[str, QuestionObservationFactValue]:
+    evidence_state_counts = dict(
+        Counter(item.evidence_state.value for item in answer.items)
+    )
     return {
         "item_count": len(answer.items),
         "evidence_state_counts": evidence_state_counts,
@@ -380,7 +424,9 @@ def emit_question_observation(
         return None
 
 
-def _derive_parent_status(children: list[QuestionObservationStep]) -> QuestionObservationStepStatus:
+def _derive_parent_status(
+    children: list[QuestionObservationStep],
+) -> QuestionObservationStepStatus:
     if any(child.status == "failed" for child in children):
         return "failed"
     if any(child.status == "succeeded" for child in children):
@@ -388,7 +434,9 @@ def _derive_parent_status(children: list[QuestionObservationStep]) -> QuestionOb
     return "not_started"
 
 
-def _first_child_failure(children: list[QuestionObservationStep]) -> QuestionObservationFailureKind | None:
+def _first_child_failure(
+    children: list[QuestionObservationStep],
+) -> QuestionObservationFailureKind | None:
     for child in children:
         if child.failure_kind is not None:
             return child.failure_kind
@@ -438,7 +486,10 @@ def _is_safe_fact_value(value: QuestionObservationFactValue) -> bool:
     if value is None or isinstance(value, str | int | float | bool):
         return True
     if isinstance(value, dict):
-        return all(isinstance(key, str) and isinstance(item, int) for key, item in value.items())
+        return all(
+            isinstance(key, str) and isinstance(item, int)
+            for key, item in value.items()
+        )
     if isinstance(value, list):
         return all(isinstance(item, str) for item in value)
     return False

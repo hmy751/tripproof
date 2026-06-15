@@ -8,7 +8,10 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from server.api.routes import health, materials, questions
-from server.answers.library_chat import LibraryChatAnswerComposer, create_library_chat_answer_composer_from_config
+from server.answers.library_chat import (
+    LibraryChatAnswerComposer,
+    create_library_chat_answer_composer_from_config,
+)
 from server.core.config import (
     ALLOWED_ORIGINS,
     CORS_EXPOSE_HEADERS,
@@ -33,13 +36,15 @@ from server.observations.export import (
     reset_current_observation_request_context,
     set_current_observation_request_context,
 )
-from server.observations.langsmith import LangSmithObservationExporter, LangSmithRunTreeWriter
+from server.observations.langsmith import (
+    LangSmithObservationExporter,
+    LangSmithRunTreeWriter,
+)
 from server.questions.observation import QuestionObservationSink
 from server.retrieval.search import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
 from server.runtime.config_snapshot import RuntimeConfigSettings
-
 
 REQUEST_ID_HEADER = "X-TripProof-Request-Id"
 CORRELATION_ID_HEADER = "X-TripProof-Correlation-Id"
@@ -64,9 +69,15 @@ def create_app(
         app.state.material_store = store
     else:
         active_embedding_auto_generate = (
-            EMBEDDING_AUTO_GENERATE if embedding_auto_generate is None else embedding_auto_generate
+            EMBEDDING_AUTO_GENERATE
+            if embedding_auto_generate is None
+            else embedding_auto_generate
         )
-        embedding_provider = create_ollama_embedding_provider_from_config() if active_embedding_auto_generate else None
+        embedding_provider = (
+            create_ollama_embedding_provider_from_config()
+            if active_embedding_auto_generate
+            else None
+        )
         active_retrieval_backend = (retrieval_backend or RETRIEVAL_BACKEND).lower()
         retrieval_repository = (
             create_supabase_retrieval_repository_from_config()
@@ -92,16 +103,21 @@ def create_app(
     )
     app.state.library_chat_answer_composer = (
         library_chat_answer_composer
-        or create_library_chat_answer_composer_from_config(backend=fact_proposer_backend)
+        or create_library_chat_answer_composer_from_config(
+            backend=fact_proposer_backend
+        )
     )
-    active_observation_exporter = observation_exporter or _create_default_observation_exporter()
+    active_observation_exporter = (
+        observation_exporter or _create_default_observation_exporter()
+    )
     app.state.observation_exporter = active_observation_exporter
     app.state.material_upload_observation_sink = (
         material_upload_observation_sink
         or MaterialUploadObservationExportSink(active_observation_exporter)
     )
     app.state.question_observation_sink = (
-        question_observation_sink or QuestionObservationExportSink(active_observation_exporter)
+        question_observation_sink
+        or QuestionObservationExportSink(active_observation_exporter)
     )
 
     @app.middleware("http")

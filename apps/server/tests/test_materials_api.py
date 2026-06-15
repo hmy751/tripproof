@@ -21,7 +21,9 @@ from server.observations.export import (
     ObservationExportEnvelope,
 )
 from server.observations.langsmith import LangSmithObservationExporter
-from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
+from server.prompts.renderers.answer.library_chat_answer import (
+    load_library_chat_answer_prompt,
+)
 from server.questions.observation import InMemoryQuestionObservationSink
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
@@ -43,7 +45,13 @@ def test_upload_text_pdf_returns_ready_material() -> None:
         "/api/materials",
         headers={"Origin": "http://localhost:5173"},
         data={"displayName": "Agoda Fukuoka"},
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00"), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00"),
+                "application/pdf",
+            )
+        },
     )
 
     assert response.status_code == 200
@@ -247,8 +255,12 @@ def test_upload_too_large_pdf_records_size_limit_observation(monkeypatch) -> Non
     assert record.failure_kind == "size_limit_exceeded"
 
 
-def test_upload_invalid_correlation_id_header_falls_back_without_product_error() -> None:
-    client = TestClient(create_app(embedding_auto_generate=False, retrieval_backend="memory"))
+def test_upload_invalid_correlation_id_header_falls_back_without_product_error() -> (
+    None
+):
+    client = TestClient(
+        create_app(embedding_auto_generate=False, retrieval_backend="memory")
+    )
 
     response = client.post(
         "/api/materials",
@@ -278,7 +290,13 @@ def test_upload_observation_sink_failure_does_not_change_ready_response() -> Non
 
     response = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00"), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00"),
+                "application/pdf",
+            )
+        },
     )
 
     assert response.status_code == 200
@@ -289,7 +307,9 @@ def test_upload_observation_sink_failure_does_not_change_ready_response() -> Non
     assert "raw" not in material
 
 
-def test_local_artifact_observation_exporter_records_material_and_question_payloads(tmp_path) -> None:
+def test_local_artifact_observation_exporter_records_material_and_question_payloads(
+    tmp_path,
+) -> None:
     exporter = LocalArtifactObservationExporter(tmp_path)
     composer = FakeLibraryChatAnswerComposer(
         body="체크인 시작 시각은 15:00입니다.",
@@ -334,7 +354,10 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert "requestId" not in body
     assert "correlationId" not in body
 
-    rows = [json.loads(line) for line in exporter.path.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        json.loads(line)
+        for line in exporter.path.read_text(encoding="utf-8").splitlines()
+    ]
     assert [row["schema_version"] for row in rows] == [
         "tripproof.observation_export.v1",
         "tripproof.observation_export.v1",
@@ -367,7 +390,9 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
         "ready_material_count": 1,
         "ready_material_ids": [material_id],
     }
-    assert _export_step(question_export, "question_status")["facts"] == {"status": "accepted"}
+    assert _export_step(question_export, "question_status")["facts"] == {
+        "status": "accepted"
+    }
 
     exported_json = json.dumps(rows, ensure_ascii=False)
     assert "booking-secret-name.pdf" not in exported_json
@@ -395,7 +420,9 @@ def test_fanout_observation_exporter_continues_after_sink_failure() -> None:
     assert spy.envelopes == [envelope]
 
 
-def test_langsmith_observation_exporter_records_safe_material_and_question_runs() -> None:
+def test_langsmith_observation_exporter_records_safe_material_and_question_runs() -> (
+    None
+):
     writer = SpyLangSmithRunWriter()
     exporter = LangSmithObservationExporter(writer)
     composer = FakeLibraryChatAnswerComposer(
@@ -444,10 +471,16 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
         "subject": {"material_id": material_id},
     }
     assert material_run["outputs"] == {"final_status": "ready", "failure_kind": None}
-    assert material_run["metadata"]["tripproof.schema_version"] == "tripproof.observation_export.v1"
+    assert (
+        material_run["metadata"]["tripproof.schema_version"]
+        == "tripproof.observation_export.v1"
+    )
     assert material_run["metadata"]["tripproof.request_id"] == upload_request_id
     assert material_run["metadata"]["tripproof.correlation_id"] == upload_request_id
-    assert material_run["metadata"]["tripproof.correlation_id_source"] == "request_id_fallback"
+    assert (
+        material_run["metadata"]["tripproof.correlation_id_source"]
+        == "request_id_fallback"
+    )
     assert material_run["metadata"]["tripproof.retrieval_backend"] == "memory"
     assert material_run["metadata"]["tripproof.embedding_provider"] == "ollama"
     assert f"tripproof.correlation:{upload_request_id}" in material_run["tags"]
@@ -460,7 +493,9 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     material_intake = _langsmith_child_run(material_run, "material_intake")
     assert material_intake["metadata"]["tripproof.synthetic_observation_step"] is True
     assert material_intake["metadata"]["tripproof.step.kind"] == "parent_step"
-    assert [child["name"] for child in material_intake["children"]] == ["upload_snapshot"]
+    assert [child["name"] for child in material_intake["children"]] == [
+        "upload_snapshot"
+    ]
     upload_child = _langsmith_child_run(material_intake, "upload_snapshot")
     assert upload_child["outputs"]["status"] == "succeeded"
     assert upload_child["outputs"]["failure_kind"] is None
@@ -471,9 +506,17 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     assert upload_child["metadata"]["tripproof.step.facts"]["file_extension"] == "pdf"
     assert "file_name" not in upload_child["metadata"]["tripproof.step.facts"]
     retrieval_preparation = _langsmith_child_run(material_run, "retrieval_preparation")
-    assert retrieval_preparation["metadata"]["tripproof.runtime_hint.retrieval_backend"] == "memory"
-    embedding_record_build = _langsmith_child_run(material_run, "embedding_record_build")
-    assert embedding_record_build["metadata"]["tripproof.runtime_hint.embedding_provider"] == "ollama"
+    assert (
+        retrieval_preparation["metadata"]["tripproof.runtime_hint.retrieval_backend"]
+        == "memory"
+    )
+    embedding_record_build = _langsmith_child_run(
+        material_run, "embedding_record_build"
+    )
+    assert (
+        embedding_record_build["metadata"]["tripproof.runtime_hint.embedding_provider"]
+        == "ollama"
+    )
     assert (
         embedding_record_build["metadata"]["tripproof.runtime_hint.embedding_model"]
         == "nomic-embed-text-v2-moe"
@@ -517,13 +560,21 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
         "evidence_state_counts": {"supported": 1},
     }
     retrieval_pipeline = _langsmith_child_run(question_run, "retrieval_pipeline")
-    assert retrieval_pipeline["metadata"]["tripproof.runtime_hint.retrieval_backend"] == "memory"
+    assert (
+        retrieval_pipeline["metadata"]["tripproof.runtime_hint.retrieval_backend"]
+        == "memory"
+    )
     source_retrieval = _langsmith_child_run(question_run, "source_retrieval")
-    assert source_retrieval["metadata"]["tripproof.runtime_hint.embedding_provider"] == "ollama"
+    assert (
+        source_retrieval["metadata"]["tripproof.runtime_hint.embedding_provider"]
+        == "ollama"
+    )
     assert _langsmith_event(question_run, "query_snapshot")["kwargs"]["facts"] == {
         "question_length": len("check-in time?"),
     }
-    assert _langsmith_event(question_run, "ready_material_selection")["kwargs"]["facts"] == {
+    assert _langsmith_event(question_run, "ready_material_selection")["kwargs"][
+        "facts"
+    ] == {
         "ready_material_count": 1,
         "ready_material_ids": [material_id],
     }
@@ -540,22 +591,35 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     assert "체크인 시작 시각은 15:00입니다." not in exported_json
 
 
-def test_langsmith_observation_exporter_failure_does_not_change_product_responses() -> None:
+def test_langsmith_observation_exporter_failure_does_not_change_product_responses() -> (
+    None
+):
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
             retrieval_backend="memory",
             library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
-            observation_exporter=LangSmithObservationExporter(FailingLangSmithRunWriter()),
+            observation_exporter=LangSmithObservationExporter(
+                FailingLangSmithRunWriter()
+            ),
         )
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material = upload.json()
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material["id"]]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material["id"]]},
+    )
 
     assert upload.status_code == 200
     assert material["status"] == "ready"
@@ -568,7 +632,9 @@ def test_langsmith_observation_exporter_failure_does_not_change_product_response
     assert "raw" not in body
 
 
-def test_default_observation_exporter_uses_noop_when_langsmith_enabled_without_api_key(monkeypatch) -> None:
+def test_default_observation_exporter_uses_noop_when_langsmith_enabled_without_api_key(
+    monkeypatch,
+) -> None:
     monkeypatch.setattr(server_app, "LANGSMITH_OBSERVATION_ENABLED", True)
     monkeypatch.setattr(server_app, "LANGSMITH_API_KEY", "")
     monkeypatch.setattr(server_app, "OBSERVATION_EXPORT_DIR", "")
@@ -619,11 +685,20 @@ def test_observation_exporter_failure_does_not_change_product_responses() -> Non
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material = upload.json()
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material["id"]]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material["id"]]},
+    )
 
     assert upload.status_code == 200
     assert material["status"] == "ready"
@@ -662,7 +737,10 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -673,7 +751,10 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert body["answer"]["summary"] == "자료에서 확인한 답변입니다."
     assert body["answer"]["items"][0]["id"] == "answer"
     assert body["answer"]["items"][0]["body"] == "체크인 시작 시각은 15:00입니다."
-    assert body["answer"]["items"][0]["evidence"][0]["snippet"] == "Check-in starts at 15:00."
+    assert (
+        body["answer"]["items"][0]["evidence"][0]["snippet"]
+        == "Check-in starts at 15:00."
+    )
     assert composer.last_question == "check-in time?"
     assert composer.last_context is not None
     assert composer.last_context.query == "check-in time?"
@@ -698,7 +779,9 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     ]
     assert _child_step_names(record.step("question_preparation")) == ["query_snapshot"]
     assert record.step("query_snapshot").status == "succeeded"
-    assert record.step("query_snapshot").facts == {"question_length": len("check-in time?")}
+    assert record.step("query_snapshot").facts == {
+        "question_length": len("check-in time?")
+    }
     assert _child_step_names(record.step("material_scope")) == [
         "ready_material_selection",
         "retrieval_record_load",
@@ -808,7 +891,10 @@ def test_question_observation_records_repository_vector_source_retrieval() -> No
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
     record = question_observation_sink.records[0]
@@ -858,23 +944,31 @@ def test_question_route_calls_library_chat_answer_composer_contract() -> None:
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "accepted"
     assert body["answer"]["summary"] == "composer contract reached"
-    assert body["answer"]["items"][0]["body"] == "route called LibraryChatAnswerComposer.compose"
+    assert (
+        body["answer"]["items"][0]["body"]
+        == "route called LibraryChatAnswerComposer.compose"
+    )
     assert composer.calls == 1
     assert composer.last_question == "check-in time?"
     assert composer.last_context is not None
     assert composer.last_context.target_id == "library_chat_answer"
-    assert [candidate.source_unit.text for candidate in composer.last_context.candidates] == [
-        "Hotel address is Hakata. Check-in starts at 15:00."
-    ]
+    assert [
+        candidate.source_unit.text for candidate in composer.last_context.candidates
+    ] == ["Hotel address is Hakata. Check-in starts at 15:00."]
 
 
-def test_question_observation_records_prompt_snapshot_when_composer_exposes_prompt() -> None:
+def test_question_observation_records_prompt_snapshot_when_composer_exposes_prompt() -> (
+    None
+):
     question_observation_sink = InMemoryQuestionObservationSink()
     client = TestClient(
         create_app(
@@ -886,11 +980,20 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
     prompt_snapshot = load_library_chat_answer_prompt().snapshot()
@@ -900,8 +1003,12 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     assert record.runtime_config_snapshot.prompt.domain == "answer"
     assert record.runtime_config_snapshot.prompt.name == "library_chat_answer"
     assert record.runtime_config_snapshot.prompt.version == "2026-06-10"
-    assert record.runtime_config_snapshot.prompt.body_hash == prompt_snapshot["bodyHash"]
-    assert record.runtime_config_snapshot.prompt.file_hash == prompt_snapshot["fileHash"]
+    assert (
+        record.runtime_config_snapshot.prompt.body_hash == prompt_snapshot["bodyHash"]
+    )
+    assert (
+        record.runtime_config_snapshot.prompt.file_hash == prompt_snapshot["fileHash"]
+    )
     assert (
         record.runtime_config_snapshot.prompt.asset_path
         == "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
@@ -934,11 +1041,20 @@ def test_question_runtime_config_snapshot_records_configured_answer_model() -> N
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -996,7 +1112,9 @@ def test_material_store_can_generate_embedding_records_with_provider() -> None:
     assert embedding.vector == [1.0, 0.0, 0.0]
 
 
-def test_material_store_does_not_publish_ready_material_when_retrieval_upsert_fails() -> None:
+def test_material_store_does_not_publish_ready_material_when_retrieval_upsert_fails() -> (
+    None
+):
     store = MaterialStore(retrieval_repository=FailingRetrievalRepository())
 
     with pytest.raises(RuntimeError, match="upsert failed"):
@@ -1012,7 +1130,9 @@ def test_material_store_does_not_publish_ready_material_when_retrieval_upsert_fa
     assert store.list_public() == []
 
 
-def test_upload_records_repository_upsert_failure_without_publishing_ready_material() -> None:
+def test_upload_records_repository_upsert_failure_without_publishing_ready_material() -> (
+    None
+):
     observation_sink = InMemoryMaterialUploadObservationSink()
     store = MaterialStore(retrieval_repository=FailingRetrievalRepository())
     client = TestClient(
@@ -1022,7 +1142,13 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
 
     response = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Show your booking confirmation."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Show your booking confirmation."),
+                "application/pdf",
+            )
+        },
     )
 
     assert response.status_code == 500
@@ -1036,7 +1162,9 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
     assert record.step("upload_snapshot").status == "succeeded"
     assert record.step("pdf_parse").status == "succeeded"
     assert record.step("retrieval_preparation").status == "failed"
-    assert record.step("retrieval_preparation").failure_kind == "repository_upsert_failed"
+    assert (
+        record.step("retrieval_preparation").failure_kind == "repository_upsert_failed"
+    )
     assert record.step("source_unit_build").status == "succeeded"
     assert record.step("source_unit_build").facts == {"count": 1}
     assert record.step("embedding_record_build").status == "succeeded"
@@ -1050,7 +1178,10 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
         "source_unit_count": 1,
         "embedding_record_count": 1,
     }
-    assert record.step("retrieval_repository_upsert").failure_kind == "repository_upsert_failed"
+    assert (
+        record.step("retrieval_repository_upsert").failure_kind
+        == "repository_upsert_failed"
+    )
     assert record.step("finalization").status == "succeeded"
     assert record.step("material_status").facts == {"status": "failed"}
     assert record.final_material_status == "failed"
@@ -1085,7 +1216,9 @@ def test_question_blocks_when_only_failed_material_exists() -> None:
     assert len(records) == 1
     record = records[0]
     assert record.step("query_snapshot").status == "succeeded"
-    assert record.step("query_snapshot").facts == {"question_length": len("check-in time?")}
+    assert record.step("query_snapshot").facts == {
+        "question_length": len("check-in time?")
+    }
     assert record.step("ready_material_selection").status == "failed"
     assert record.step("ready_material_selection").failure_kind == "no_ready_materials"
     assert record.step("ready_material_selection").facts == {
@@ -1146,11 +1279,20 @@ def test_question_observation_sink_failure_does_not_change_accepted_response() -
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -1160,7 +1302,9 @@ def test_question_observation_sink_failure_does_not_change_accepted_response() -
     assert "raw" not in body
 
 
-def test_question_records_retrieval_failure_without_changing_exception_behavior() -> None:
+def test_question_records_retrieval_failure_without_changing_exception_behavior() -> (
+    None
+):
     question_observation_sink = InMemoryQuestionObservationSink()
     store = MaterialStore(retrieval_repository=FailingReadRetrievalRepository())
     client = TestClient(
@@ -1173,11 +1317,20 @@ def test_question_records_retrieval_failure_without_changing_exception_behavior(
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 500
     records = question_observation_sink.records
@@ -1204,7 +1357,9 @@ def test_question_records_retrieval_failure_without_changing_exception_behavior(
     assert record.failure_kind == "retrieval_failed"
 
 
-def test_question_records_answer_composer_failure_without_changing_exception_behavior() -> None:
+def test_question_records_answer_composer_failure_without_changing_exception_behavior() -> (
+    None
+):
     question_observation_sink = InMemoryQuestionObservationSink()
     client = TestClient(
         create_app(
@@ -1217,11 +1372,20 @@ def test_question_records_answer_composer_failure_without_changing_exception_beh
     )
     upload = client.post(
         "/api/materials",
-        files={"file": ("booking.pdf", _pdf_with_text("Check-in starts at 15:00."), "application/pdf")},
+        files={
+            "file": (
+                "booking.pdf",
+                _pdf_with_text("Check-in starts at 15:00."),
+                "application/pdf",
+            )
+        },
     )
     material_id = upload.json()["id"]
 
-    response = client.post("/api/questions", json={"question": "check-in time?", "materialIds": [material_id]})
+    response = client.post(
+        "/api/questions",
+        json={"question": "check-in time?", "materialIds": [material_id]},
+    )
 
     assert response.status_code == 500
     records = question_observation_sink.records
@@ -1249,21 +1413,31 @@ def test_question_records_answer_composer_failure_without_changing_exception_beh
 def test_create_app_uses_supabase_repository_when_backend_enabled(monkeypatch) -> None:
     repository = InMemoryRetrievalRepository()
     monkeypatch.setattr(server_app, "RETRIEVAL_BACKEND", "supabase")
-    monkeypatch.setattr(server_app, "create_supabase_retrieval_repository_from_config", lambda: repository)
+    monkeypatch.setattr(
+        server_app,
+        "create_supabase_retrieval_repository_from_config",
+        lambda: repository,
+    )
 
     app = server_app.create_app(embedding_auto_generate=False)
 
     assert app.state.material_store.retrieval_repository is repository
 
 
-def test_create_app_uses_provided_store_without_building_supabase_repository(monkeypatch) -> None:
+def test_create_app_uses_provided_store_without_building_supabase_repository(
+    monkeypatch,
+) -> None:
     store = MaterialStore()
     monkeypatch.setattr(server_app, "RETRIEVAL_BACKEND", "supabase")
 
     def fail_if_called():
-        raise AssertionError("Supabase repository should not be created when store is provided.")
+        raise AssertionError(
+            "Supabase repository should not be created when store is provided."
+        )
 
-    monkeypatch.setattr(server_app, "create_supabase_retrieval_repository_from_config", fail_if_called)
+    monkeypatch.setattr(
+        server_app, "create_supabase_retrieval_repository_from_config", fail_if_called
+    )
 
     app = server_app.create_app(store=store)
 
@@ -1430,13 +1604,17 @@ class FailingLibraryChatAnswerComposer:
 
 
 class FailingRetrievalRepository:
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         raise RuntimeError("upsert failed")
 
     def records_for_materials(self, material_ids):
         return RetrievalRecords(source_units=[], embedding_records=[])
 
-    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+    def match_source_units(
+        self, *, material_ids, query_embedding, limit, similarity_threshold
+    ):
         return []
 
     def clear(self) -> None:
@@ -1447,13 +1625,17 @@ class FailingReadRetrievalRepository:
     def __init__(self) -> None:
         self._delegate = InMemoryRetrievalRepository()
 
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         self._delegate.upsert_material_records(material_id=material_id, records=records)
 
     def records_for_materials(self, material_ids):
         raise RuntimeError("retrieval records read failed")
 
-    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+    def match_source_units(
+        self, *, material_ids, query_embedding, limit, similarity_threshold
+    ):
         return []
 
     def clear(self) -> None:
@@ -1466,7 +1648,9 @@ class TrackingRetrievalRepository(InMemoryRetrievalRepository):
         self.seen_limit = None
         self.seen_similarity_threshold = None
 
-    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+    def match_source_units(
+        self, *, material_ids, query_embedding, limit, similarity_threshold
+    ):
         self.seen_limit = limit
         self.seen_similarity_threshold = similarity_threshold
         return super().match_source_units(

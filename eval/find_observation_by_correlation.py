@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SEARCH_PATHS = (
     REPO_ROOT / ".tripproof-observations",
@@ -70,7 +69,11 @@ def iter_jsonl_paths(search_paths: tuple[Path, ...]):
     for search_path in search_paths:
         if not search_path.exists():
             continue
-        candidates = [search_path] if search_path.is_file() else sorted(search_path.rglob("*.jsonl"))
+        candidates = (
+            [search_path]
+            if search_path.is_file()
+            else sorted(search_path.rglob("*.jsonl"))
+        )
         for candidate in candidates:
             if not candidate.is_file() or candidate.suffix != ".jsonl":
                 continue
@@ -82,7 +85,9 @@ def iter_jsonl_paths(search_paths: tuple[Path, ...]):
 
 
 def iter_jsonl_rows(path: Path):
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         if not line.strip():
             continue
         try:
@@ -152,7 +157,9 @@ def _parse_args() -> argparse.Namespace:
             "Defaults to .tripproof-observations/ and eval/runs/question-runtime-recording/."
         ),
     )
-    parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    parser.add_argument(
+        "--json", action="store_true", help="Print machine-readable JSON."
+    )
     return parser.parse_args()
 
 

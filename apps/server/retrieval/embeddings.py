@@ -48,7 +48,9 @@ class OllamaEmbeddingProvider:
         document_prefix: str = "search_document: ",
         query_prefix: str = "search_query: ",
     ) -> None:
-        self.profile = EmbeddingProfile(provider="ollama", model=model, dimensions=dimensions)
+        self.profile = EmbeddingProfile(
+            provider="ollama", model=model, dimensions=dimensions
+        )
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._document_prefix = document_prefix
@@ -61,7 +63,9 @@ class OllamaEmbeddingProvider:
         return self._embed([self._query_prefix + text])[0]
 
     def _embed(self, inputs: list[str]) -> list[list[float]]:
-        payload = json.dumps({"model": self.profile.model, "input": inputs}).encode("utf-8")
+        payload = json.dumps({"model": self.profile.model, "input": inputs}).encode(
+            "utf-8"
+        )
         http_request = request.Request(
             f"{self._base_url}/api/embed",
             data=payload,
@@ -70,19 +74,27 @@ class OllamaEmbeddingProvider:
         )
 
         try:
-            with request.urlopen(http_request, timeout=self._timeout_seconds) as response:
+            with request.urlopen(
+                http_request, timeout=self._timeout_seconds
+            ) as response:
                 raw = response.read()
         except error.URLError as exc:
-            raise EmbeddingProviderError(f"Ollama embedding request failed: {exc}") from exc
+            raise EmbeddingProviderError(
+                f"Ollama embedding request failed: {exc}"
+            ) from exc
 
         try:
             body = json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError as exc:
-            raise EmbeddingProviderError("Ollama embedding response was not valid JSON.") from exc
+            raise EmbeddingProviderError(
+                "Ollama embedding response was not valid JSON."
+            ) from exc
 
         embeddings = body.get("embeddings")
         if not isinstance(embeddings, list):
-            raise EmbeddingProviderError("Ollama embedding response did not include embeddings.")
+            raise EmbeddingProviderError(
+                "Ollama embedding response did not include embeddings."
+            )
 
         vectors: list[list[float]] = []
         for embedding in embeddings:
@@ -96,7 +108,9 @@ class OllamaEmbeddingProvider:
             vectors.append(vector)
 
         if len(vectors) != len(inputs):
-            raise EmbeddingProviderError("Ollama returned a different number of embeddings than requested.")
+            raise EmbeddingProviderError(
+                "Ollama returned a different number of embeddings than requested."
+            )
 
         return vectors
 
@@ -126,7 +140,9 @@ def build_embedding_records(
     generate: bool = False,
 ) -> list[EmbeddingRecord]:
     units = list(source_units)
-    active_profile = provider.profile if provider else profile or default_embedding_profile()
+    active_profile = (
+        provider.profile if provider else profile or default_embedding_profile()
+    )
 
     if not units:
         return []
@@ -165,7 +181,9 @@ def _pending_record(unit: SourceUnit, profile: EmbeddingProfile) -> EmbeddingRec
     )
 
 
-def _failed_record(unit: SourceUnit, profile: EmbeddingProfile, error_message: str) -> EmbeddingRecord:
+def _failed_record(
+    unit: SourceUnit, profile: EmbeddingProfile, error_message: str
+) -> EmbeddingRecord:
     return EmbeddingRecord(
         id=_embedding_id(unit=unit, profile=profile),
         source_unit_id=unit.id,

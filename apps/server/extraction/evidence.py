@@ -12,9 +12,13 @@ def evidence_ref_from_snippet(*, source_unit: SourceUnit, snippet: str) -> Evide
     proposed_snippet = snippet.strip()
     if not proposed_snippet:
         raise EvidenceGroundingError("Evidence snippet cannot be empty.")
-    grounded_snippet = _ground_snippet(source_text=source_unit.text, proposed_snippet=proposed_snippet)
+    grounded_snippet = _ground_snippet(
+        source_text=source_unit.text, proposed_snippet=proposed_snippet
+    )
     if grounded_snippet is None:
-        raise EvidenceGroundingError("Evidence snippet must be an exact part of the source unit text.")
+        raise EvidenceGroundingError(
+            "Evidence snippet must be an exact part of the source unit text."
+        )
 
     return EvidenceRef(
         material_id=source_unit.material_id,

@@ -12,7 +12,9 @@ class TextChunk:
     end: int
 
 
-def chunk_text(text: str, *, chunk_size: int = 1200, overlap: int = 160) -> list[TextChunk]:
+def chunk_text(
+    text: str, *, chunk_size: int = 1200, overlap: int = 160
+) -> list[TextChunk]:
     stripped = text.strip()
     if not stripped:
         return []

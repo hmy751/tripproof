@@ -22,7 +22,9 @@ class VectorSourceUnitMatch:
 
 
 class RetrievalRepository(Protocol):
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         raise NotImplementedError
 
     def records_for_materials(self, material_ids: Iterable[str]) -> RetrievalRecords:
@@ -46,7 +48,9 @@ class InMemoryRetrievalRepository:
     def __init__(self) -> None:
         self._records_by_material_id: dict[str, RetrievalRecords] = {}
 
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         self._records_by_material_id[material_id] = records
 
     def records_for_materials(self, material_ids: Iterable[str]) -> RetrievalRecords:
@@ -105,7 +109,10 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
     if len(left) != len(right) or not left:
         return None
 
-    dot = sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
+    dot = sum(
+        left_value * right_value
+        for left_value, right_value in zip(left, right, strict=True)
+    )
     left_norm = sqrt(sum(value * value for value in left))
     right_norm = sqrt(sum(value * value for value in right))
     if left_norm == 0 or right_norm == 0:

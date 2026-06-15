@@ -25,6 +25,13 @@
 - subagent와 로컬 agent는 판단 재료를 제공하는 report-only 도구다. 승인/반려 권한은 갖지 않는다.
 - 사용자가 "두고", "멈춰", "보류"라고 말하면 파일 수정과 추가 실행을 멈추고 현재 상태를 보고한다.
 
+## 검증과 포맷
+
+- Python 포맷터는 Black을 기준으로 한다. 설정은 `pyproject.toml`의 `[tool.black]`과 `black` dev dependency를 원천으로 둔다.
+- Python 포맷 실행은 `npm run black` 또는 `npm run format`을 사용한다.
+- Python 포맷 검증은 `npm run black:check` 또는 `npm run format:check`를 사용한다.
+- 전체 검증은 `npm run check`를 사용한다. 이 명령은 Black check, client build, server test를 순서대로 실행한다.
+
 ## Commit 규칙
 
 - commit message는 Conventional Commits 형식을 쓴다: `type(scope): 한국어 요약`.

@@ -12,7 +12,11 @@ from server.core.config import (
 )
 from server.extraction.evidence import EvidenceGroundingError, evidence_ref_from_snippet
 from server.extraction.models import EvidenceRef, EvidenceState
-from server.llm.ollama import OllamaChatJsonClient, OllamaChatJsonConfig, OllamaClientError
+from server.llm.ollama import (
+    OllamaChatJsonClient,
+    OllamaChatJsonConfig,
+    OllamaClientError,
+)
 from server.prompts.renderers.answer.library_chat_answer import (
     LibraryChatAnswerPrompt,
     load_library_chat_answer_prompt,
@@ -20,7 +24,6 @@ from server.prompts.renderers.answer.library_chat_answer import (
 from server.retrieval.models import AnswerContext, SourceUnit
 from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse
 from server.schemas.facts import EvidenceRefResponse
-
 
 LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 
@@ -82,12 +85,16 @@ class OllamaLibraryChatAnswerComposer:
 
     def compose(self, *, question: str, context: AnswerContext) -> ChatAnswerResponse:
         if not context.candidates:
-            return _missing_answer(reason="질문과 관련된 source unit 후보를 찾지 못했습니다.")
+            return _missing_answer(
+                reason="질문과 관련된 source unit 후보를 찾지 못했습니다."
+            )
 
         try:
             payload = self._client.generate_json(
                 system=self._prompt.system_message(),
-                user=_user_prompt(question=question, context=context, prompt=self._prompt),
+                user=_user_prompt(
+                    question=question, context=context, prompt=self._prompt
+                ),
             )
         except OllamaClientError as exc:
             return _missing_answer(reason=f"답변 생성에 실패했습니다: {exc}")
@@ -122,7 +129,9 @@ def create_library_chat_answer_composer_from_config(
     raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
 
 
-def _user_prompt(*, question: str, context: AnswerContext, prompt: LibraryChatAnswerPrompt) -> str:
+def _user_prompt(
+    *, question: str, context: AnswerContext, prompt: LibraryChatAnswerPrompt
+) -> str:
     source_blocks = "\n\n".join(
         (
             f"source_unit_id: {candidate.source_unit.id}\n"
@@ -134,21 +143,34 @@ def _user_prompt(*, question: str, context: AnswerContext, prompt: LibraryChatAn
     return prompt.user_message(question=question, source_blocks=source_blocks)
 
 
-def _answer_from_payload(*, question: str, payload: object, context: AnswerContext) -> ChatAnswerResponse:
+def _answer_from_payload(
+    *, question: str, payload: object, context: AnswerContext
+) -> ChatAnswerResponse:
     if not isinstance(payload, dict):
-        return _missing_answer(reason="답변 생성기가 JSON object를 반환하지 않았습니다.")
+        return _missing_answer(
+            reason="답변 생성기가 JSON object를 반환하지 않았습니다."
+        )
 
     raw_items = payload.get("items")
     if not isinstance(raw_items, list) or not raw_items:
-        return _missing_answer(reason="답변 생성기가 answer item을 반환하지 않았습니다.")
+        return _missing_answer(
+            reason="답변 생성기가 answer item을 반환하지 않았습니다."
+        )
 
     items = [
         item
         for index, raw_item in enumerate(raw_items, start=1)
-        if (item := _item_from_payload(index=index, question=question, payload=raw_item, context=context)) is not None
+        if (
+            item := _item_from_payload(
+                index=index, question=question, payload=raw_item, context=context
+            )
+        )
+        is not None
     ]
     if not items:
-        return _missing_answer(reason="답변 생성기가 검증 가능한 answer item을 반환하지 않았습니다.")
+        return _missing_answer(
+            reason="답변 생성기가 검증 가능한 answer item을 반환하지 않았습니다."
+        )
 
     return ChatAnswerResponse(summary=_summary_for_items(items), items=items)
 
@@ -193,7 +215,9 @@ def _normalize_answer_item_payload(
         return None
 
     value = _optional_string(_field(payload, "value"))
-    label = _display_label(raw_label=_optional_string(_field(payload, "label")), value=value)
+    label = _display_label(
+        raw_label=_optional_string(_field(payload, "label")), value=value
+    )
     body = _display_body(
         question=question,
         label=label,
@@ -202,12 +226,18 @@ def _normalize_answer_item_payload(
     )
     return NormalizedAnswerItemPayload(
         raw=payload,
-        evidence_state=_evidence_state_from_value(_field(payload, "evidence_state", "evidenceState")),
+        evidence_state=_evidence_state_from_value(
+            _field(payload, "evidence_state", "evidenceState")
+        ),
         label=label,
         body=body,
         value=value,
-        source_unit_id=_optional_string(_field(payload, "source_unit_id", "sourceUnitId")),
-        evidence_snippet=_optional_string(_field(payload, "evidence_snippet", "evidenceSnippet")),
+        source_unit_id=_optional_string(
+            _field(payload, "source_unit_id", "sourceUnitId")
+        ),
+        evidence_snippet=_optional_string(
+            _field(payload, "evidence_snippet", "evidenceSnippet")
+        ),
     )
 
 
@@ -218,12 +248,20 @@ def _supported_item_from_payload(
     payload: NormalizedAnswerItemPayload,
     context: AnswerContext,
 ) -> ChatAnswerItemResponse:
-    if not payload.body or payload.source_unit_id is None or payload.evidence_snippet is None:
+    if (
+        not payload.body
+        or payload.source_unit_id is None
+        or payload.evidence_snippet is None
+    ):
         return _ungrounded_item(index=index, label=payload.label)
-    if not _supported_value_matches_question(question=question, value=payload.value, body=payload.body):
+    if not _supported_value_matches_question(
+        question=question, value=payload.value, body=payload.body
+    ):
         return _ungrounded_item(index=index, label=payload.label)
 
-    source_unit = _source_unit_by_id(context=context, source_unit_id=payload.source_unit_id)
+    source_unit = _source_unit_by_id(
+        context=context, source_unit_id=payload.source_unit_id
+    )
     if source_unit is None:
         return _ungrounded_item(index=index, label=payload.label)
 
@@ -268,7 +306,8 @@ def _missing_item_from_payload(
     return ChatAnswerItemResponse(
         id=payload.response_id(index=index),
         label=payload.label,
-        body=payload.body or f"현재 등록된 자료에서 {payload.label}을 확인하지 못했습니다.",
+        body=payload.body
+        or f"현재 등록된 자료에서 {payload.label}을 확인하지 못했습니다.",
         evidence_state=EvidenceState.MISSING,
         value=None,
         evidence=[],
@@ -282,13 +321,17 @@ def _ground_evidence_ref(
     value: str | None,
 ) -> EvidenceRef | None:
     try:
-        return evidence_ref_from_snippet(source_unit=source_unit, snippet=evidence_snippet)
+        return evidence_ref_from_snippet(
+            source_unit=source_unit, snippet=evidence_snippet
+        )
     except EvidenceGroundingError:
         return _evidence_ref_from_value(source_unit=source_unit, value=value)
 
 
 def _summary_for_items(items: list[ChatAnswerItemResponse]) -> str:
-    supported_count = sum(item.evidence_state == EvidenceState.SUPPORTED for item in items)
+    supported_count = sum(
+        item.evidence_state == EvidenceState.SUPPORTED for item in items
+    )
     missing_count = sum(item.evidence_state == EvidenceState.MISSING for item in items)
     if supported_count and missing_count:
         return "자료에서 확인한 내용과 확인되지 않은 항목입니다."
@@ -324,14 +367,18 @@ def _ungrounded_item(*, index: int, label: str) -> ChatAnswerItemResponse:
     )
 
 
-def _source_unit_by_id(*, context: AnswerContext, source_unit_id: str) -> SourceUnit | None:
+def _source_unit_by_id(
+    *, context: AnswerContext, source_unit_id: str
+) -> SourceUnit | None:
     for candidate in context.candidates:
         if candidate.source_unit.id == source_unit_id:
             return candidate.source_unit
     return None
 
 
-def _evidence_ref_from_value(*, source_unit: SourceUnit, value: str | None) -> EvidenceRef | None:
+def _evidence_ref_from_value(
+    *, source_unit: SourceUnit, value: str | None
+) -> EvidenceRef | None:
     if value is None:
         return None
 
@@ -377,7 +424,9 @@ def _numeric_value_window(*, source_text: str, value: str) -> str | None:
     if last.end() - first.start() > 220:
         return None
 
-    window_start = _numeric_value_window_start(source_text=source_text, start=first.start())
+    window_start = _numeric_value_window_start(
+        source_text=source_text, start=first.start()
+    )
     window_end = _numeric_value_window_end(source_text=source_text, end=last.end())
     return source_text[window_start:window_end].strip()
 
@@ -410,7 +459,9 @@ def _normalize_number(value: str) -> str:
     return stripped or "0"
 
 
-def _supported_value_matches_question(*, question: str, value: str | None, body: str) -> bool:
+def _supported_value_matches_question(
+    *, question: str, value: str | None, body: str
+) -> bool:
     if not _question_asks_time(question):
         return True
     answer_text = value or body
@@ -452,7 +503,9 @@ def _item_id(*, payload: dict[object, object], index: int) -> str:
         return f"answer_{index}"
     if value.startswith("su_"):
         return f"answer_{index}"
-    normalized = "".join(char if char.isalnum() or char == "_" else "_" for char in value.strip().lower())
+    normalized = "".join(
+        char if char.isalnum() or char == "_" else "_" for char in value.strip().lower()
+    )
     normalized = "_".join(part for part in normalized.split("_") if part)
     return normalized or f"answer_{index}"
 

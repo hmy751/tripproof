@@ -3,17 +3,25 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID, OllamaLibraryChatAnswerComposer
+from server.answers.library_chat import (
+    LIBRARY_CHAT_TARGET_ID,
+    OllamaLibraryChatAnswerComposer,
+)
 from server.extraction.models import EvidenceState
-from server.prompts.renderers.answer.library_chat_answer import load_library_chat_answer_prompt
+from server.prompts.renderers.answer.library_chat_answer import (
+    load_library_chat_answer_prompt,
+)
 from server.retrieval.models import AnswerContext, RetrievedSource, SourceUnit
 
-
-FIXTURE_ROOT = Path(__file__).resolve().parents[3] / "fixtures" / "accommodation-checkin"
+FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[3] / "fixtures" / "accommodation-checkin"
+)
 
 
 def test_library_chat_composer_answers_question_from_grounded_source() -> None:
-    unit = _source_unit("Arrival :\n체크인 :\n2025년 3월 09일\nDeparture :\n체크아웃 :\n2025년 3월 13일")
+    unit = _source_unit(
+        "Arrival :\n체크인 :\n2025년 3월 09일\nDeparture :\n체크아웃 :\n2025년 3월 13일"
+    )
     composer = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(
             {
@@ -32,7 +40,9 @@ def test_library_chat_composer_answers_question_from_grounded_source() -> None:
         )
     )
 
-    answer = composer.compose(question="체크인 날짜가 어떻게 돼?", context=_context(unit))
+    answer = composer.compose(
+        question="체크인 날짜가 어떻게 돼?", context=_context(unit)
+    )
 
     assert answer.summary == "자료에서 확인한 답변입니다."
     assert len(answer.items) == 1
@@ -75,8 +85,14 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     assert composer.prompt.document.metadata["description_ko"] == (
         "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만든다."
     )
-    assert "# 자료함 질문 답변 프롬프트" in composer.prompt.document.metadata["translation_ko"]
-    assert "일반 여행 지식으로 추론하지 않는다." in composer.prompt.document.metadata["translation_ko"]
+    assert (
+        "# 자료함 질문 답변 프롬프트"
+        in composer.prompt.document.metadata["translation_ko"]
+    )
+    assert (
+        "일반 여행 지식으로 추론하지 않는다."
+        in composer.prompt.document.metadata["translation_ko"]
+    )
     assert composer.prompt.snapshot()["bodyHash"] == prompt.document.body_hash
     assert composer.prompt.snapshot()["assetPath"] == (
         "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
@@ -102,11 +118,19 @@ def test_library_chat_answer_changes_when_only_source_checkin_time_changes() -> 
         "Check-in starts at 15:00.\n"
         "Check-out is at 11:00."
     )
-    variant_unit = _source_unit((FIXTURE_ROOT / "agoda-fukuoka-checkin-start-1600.txt").read_text())
-    composer = OllamaLibraryChatAnswerComposer(client=_SourceDrivenCheckinTimeJsonClient())
+    variant_unit = _source_unit(
+        (FIXTURE_ROOT / "agoda-fukuoka-checkin-start-1600.txt").read_text()
+    )
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_SourceDrivenCheckinTimeJsonClient()
+    )
 
-    base_answer = composer.compose(question=question, context=_context(base_unit, query=question))
-    variant_answer = composer.compose(question=question, context=_context(variant_unit, query=question))
+    base_answer = composer.compose(
+        question=question, context=_context(base_unit, query=question)
+    )
+    variant_answer = composer.compose(
+        question=question, context=_context(variant_unit, query=question)
+    )
 
     base_item = base_answer.items[0]
     variant_item = variant_answer.items[0]
@@ -120,8 +144,12 @@ def test_library_chat_answer_changes_when_only_source_checkin_time_changes() -> 
     assert variant_item.evidence[0].snippet in variant_unit.text
 
 
-def test_library_chat_supported_items_return_evidence_snippets_from_source_text() -> None:
-    unit = _source_unit("체크인 시\n예약 확정서를\n제시해 주세요.\nCheck-in starts at 15:00.")
+def test_library_chat_supported_items_return_evidence_snippets_from_source_text() -> (
+    None
+):
+    unit = _source_unit(
+        "체크인 시\n예약 확정서를\n제시해 주세요.\nCheck-in starts at 15:00."
+    )
     composer = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(
             {
@@ -149,7 +177,9 @@ def test_library_chat_supported_items_return_evidence_snippets_from_source_text(
         )
     )
 
-    answer = composer.compose(question="체크인 자료에서 확인되는 항목은 뭐야?", context=_context(unit))
+    answer = composer.compose(
+        question="체크인 자료에서 확인되는 항목은 뭐야?", context=_context(unit)
+    )
 
     assert len(answer.items) == 2
     for item in answer.items:
@@ -179,7 +209,9 @@ def test_library_chat_composer_downgrades_ungrounded_supported_answer() -> None:
         )
     )
 
-    answer = composer.compose(question="체크인 날짜가 어떻게 돼?", context=_context(unit))
+    answer = composer.compose(
+        question="체크인 날짜가 어떻게 돼?", context=_context(unit)
+    )
 
     assert answer.summary == "현재 등록된 자료만으로는 답을 확인하지 못했습니다."
     assert answer.items[0].evidence_state == EvidenceState.MISSING
@@ -207,7 +239,9 @@ def test_library_chat_composer_downgrades_date_answer_when_question_asks_time() 
         )
     )
 
-    answer = composer.compose(question="체크인 시작 시각은 몇 시야?", context=_context(unit))
+    answer = composer.compose(
+        question="체크인 시작 시각은 몇 시야?", context=_context(unit)
+    )
 
     assert answer.summary == "현재 등록된 자료만으로는 답을 확인하지 못했습니다."
     assert answer.items[0].evidence_state == EvidenceState.MISSING
@@ -215,7 +249,9 @@ def test_library_chat_composer_downgrades_date_answer_when_question_asks_time() 
     assert answer.items[0].evidence == []
 
 
-def test_library_chat_composer_repairs_numeric_value_snippet_from_pdf_extracted_text() -> None:
+def test_library_chat_composer_repairs_numeric_value_snippet_from_pdf_extracted_text() -> (
+    None
+):
     unit = _source_unit(
         "Arrival :\n"
         "체크인\n"
@@ -251,7 +287,9 @@ def test_library_chat_composer_repairs_numeric_value_snippet_from_pdf_extracted_
         )
     )
 
-    answer = composer.compose(question="체크인 날짜가 어떻게 돼?", context=_context(unit))
+    answer = composer.compose(
+        question="체크인 날짜가 어떻게 돼?", context=_context(unit)
+    )
 
     item = answer.items[0]
     assert item.id == "answer_1"
@@ -279,7 +317,9 @@ def _source_unit(text: str) -> SourceUnit:
     )
 
 
-def _context(unit: SourceUnit, *, query: str = "체크인 날짜가 어떻게 돼?") -> AnswerContext:
+def _context(
+    unit: SourceUnit, *, query: str = "체크인 날짜가 어떻게 돼?"
+) -> AnswerContext:
     return AnswerContext(
         target_id=LIBRARY_CHAT_TARGET_ID,
         query=query,
@@ -318,7 +358,9 @@ class _CapturingJsonClient(_FakeJsonClient):
 
 class _SourceDrivenCheckinTimeJsonClient:
     def generate_json(self, *, system: str, user: str) -> object:
-        source_unit_id_match = re.search(r"source_unit_id: (?P<source_unit_id>\S+)", user)
+        source_unit_id_match = re.search(
+            r"source_unit_id: (?P<source_unit_id>\S+)", user
+        )
         time_match = re.search(r"Check-in starts at (?P<time>\d{2}:\d{2})\.", user)
         if source_unit_id_match is None or time_match is None:
             return {

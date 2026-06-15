@@ -13,7 +13,9 @@ def get_material_store(request: Request) -> MaterialStore:
     return request.app.state.material_store
 
 
-def get_material_upload_observation_sink(request: Request) -> MaterialUploadObservationSink:
+def get_material_upload_observation_sink(
+    request: Request,
+) -> MaterialUploadObservationSink:
     return request.app.state.material_upload_observation_sink
 
 

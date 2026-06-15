@@ -22,14 +22,24 @@ if str(APPS_PATH) not in sys.path:
 
 from fastapi.testclient import TestClient  # noqa: E402
 from pypdf import PdfWriter  # noqa: E402
-from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject  # noqa: E402
+from pypdf.generic import (
+    DecodedStreamObject,
+    DictionaryObject,
+    NameObject,
+)  # noqa: E402
 
-from server.app import CORRELATION_ID_HEADER, REQUEST_ID_HEADER, create_app  # noqa: E402
+from server.app import (
+    CORRELATION_ID_HEADER,
+    REQUEST_ID_HEADER,
+    create_app,
+)  # noqa: E402
 from server.extraction.models import EvidenceRef, EvidenceState  # noqa: E402
 from server.observations.export import LocalArtifactObservationExporter  # noqa: E402
-from server.schemas.answers import ChatAnswerItemResponse, ChatAnswerResponse  # noqa: E402
+from server.schemas.answers import (
+    ChatAnswerItemResponse,
+    ChatAnswerResponse,
+)  # noqa: E402
 from server.schemas.facts import EvidenceRefResponse  # noqa: E402
-
 
 DEFAULT_MATERIAL_TEXT = "Hotel address is Hakata. Check-in starts at 15:00."
 DEFAULT_QUESTION = "check-in time?"
@@ -83,10 +93,14 @@ def run_smoke_eval(
     upload = client.post(
         "/api/materials",
         data={"displayName": "Eval smoke material"},
-        files={"file": ("booking.pdf", _pdf_with_text(material_text), "application/pdf")},
+        files={
+            "file": ("booking.pdf", _pdf_with_text(material_text), "application/pdf")
+        },
     )
     if upload.status_code != 200:
-        raise RuntimeError(f"material upload failed: {upload.status_code} {upload.text}")
+        raise RuntimeError(
+            f"material upload failed: {upload.status_code} {upload.text}"
+        )
     material = upload.json()
     material_id = material["id"]
 
@@ -96,7 +110,9 @@ def run_smoke_eval(
         json={"question": question, "materialIds": [material_id]},
     )
     if question_response.status_code != 200:
-        raise RuntimeError(f"question request failed: {question_response.status_code} {question_response.text}")
+        raise RuntimeError(
+            f"question request failed: {question_response.status_code} {question_response.text}"
+        )
     question_body = question_response.json()
 
     observation_rows = _read_jsonl(exporter.path)
@@ -114,7 +130,10 @@ def run_smoke_eval(
     if failed_checks:
         raise RuntimeError(f"eval smoke checks failed: {', '.join(failed_checks)}")
 
-    artifact_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    artifact_path.write_text(
+        json.dumps(artifact, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     return artifact, artifact_path
 
 
@@ -133,8 +152,16 @@ def _artifact(
     upload_correlation_id = upload_response.headers.get(CORRELATION_ID_HEADER, "")
     question_request_id = question_response.headers.get(REQUEST_ID_HEADER, "")
     question_correlation_id = question_response.headers.get(CORRELATION_ID_HEADER, "")
-    answer = question_body.get("answer") if isinstance(question_body.get("answer"), dict) else {}
-    answer_items = answer.get("items") if isinstance(answer, dict) and isinstance(answer.get("items"), list) else []
+    answer = (
+        question_body.get("answer")
+        if isinstance(question_body.get("answer"), dict)
+        else {}
+    )
+    answer_items = (
+        answer.get("items")
+        if isinstance(answer, dict) and isinstance(answer.get("items"), list)
+        else []
+    )
     evidence_state_counts = Counter(
         item.get("evidenceState")
         for item in answer_items
@@ -154,22 +181,31 @@ def _artifact(
     checks = {
         "upload_response_had_request_id": upload_request_id.startswith("req_"),
         "question_response_had_request_id": question_request_id.startswith("req_"),
-        "upload_request_fell_back_to_own_correlation_id": upload_correlation_id == upload_request_id,
-        "question_response_correlation_matched_input": question_correlation_id == correlation_id,
-        "export_contains_material_and_question": [row.get("operation") for row in observation_rows]
+        "upload_request_fell_back_to_own_correlation_id": upload_correlation_id
+        == upload_request_id,
+        "question_response_correlation_matched_input": question_correlation_id
+        == correlation_id,
+        "export_contains_material_and_question": [
+            row.get("operation") for row in observation_rows
+        ]
         == ["material_upload", "question_answer"],
         "question_export_correlation_matched_input": any(
-            row.get("operation") == "question_answer" and row.get("correlation_id") == correlation_id
+            row.get("operation") == "question_answer"
+            and row.get("correlation_id") == correlation_id
             for row in observation_rows
         ),
-        "product_json_has_no_request_or_correlation_id": _has_no_product_trace_ids(material)
+        "product_json_has_no_request_or_correlation_id": _has_no_product_trace_ids(
+            material
+        )
         and _has_no_product_trace_ids(question_body),
     }
 
     return {
         "schema_version": RUN_SCHEMA_VERSION,
         "run_id": run_id,
-        "created_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "created_at": datetime.now(UTC)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
         "kind": "question_runtime_recording_smoke",
         "correlation_id": correlation_id,
         "product_entry_point": {
@@ -229,10 +265,16 @@ def _parse_args() -> argparse.Namespace:
         help="Directory where a timestamped run folder will be written.",
     )
     parser.add_argument("--run-id", help="Optional slug for the run folder.")
-    parser.add_argument("--correlation-id", help="Optional X-TripProof-Correlation-Id value.")
+    parser.add_argument(
+        "--correlation-id", help="Optional X-TripProof-Correlation-Id value."
+    )
     parser.add_argument("--question", default=DEFAULT_QUESTION)
     parser.add_argument("--material-text", default=DEFAULT_MATERIAL_TEXT)
-    parser.add_argument("--json", action="store_true", help="Print the artifact JSON with artifact_path.")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the artifact JSON with artifact_path.",
+    )
     return parser.parse_args()
 
 
@@ -240,7 +282,9 @@ def _run_id(value: str | None) -> str:
     if value is not None:
         slug = value.strip()
         if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", slug):
-            raise ValueError("run_id must be 1-128 characters of A-Z, a-z, 0-9, '.', '_', ':', or '-'.")
+            raise ValueError(
+                "run_id must be 1-128 characters of A-Z, a-z, 0-9, '.', '_', ':', or '-'."
+            )
         return slug
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return f"{timestamp}-{uuid4().hex[:8]}"
@@ -268,7 +312,11 @@ def _pdf_with_text(text: str) -> bytes:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, object]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def _payload_value(row: dict[str, object], key: str) -> object:
@@ -280,7 +328,10 @@ def _payload_value(row: dict[str, object], key: str) -> object:
 
 def _has_no_product_trace_ids(payload: object) -> bool:
     if isinstance(payload, dict):
-        return not any(key in payload for key in ("requestId", "correlationId", "request_id", "correlation_id"))
+        return not any(
+            key in payload
+            for key in ("requestId", "correlationId", "request_id", "correlation_id")
+        )
     return True
 
 

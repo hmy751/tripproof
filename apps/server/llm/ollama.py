@@ -45,7 +45,9 @@ class OllamaChatJsonClient:
         )
 
         try:
-            with request.urlopen(http_request, timeout=self._timeout_seconds) as response:
+            with request.urlopen(
+                http_request, timeout=self._timeout_seconds
+            ) as response:
                 raw = response.read()
         except error.URLError as exc:
             raise OllamaClientError(f"Ollama chat request failed: {exc}") from exc
@@ -58,9 +60,13 @@ class OllamaChatJsonClient:
         message = body.get("message") if isinstance(body, dict) else None
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str):
-            raise OllamaClientError("Ollama chat response did not include message content.")
+            raise OllamaClientError(
+                "Ollama chat response did not include message content."
+            )
 
         try:
             return json.loads(content)
         except json.JSONDecodeError as exc:
-            raise OllamaClientError("Ollama message content was not valid JSON.") from exc
+            raise OllamaClientError(
+                "Ollama message content was not valid JSON."
+            ) from exc

@@ -88,7 +88,9 @@ def test_find_observation_by_correlation_returns_safe_json_summary(tmp_path) -> 
     assert "question_length" not in result.stdout
 
 
-def test_find_observation_by_correlation_text_output_and_missing_exit_code(tmp_path) -> None:
+def test_find_observation_by_correlation_text_output_and_missing_exit_code(
+    tmp_path,
+) -> None:
     repo_root = Path(__file__).resolve().parents[3]
     script = repo_root / "eval" / "find_observation_by_correlation.py"
     export_path = tmp_path / "observation-export.jsonl"
@@ -112,7 +114,13 @@ def test_find_observation_by_correlation_text_output_and_missing_exit_code(tmp_p
     )
 
     found = subprocess.run(
-        [sys.executable, str(script), "flow_eval_test", "--search-path", str(export_path)],
+        [
+            sys.executable,
+            str(script),
+            "flow_eval_test",
+            "--search-path",
+            str(export_path),
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -123,7 +131,13 @@ def test_find_observation_by_correlation_text_output_and_missing_exit_code(tmp_p
     assert f"source: {export_path}:1" in found.stdout
 
     missing = subprocess.run(
-        [sys.executable, str(script), "flow_missing", "--search-path", str(export_path)],
+        [
+            sys.executable,
+            str(script),
+            "flow_missing",
+            "--search-path",
+            str(export_path),
+        ],
         capture_output=True,
         text=True,
     )

@@ -12,9 +12,11 @@ from server.materials.observation import (
     MaterialUploadObservationRecord,
     MaterialUploadObservationStep,
 )
-from server.questions.observation import QuestionObservationRecord, QuestionObservationStep
+from server.questions.observation import (
+    QuestionObservationRecord,
+    QuestionObservationStep,
+)
 from server.runtime.config_snapshot import RuntimeConfigSnapshot
-
 
 OBSERVATION_EXPORT_SCHEMA_VERSION = "tripproof.observation_export.v1"
 ObservationExportOperation = Literal["material_upload", "question_answer"]
@@ -113,7 +115,9 @@ class QuestionObservationExportSink:
         self._exporter.export_observation(question_observation_export(record))
 
 
-def create_observation_exporter_from_directory(directory: str | Path | None) -> ObservationExporter:
+def create_observation_exporter_from_directory(
+    directory: str | Path | None,
+) -> ObservationExporter:
     if directory is None or str(directory).strip() == "":
         return NoopObservationExporter()
     return LocalArtifactObservationExporter(directory)
@@ -154,7 +158,11 @@ def material_upload_observation_export(
     exported_at: str | None = None,
     request_context: ObservationRequestContext | None = None,
 ) -> ObservationExportEnvelope:
-    context = request_context or current_observation_request_context() or new_observation_request_context()
+    context = (
+        request_context
+        or current_observation_request_context()
+        or new_observation_request_context()
+    )
     return ObservationExportEnvelope(
         schema_version=OBSERVATION_EXPORT_SCHEMA_VERSION,
         exported_at=exported_at or _utc_timestamp(),
@@ -181,7 +189,11 @@ def question_observation_export(
     exported_at: str | None = None,
     request_context: ObservationRequestContext | None = None,
 ) -> ObservationExportEnvelope:
-    context = request_context or current_observation_request_context() or new_observation_request_context()
+    context = (
+        request_context
+        or current_observation_request_context()
+        or new_observation_request_context()
+    )
     return ObservationExportEnvelope(
         schema_version=OBSERVATION_EXPORT_SCHEMA_VERSION,
         exported_at=exported_at or _utc_timestamp(),
@@ -255,7 +267,9 @@ def _file_name_summary(value: object) -> dict[str, Any]:
     }
 
 
-def _runtime_config_snapshot_to_payload(snapshot: RuntimeConfigSnapshot | None) -> dict[str, Any] | None:
+def _runtime_config_snapshot_to_payload(
+    snapshot: RuntimeConfigSnapshot | None,
+) -> dict[str, Any] | None:
     if snapshot is None:
         return None
 

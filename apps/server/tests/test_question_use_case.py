@@ -42,7 +42,9 @@ def test_ask_question_use_case_returns_accepted_trace_without_http_adapter() -> 
     assert result.trace.question_length == len("check-in time?")
     assert result.trace.ready_material_ids == [material.id]
     assert result.trace.page_count == 1
-    assert result.trace.char_count == len("Hotel address is Hakata. Check-in starts at 15:00.")
+    assert result.trace.char_count == len(
+        "Hotel address is Hakata. Check-in starts at 15:00."
+    )
     assert result.trace.source_unit_count == 1
     assert result.trace.embedding_record_count == 1
     assert result.trace.retrieval_strategy == "lexical"
@@ -52,7 +54,9 @@ def test_ask_question_use_case_returns_accepted_trace_without_http_adapter() -> 
     assert result.trace.failure_kind is None
 
     record = sink.records[0]
-    assert record.step("query_snapshot").facts == {"question_length": len("check-in time?")}
+    assert record.step("query_snapshot").facts == {
+        "question_length": len("check-in time?")
+    }
     assert record.step("retrieval_pipeline").status == "succeeded"
     assert record.step("answer_pipeline").status == "succeeded"
     assert record.final_question_status == "accepted"
@@ -68,7 +72,9 @@ def test_ask_question_use_case_returns_blocked_trace_without_ready_materials() -
         runtime_config=_runtime_config(store),
     )
 
-    result = use_case.run(AskQuestionCommand(question="check-in time?", material_ids=None))
+    result = use_case.run(
+        AskQuestionCommand(question="check-in time?", material_ids=None)
+    )
 
     assert result.response.status == "blocked"
     assert result.response.material_count == 0
@@ -99,7 +105,9 @@ def test_ask_question_use_case_records_retrieval_failure_without_http_adapter() 
     )
 
     with pytest.raises(RuntimeError, match="retrieval records read failed"):
-        use_case.run(AskQuestionCommand(question="check-in time?", material_ids=[material.id]))
+        use_case.run(
+            AskQuestionCommand(question="check-in time?", material_ids=[material.id])
+        )
 
     record = sink.records[0]
     assert record.step("query_snapshot").status == "succeeded"
@@ -138,13 +146,17 @@ class FailingReadRetrievalRepository:
     def __init__(self) -> None:
         self._delegate = InMemoryRetrievalRepository()
 
-    def upsert_material_records(self, *, material_id: str, records: RetrievalRecords) -> None:
+    def upsert_material_records(
+        self, *, material_id: str, records: RetrievalRecords
+    ) -> None:
         self._delegate.upsert_material_records(material_id=material_id, records=records)
 
     def records_for_materials(self, material_ids):
         raise RuntimeError("retrieval records read failed")
 
-    def match_source_units(self, *, material_ids, query_embedding, limit, similarity_threshold):
+    def match_source_units(
+        self, *, material_ids, query_embedding, limit, similarity_threshold
+    ):
         return []
 
     def clear(self) -> None:

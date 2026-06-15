@@ -8,7 +8,12 @@ from typing import Literal
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.chunking import chunk_text
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
-from server.retrieval.models import AnswerContext, EmbeddingRecord, RetrievedSource, SourceUnit
+from server.retrieval.models import (
+    AnswerContext,
+    EmbeddingRecord,
+    RetrievedSource,
+    SourceUnit,
+)
 from server.retrieval.repository import RetrievalRepository
 
 
@@ -29,7 +34,9 @@ class SourceUnitExcerpt:
     vector_score: float | None
 
 
-SourceRetrievalStrategy = Literal["repository_vector", "local_vector", "lexical", "none"]
+SourceRetrievalStrategy = Literal[
+    "repository_vector", "local_vector", "lexical", "none"
+]
 
 
 @dataclass(frozen=True)
@@ -58,7 +65,9 @@ class QueryEmbeddingAttempt:
         return self.vector is not None
 
 
-def select_excerpt(texts: Iterable[str], query: str, *, max_chars: int = 420) -> str | None:
+def select_excerpt(
+    texts: Iterable[str], query: str, *, max_chars: int = 420
+) -> str | None:
     normalized = _collapse_whitespace("\n\n".join(texts))
     if not normalized:
         return None
@@ -190,7 +199,11 @@ def _can_attempt_repository_vector(
     retrieval_repository: RetrievalRepository | None,
     material_ids: list[str] | None,
 ) -> bool:
-    return query_embedding.available and retrieval_repository is not None and material_ids is not None
+    return (
+        query_embedding.available
+        and retrieval_repository is not None
+        and material_ids is not None
+    )
 
 
 def _retrieve_repository_vector_context(
@@ -203,7 +216,11 @@ def _retrieve_repository_vector_context(
     top_k: int,
     similarity_threshold: float,
 ) -> RetrievedContext | None:
-    if query_embedding.vector is None or retrieval_repository is None or material_ids is None:
+    if (
+        query_embedding.vector is None
+        or retrieval_repository is None
+        or material_ids is None
+    ):
         return None
 
     vector_matches = retrieval_repository.match_source_units(
@@ -272,7 +289,9 @@ def _retrieve_ranked_context(
         for match in matches[:top_k]
         if match.score > 0
     ]
-    vector_candidate_count = sum(candidate.vector_score is not None for candidate in candidates)
+    vector_candidate_count = sum(
+        candidate.vector_score is not None for candidate in candidates
+    )
     strategy = _ranked_retrieval_strategy(
         candidates=candidates,
         vector_candidate_count=vector_candidate_count,
@@ -366,7 +385,9 @@ def _rank_source_units(
             )
         )
 
-    return sorted(matches, key=lambda match: (match.score, match.lexical_score), reverse=True)
+    return sorted(
+        matches, key=lambda match: (match.score, match.lexical_score), reverse=True
+    )
 
 
 def select_source_excerpt(
@@ -386,7 +407,11 @@ def select_source_excerpt(
         embedding_provider=embedding_provider,
     )
     match = None
-    if query_vector is not None and retrieval_repository is not None and material_ids is not None:
+    if (
+        query_vector is not None
+        and retrieval_repository is not None
+        and material_ids is not None
+    ):
         vector_matches = retrieval_repository.match_source_units(
             material_ids=material_ids,
             query_embedding=query_vector,
@@ -462,7 +487,9 @@ def _can_attempt_query_vector(
 ) -> bool:
     if embedding_provider is None:
         return False
-    return any(record.status == "ready" and record.vector for record in embedding_records)
+    return any(
+        record.status == "ready" and record.vector for record in embedding_records
+    )
 
 
 def _query_vector(
@@ -471,7 +498,9 @@ def _query_vector(
     embedding_records: Iterable[EmbeddingRecord],
     embedding_provider: EmbeddingProvider | None,
 ) -> list[float] | None:
-    has_ready_embeddings = any(record.status == "ready" and record.vector for record in embedding_records)
+    has_ready_embeddings = any(
+        record.status == "ready" and record.vector for record in embedding_records
+    )
     if not has_ready_embeddings or embedding_provider is None:
         return None
 
@@ -485,7 +514,10 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
     if len(left) != len(right) or not left:
         return None
 
-    dot = sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
+    dot = sum(
+        left_value * right_value
+        for left_value, right_value in zip(left, right, strict=True)
+    )
     left_norm = sqrt(sum(value * value for value in left))
     right_norm = sqrt(sum(value * value for value in right))
     if left_norm == 0 or right_norm == 0:

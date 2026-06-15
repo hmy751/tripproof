@@ -141,7 +141,9 @@ class MaterialUploadObservationRecorder:
         self._material_id: str | None = None
         self._runtime_config_snapshot = runtime_config_snapshot
         self._steps = {
-            step_name: MaterialUploadObservationStep(name=step_name, status="not_started")
+            step_name: MaterialUploadObservationStep(
+                name=step_name, status="not_started"
+            )
             for step_name in _ALL_STEP_NAMES
         }
         self.succeed(
@@ -165,7 +167,9 @@ class MaterialUploadObservationRecorder:
         *,
         facts: dict[str, ObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(step_name, self._steps[step_name].facts, facts or {})
+        safe_facts = _merge_safe_facts(
+            step_name, self._steps[step_name].facts, facts or {}
+        )
         self._steps[step_name] = MaterialUploadObservationStep(
             name=step_name,
             status="succeeded",
@@ -179,7 +183,9 @@ class MaterialUploadObservationRecorder:
         *,
         facts: dict[str, ObservationFactValue] | None = None,
     ) -> None:
-        safe_facts = _merge_safe_facts(step_name, self._steps[step_name].facts, facts or {})
+        safe_facts = _merge_safe_facts(
+            step_name, self._steps[step_name].facts, facts or {}
+        )
         self._steps[step_name] = MaterialUploadObservationStep(
             name=step_name,
             status="failed",
@@ -213,9 +219,14 @@ class MaterialUploadObservationRecorder:
             runtime_config_snapshot=self._runtime_config_snapshot,
         )
 
-    def _build_step(self, step_name: MaterialUploadStepName) -> MaterialUploadObservationStep:
+    def _build_step(
+        self, step_name: MaterialUploadStepName
+    ) -> MaterialUploadObservationStep:
         current = self._steps[step_name]
-        children = [self._build_step(child_name) for child_name in _STEP_CHILDREN.get(step_name, ())]
+        children = [
+            self._build_step(child_name)
+            for child_name in _STEP_CHILDREN.get(step_name, ())
+        ]
         if not children:
             return current
         return MaterialUploadObservationStep(
@@ -285,7 +296,9 @@ class MaterialUploadObservationReporter:
         self._recorder.finalize("failed", failure_kind="embedding_record_build_failed")
 
     def embedding_records_built(self, *, records: list[EmbeddingRecord]) -> None:
-        self._recorder.succeed("embedding_record_build", facts=embedding_record_build_facts(records))
+        self._recorder.succeed(
+            "embedding_record_build", facts=embedding_record_build_facts(records)
+        )
 
     def retrieval_records_upsert_failed(
         self,
@@ -326,8 +339,12 @@ class MaterialUploadObservationReporter:
         emit_material_upload_observation(sink=self._sink, recorder=self._recorder)
 
 
-def embedding_record_build_facts(records: list[EmbeddingRecord]) -> dict[str, ObservationFactValue]:
-    status_counts: dict[EmbeddingStatus, int] = dict(Counter(record.status for record in records))
+def embedding_record_build_facts(
+    records: list[EmbeddingRecord],
+) -> dict[str, ObservationFactValue]:
+    status_counts: dict[EmbeddingStatus, int] = dict(
+        Counter(record.status for record in records)
+    )
     return {
         "count": len(records),
         "status_counts": status_counts,
@@ -345,7 +362,9 @@ def emit_material_upload_observation(
         return None
 
 
-def _derive_parent_status(children: list[MaterialUploadObservationStep]) -> ObservationStepStatus:
+def _derive_parent_status(
+    children: list[MaterialUploadObservationStep],
+) -> ObservationStepStatus:
     if any(child.status == "failed" for child in children):
         return "failed"
     if any(child.status == "succeeded" for child in children):
@@ -405,5 +424,8 @@ def _is_safe_fact_value(value: ObservationFactValue) -> bool:
     if value is None or isinstance(value, str | int | float | bool):
         return True
     if isinstance(value, dict):
-        return all(isinstance(key, str) and isinstance(item, int) for key, item in value.items())
+        return all(
+            isinstance(key, str) and isinstance(item, int)
+            for key, item in value.items()
+        )
     return False

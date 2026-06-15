@@ -4,7 +4,10 @@ from typing import Any
 
 from server.retrieval.models import EmbeddingRecord, SourceUnit
 from server.retrieval.repository import RetrievalRecords
-from server.retrieval.supabase import SupabaseRetrievalConfig, SupabaseRetrievalRepository
+from server.retrieval.supabase import (
+    SupabaseRetrievalConfig,
+    SupabaseRetrievalRepository,
+)
 
 
 def test_supabase_repository_upserts_tripproof_source_units_and_embeddings() -> None:
@@ -14,11 +17,16 @@ def test_supabase_repository_upserts_tripproof_source_units_and_embeddings() -> 
 
     repository.upsert_material_records(
         material_id="mat_1",
-        records=RetrievalRecords(source_units=[source_unit], embedding_records=[embedding]),
+        records=RetrievalRecords(
+            source_units=[source_unit], embedding_records=[embedding]
+        ),
     )
 
     assert repository.requests[0]["method"] == "DELETE"
-    assert repository.requests[0]["path"] == "/rest/v1/tripproof_source_units?material_id=eq.mat_1"
+    assert (
+        repository.requests[0]["path"]
+        == "/rest/v1/tripproof_source_units?material_id=eq.mat_1"
+    )
     assert repository.requests[1]["path"] == "/rest/v1/tripproof_source_units"
     assert repository.requests[1]["body"][0]["id"] == source_unit.id
     assert repository.requests[1]["body"][0]["text"] == source_unit.text

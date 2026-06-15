@@ -4,7 +4,6 @@ from pathlib import Path
 
 from server.prompts.runtime.prompt_document import PromptDocument, read_prompt_document
 
-
 PROMPT_ROOT = Path(__file__).resolve().parents[1]
 PROMPT_ASSET_ROOT = PROMPT_ROOT / "assets"
 
