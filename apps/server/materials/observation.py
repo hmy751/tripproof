@@ -270,8 +270,57 @@ class MaterialUploadObservationReporter:
     def pdf_parsed(self, *, page_count: int) -> None:
         self._recorder.succeed("pdf_parse", facts={"page_count": page_count})
 
-    def recorder_for_material_store(self) -> MaterialUploadObservationRecorder:
-        return self._recorder
+    def material_id_assigned(self, material_id: str) -> None:
+        self._recorder.assign_material_id(material_id)
+
+    def source_unit_build_failed(self) -> None:
+        self._recorder.fail("source_unit_build", "source_unit_build_failed")
+        self._recorder.finalize("failed", failure_kind="source_unit_build_failed")
+
+    def source_units_built(self, *, count: int) -> None:
+        self._recorder.succeed("source_unit_build", facts={"count": count})
+
+    def embedding_record_build_failed(self) -> None:
+        self._recorder.fail("embedding_record_build", "embedding_record_build_failed")
+        self._recorder.finalize("failed", failure_kind="embedding_record_build_failed")
+
+    def embedding_records_built(self, *, records: list[EmbeddingRecord]) -> None:
+        self._recorder.succeed("embedding_record_build", facts=embedding_record_build_facts(records))
+
+    def retrieval_records_upsert_failed(
+        self,
+        *,
+        source_unit_count: int,
+        embedding_record_count: int,
+    ) -> None:
+        self._recorder.fail(
+            "retrieval_repository_upsert",
+            "repository_upsert_failed",
+            facts={
+                "executed": True,
+                "source_unit_count": source_unit_count,
+                "embedding_record_count": embedding_record_count,
+            },
+        )
+        self._recorder.finalize("failed", failure_kind="repository_upsert_failed")
+
+    def retrieval_records_upserted(
+        self,
+        *,
+        source_unit_count: int,
+        embedding_record_count: int,
+    ) -> None:
+        self._recorder.succeed(
+            "retrieval_repository_upsert",
+            facts={
+                "executed": True,
+                "source_unit_count": source_unit_count,
+                "embedding_record_count": embedding_record_count,
+            },
+        )
+
+    def material_ready(self) -> None:
+        self._recorder.finalize("ready")
 
     def emit(self) -> None:
         emit_material_upload_observation(sink=self._sink, recorder=self._recorder)

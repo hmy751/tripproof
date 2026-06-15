@@ -144,7 +144,7 @@ class UploadMaterialUseCase:
                 page_count=parsed_pdf.page_count,
                 text=parsed_pdf.text,
                 preview=parsed_pdf.preview,
-                observation=observation.recorder_for_material_store(),
+                ingestion_events=observation,
             )
         except Exception:
             observation.emit()
