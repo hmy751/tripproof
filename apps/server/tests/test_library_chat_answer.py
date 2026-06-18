@@ -3,14 +3,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from server.answers.library_chat import (
     LIBRARY_CHAT_TARGET_ID,
     OllamaLibraryChatAnswerComposer,
 )
 from server.extraction.models import EvidenceState
 from server.prompts.renderers.answer.library_chat_answer import (
+    LibraryChatAnswerPrompt,
     load_library_chat_answer_prompt,
 )
+from server.prompts.runtime.prompt_document import PromptDocument
 from server.retrieval.models import AnswerContext, RetrievedSource, SourceUnit
 
 FIXTURE_ROOT = (
@@ -104,10 +108,32 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     assert "question: 체크인 시작 시각은 몇 시야?" in client.last_user
     assert "source_unit_id: su_mat_1_1" in client.last_user
     assert "Check-in starts at 15:00." in client.last_user
+    assert "## System" not in client.last_user
+    assert "## User" not in client.last_user
     assert "자료함 질문 답변" not in client.last_system
     assert "자료함 질문 답변" not in client.last_user
     assert "일반 여행 지식으로 추론하지 않는다." not in client.last_system
     assert "일반 여행 지식으로 추론하지 않는다." not in client.last_user
+
+
+def test_library_chat_prompt_renders_entire_body_without_sections() -> None:
+    prompt = _prompt_with_body(
+        "Use only sources.\n\n"
+        "question: {{ question }}\n\n"
+        "sources:\n{{ source_blocks }}"
+    )
+
+    rendered = prompt.user_message(question="체크인?", source_blocks="source one")
+
+    assert prompt.system_message() == ""
+    assert rendered == "Use only sources.\n\nquestion: 체크인?\n\nsources:\nsource one"
+
+
+def test_library_chat_prompt_requires_product_input_placeholders() -> None:
+    prompt = _prompt_with_body("question: {{question}}")
+
+    with pytest.raises(ValueError, match="source_blocks"):
+        prompt.user_message(question="체크인?", source_blocks="source one")
 
 
 def test_library_chat_answer_changes_when_only_source_checkin_time_changes() -> None:
@@ -333,6 +359,23 @@ def _context(
                 vector_score=None,
             )
         ],
+    )
+
+
+def _prompt_with_body(body_markdown: str) -> LibraryChatAnswerPrompt:
+    return LibraryChatAnswerPrompt(
+        document=PromptDocument(
+            domain="answer",
+            name="library_chat_answer",
+            version="test",
+            metadata={},
+            title="Test Prompt",
+            body_markdown=body_markdown,
+            asset_path="test.md",
+            source_path=Path("test.md"),
+            file_hash="file",
+            body_hash="body",
+        )
     )
 
 
