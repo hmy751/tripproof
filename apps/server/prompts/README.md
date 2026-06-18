@@ -67,8 +67,8 @@ translation_ko:
 - prompt 본문에 secret, API key, raw user material이나 test fixture를 넣지 않는다.
 - trace/snapshot에는 prompt 전문 대신 `domain`, `name`, `version`, `fileHash`, `bodyHash`, repo-relative `assetPath`를 남긴다.
 - 한글 설명 metadata와 번역 주석은 prompt source와 `PromptDocument.metadata`에서 확인한다. 기본 snapshot에는 넣지 않는다.
-- 공통 runtime은 prompt body의 section 이름과 구조를 고정하지 않는다. 각 renderer가 provider 입력 형태와 필요한 placeholder만 검증한다.
-- renderer가 provider로 넘기는 값은 각 renderer가 고른 실행 본문 전체 또는 일부다. metadata, 번역 주석, 제목은 provider 입력에 섞지 않는다.
+- 공통 runtime은 prompt body의 section 이름과 구조를 고정하지 않는다. 각 renderer가 필요한 section과 placeholder만 검증한다.
+- renderer가 provider로 넘기는 값은 각 renderer가 고른 실행 본문 일부뿐이다. metadata, 번역 주석, 제목은 provider 입력에 섞지 않는다.
 
 ## 여러 prompt 추가 기준
 

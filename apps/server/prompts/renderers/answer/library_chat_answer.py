@@ -9,7 +9,6 @@ from server.prompts.runtime.prompt_store import load_prompt_document
 LIBRARY_CHAT_PROMPT_DOMAIN = "answer"
 LIBRARY_CHAT_PROMPT_NAME = "library_chat_answer"
 LIBRARY_CHAT_PROMPT_VERSION = "2026-06-10"
-REQUIRED_TEMPLATE_VARIABLES = frozenset({"question", "source_blocks"})
 
 
 @dataclass(frozen=True)
@@ -17,13 +16,14 @@ class LibraryChatAnswerPrompt:
     document: PromptDocument
 
     def system_message(self) -> str:
-        return ""
+        return _required_section(markdown=self.document.body_markdown, heading="System")
 
     def user_message(self, *, question: str, source_blocks: str) -> str:
+        template = _required_section(
+            markdown=self.document.body_markdown, heading="User"
+        )
         return _render_template(
-            self.document.body_markdown,
-            question=question,
-            source_blocks=source_blocks,
+            template, question=question, source_blocks=source_blocks
         )
 
     def snapshot(self) -> dict[str, str]:
@@ -42,28 +42,28 @@ def load_library_chat_answer_prompt(
     )
 
 
-def _render_template(template: str, **values: str) -> str:
-    required_missing = sorted(
-        REQUIRED_TEMPLATE_VARIABLES - _template_variables(template)
-    )
-    if required_missing:
+def _required_section(*, markdown: str, heading: str) -> str:
+    pattern = rf"^## {re.escape(heading)}\s*$\n(?P<body>.*?)(?=^## |\Z)"
+    match = re.search(pattern, markdown, flags=re.MULTILINE | re.DOTALL)
+    if match is None:
         raise ValueError(
-            "Library Chat answer prompt에 필요한 placeholder가 없습니다: "
-            f"{', '.join(required_missing)}"
+            f"Library Chat answer prompt에 필요한 section이 없습니다: {heading}"
         )
+    body = match.group("body").strip()
+    if not body:
+        raise ValueError(
+            f"Library Chat answer prompt section 본문은 비어 있을 수 없습니다: {heading}"
+        )
+    return body
 
+
+def _render_template(template: str, **values: str) -> str:
     rendered = template
     for key, value in values.items():
-        rendered = re.sub(
-            r"{{\s*" + re.escape(key) + r"\s*}}", lambda _: value, rendered
-        )
-    missing = sorted(_template_variables(rendered))
+        rendered = rendered.replace(f"{{{{{key}}}}}", value)
+    missing = sorted(set(re.findall(r"{{\s*([a-zA-Z0-9_]+)\s*}}", rendered)))
     if missing:
         raise ValueError(
             f"Library Chat answer prompt 렌더링 값이 없습니다: {', '.join(missing)}"
         )
     return rendered
-
-
-def _template_variables(template: str) -> set[str]:
-    return set(re.findall(r"{{\s*([a-zA-Z0-9_]+)\s*}}", template))
