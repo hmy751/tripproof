@@ -30,7 +30,8 @@
 - Python 포맷터는 Black을 기준으로 한다. 설정은 `pyproject.toml`의 `[tool.black]`과 `black` dev dependency를 원천으로 둔다.
 - Python 포맷 실행은 `npm run black` 또는 `npm run format`을 사용한다.
 - Python 포맷 검증은 `npm run black:check` 또는 `npm run format:check`를 사용한다.
-- 전체 검증은 `npm run check`를 사용한다. 이 명령은 Black check, client build, server test를 순서대로 실행한다.
+- 검증은 현재 변경의 목적에 맞게 고른다. 코드 형식, 타입, 단위 테스트, product/eval 실행은 서로 다른 확인이다.
+- 자료 QA, LLM, retrieval, eval 질문셋을 다룰 때는 단순 형식/단위 테스트 통과를 product behavior 통과로 말하지 않는다. 실제 자료 입력과 질문 실행 결과를 별도로 확인한다.
 
 ## Commit 규칙
 
