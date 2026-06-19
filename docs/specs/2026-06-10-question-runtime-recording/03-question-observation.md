@@ -58,7 +58,7 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 - provider/model/retrieval config snapshot 전체를 확정하지 않는다.
 - runtime config snapshot 전체 연결은 이 문서의 범위가 아니다.
 - composer 내부 provider call, prompt render, raw LLM payload 관측은 만들지 않는다.
-- observation record 저장소의 장기 보관, 검색 UI, 개인정보 마스킹 정책은 정하지 않는다.
+- observation record 저장소의 장기 보관, 검색 UI는 정하지 않는다.
 - question API 응답에 debug field, retrieval 후보(RetrievedSource), observation field를 추가하지 않는다.
 
 ## 현재 코드에서 볼 곳

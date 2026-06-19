@@ -41,7 +41,7 @@
 ## Non-goals
 
 - LangSmith trace export는 이 문서의 범위가 아니다.
-- observation record 저장소의 장기 보관, 검색 UI, 개인정보 마스킹 정책은 정하지 않는다.
+- observation record 저장소의 장기 보관, 검색 UI는 정하지 않는다.
 - prompt admin UI나 DB 기반 config registry는 만들지 않는다.
 - secret, raw request payload, raw LLM payload, raw embedding vector를 저장하지 않는다.
 - eval runner나 run artifact를 product code가 import하게 만들지 않는다.
