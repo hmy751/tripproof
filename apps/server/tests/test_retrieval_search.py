@@ -126,7 +126,7 @@ def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
     assert repository.seen_query_embedding == [1.0, 0.0]
 
 
-def test_retrieve_context_with_trace_records_repository_vector_strategy() -> None:
+def test_retrieve_context_with_trace_records_repository_vector_match() -> None:
     source_unit = _source_unit(
         id="su_supabase",
         text="Supabase vector search가 선택한 source unit입니다.",

@@ -40,7 +40,7 @@ from server.schemas.answers import (
     ChatAnswerItemResponse,
     ChatAnswerResponse,
 )  # noqa: E402
-from server.schemas.facts import EvidenceRefResponse  # noqa: E402
+from server.schemas.evidence import EvidenceRefResponse  # noqa: E402
 from html_report import DEFAULT_REPORT_FILE_NAME, write_html_report  # noqa: E402
 
 DEFAULT_MATERIAL_TEXT = "Hotel address is Hakata. Check-in starts at 15:00."
