@@ -46,31 +46,6 @@ class QueryEmbeddingAttempt:
         return self.vector is not None
 
 
-def retrieve_context(
-    *,
-    target_id: str,
-    query: str,
-    source_units: Iterable[SourceUnit],
-    embedding_records: Iterable[EmbeddingRecord],
-    embedding_provider: EmbeddingProvider | None = None,
-    retrieval_repository: RetrievalRepository | None = None,
-    material_ids: Iterable[str] | None = None,
-    top_k: int = RAG_TOP_K,
-    similarity_threshold: float = RAG_SIMILARITY_THRESHOLD,
-) -> AnswerContext:
-    return retrieve_context_with_trace(
-        target_id=target_id,
-        query=query,
-        source_units=source_units,
-        embedding_records=embedding_records,
-        embedding_provider=embedding_provider,
-        retrieval_repository=retrieval_repository,
-        material_ids=material_ids,
-        top_k=top_k,
-        similarity_threshold=similarity_threshold,
-    ).context
-
-
 def retrieve_context_with_trace(
     *,
     target_id: str,

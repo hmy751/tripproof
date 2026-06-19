@@ -158,11 +158,6 @@ class QuestionObservationSink(Protocol):
         raise NotImplementedError
 
 
-class NoopQuestionObservationSink:
-    def record_question_answer(self, record: QuestionObservationRecord) -> None:
-        return None
-
-
 class InMemoryQuestionObservationSink:
     def __init__(self) -> None:
         self._records: list[QuestionObservationRecord] = []

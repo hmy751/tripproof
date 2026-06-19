@@ -116,11 +116,6 @@ class MaterialUploadObservationSink(Protocol):
         raise NotImplementedError
 
 
-class NoopMaterialUploadObservationSink:
-    def record_material_upload(self, record: MaterialUploadObservationRecord) -> None:
-        return None
-
-
 class InMemoryMaterialUploadObservationSink:
     def __init__(self) -> None:
         self._records: list[MaterialUploadObservationRecord] = []

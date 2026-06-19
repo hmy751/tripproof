@@ -3,7 +3,7 @@ from __future__ import annotations
 from server.retrieval.embeddings import EmbeddingProfile
 from server.retrieval.models import EmbeddingRecord, SourceUnit
 from server.retrieval.repository import RetrievalRecords, VectorSourceUnitMatch
-from server.retrieval.search import retrieve_context, retrieve_context_with_trace
+from server.retrieval.search import retrieve_context_with_trace
 
 
 def test_retrieve_context_without_repository_uses_lexical_not_vector() -> None:
@@ -51,12 +51,12 @@ def test_retrieve_context_uses_lexical_search_when_vectors_are_not_ready() -> No
         text="조식은 2층 레스토랑에서 제공됩니다.",
     )
 
-    context = retrieve_context(
+    context = retrieve_context_with_trace(
         target_id="booking_confirmation",
         query="예약 확정서 제시",
         source_units=[unrelated, relevant],
         embedding_records=[],
-    )
+    ).context
 
     assert [candidate.source_unit.id for candidate in context.candidates] == [
         "su_relevant"
@@ -80,12 +80,12 @@ def test_lexical_search_does_not_let_repeated_terms_hide_earlier_relevant_source
         ),
     )
 
-    context = retrieve_context(
+    context = retrieve_context_with_trace(
         target_id="library_chat_answer",
         query="체크인 날짜가 어떻게 돼?",
         source_units=[arrival, cancellation],
         embedding_records=[],
-    )
+    ).context
 
     assert [candidate.source_unit.id for candidate in context.candidates] == [
         "su_arrival",
@@ -108,7 +108,7 @@ def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
     )
     provider = FakeEmbeddingProvider(query_vector=[1.0, 0.0])
 
-    context = retrieve_context(
+    context = retrieve_context_with_trace(
         target_id="checkin_start_time",
         query="check-in time?",
         source_units=[],
@@ -116,7 +116,7 @@ def test_retrieve_context_uses_repository_vector_match_when_available() -> None:
         embedding_provider=provider,
         retrieval_repository=repository,
         material_ids=["mat_1"],
-    )
+    ).context
 
     assert [candidate.source_unit.id for candidate in context.candidates] == [
         "su_supabase"
@@ -172,7 +172,7 @@ def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_
     repository = EmptyRetrievalRepository()
     provider = FakeEmbeddingProvider(query_vector=[1.0, 0.0])
 
-    context = retrieve_context(
+    context = retrieve_context_with_trace(
         target_id="booking_confirmation",
         query="예약 확정서 제시",
         source_units=[source_unit],
@@ -180,7 +180,7 @@ def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_
         embedding_provider=provider,
         retrieval_repository=repository,
         material_ids=["mat_1"],
-    )
+    ).context
 
     assert [candidate.source_unit.id for candidate in context.candidates] == [
         "su_lexical"
