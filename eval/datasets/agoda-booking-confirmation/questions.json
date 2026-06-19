@@ -1,0 +1,199 @@
+[
+  {
+    "id": "AGODA-P0-01",
+    "priority": "p0",
+    "type": "checkin_action",
+    "question": "체크인할 때 뭘 준비해서 보여줘야 해?",
+    "expected_evidence_state": "supported",
+    "expected_answer_pattern": "예약 확정서 전자 사본 또는 인쇄본을 제시해야 하며, 사진이 있는 유효 신분증이 필요하다. 신용카드 결제 예약이면 결제에 사용한 카드도 요구될 수 있다.",
+    "required_evidence_cues": [
+      "체크인 시 고객님의 예약 확정서",
+      "전자 사본 또는 인쇄본",
+      "사진이 있는 유효한 신분증",
+      "결제에 사용한 신용카드"
+    ],
+    "must_not_claim": [
+      "체크인 시작 시각",
+      "신분증 없이 체크인 가능",
+      "결제 카드 제시가 항상 불필요"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "evidence_state_accuracy",
+      "action_usefulness"
+    ]
+  },
+  {
+    "id": "AGODA-P0-02",
+    "priority": "p0",
+    "type": "stay_dates",
+    "question": "체크인하고 체크아웃하는 날짜가 언제야?",
+    "expected_evidence_state": "supported",
+    "expected_answer_pattern": "Arrival/체크인 필드의 날짜와 Departure/체크아웃 필드의 날짜를 각각 답한다.",
+    "required_evidence_cues": [
+      "Arrival",
+      "체크인",
+      "Departure",
+      "체크아웃"
+    ],
+    "must_not_claim": [
+      "체크인 시작 시각",
+      "체크아웃 마감 시각",
+      "취소 가능일을 체크인 날짜로 사용"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "layout_field_mapping"
+    ]
+  },
+  {
+    "id": "AGODA-P0-03",
+    "priority": "p0",
+    "type": "missing_checkin_start_time",
+    "question": "체크인 시작 시간은 몇 시야?",
+    "expected_evidence_state": "missing",
+    "expected_answer_pattern": "이 PDF에서는 체크인 날짜는 확인되지만 체크인 시작 시각은 확인되지 않는다고 답한다.",
+    "required_evidence_cues": [
+      "Arrival",
+      "체크인"
+    ],
+    "must_not_claim": [
+      "15:00",
+      "오후 3시",
+      "날짜를 시작 시각처럼 표현",
+      "일반 호텔 체크인 시간을 추정"
+    ],
+    "metrics": [
+      "abstention_accuracy",
+      "evidence_state_accuracy",
+      "answer_correctness"
+    ]
+  },
+  {
+    "id": "AGODA-P0-04",
+    "priority": "p0",
+    "type": "property_location",
+    "question": "숙소 이름과 위치는 어디야?",
+    "expected_evidence_state": "supported",
+    "expected_answer_pattern": "Property/숙소명 필드의 숙소명과 Address/주소 필드에서 숙소명과 도시·지역 수준 위치를 답한다.",
+    "required_evidence_cues": [
+      "Property",
+      "숙소명",
+      "Address",
+      "주소"
+    ],
+    "must_not_claim": [
+      "문서에 없는 다른 지점명",
+      "문서 범위를 넘어 위치를 보강"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "layout_field_mapping",
+      "action_usefulness"
+    ]
+  },
+  {
+    "id": "AGODA-P0-05",
+    "priority": "p0",
+    "type": "room_and_party",
+    "question": "예약된 객실과 인원은 어떻게 돼?",
+    "expected_evidence_state": "supported",
+    "expected_answer_pattern": "Room Type, Number of Rooms, Number of Adults, Number of Children 필드를 읽어 객실 타입, 객실 수, 성인 수, 아동 수를 답한다.",
+    "required_evidence_cues": [
+      "Room Type",
+      "Number of Rooms",
+      "Number of Adults",
+      "Number of Children"
+    ],
+    "must_not_claim": [
+      "아동이 포함됨",
+      "객실 수와 성인 수를 혼동",
+      "비고의 LargeBed를 객실 타입으로 대체"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "layout_field_mapping"
+    ]
+  },
+  {
+    "id": "AGODA-P0-06",
+    "priority": "p0",
+    "type": "cancellation_policy",
+    "question": "취소하거나 노쇼하면 어떻게 돼?",
+    "expected_evidence_state": "supported",
+    "expected_answer_pattern": "무료 취소 기준일, 체크인 날짜 전 1일 이내 취소 시 총 숙박 요금 부과, 노쇼 시 예약 요금 100% 부과 조건을 구분해 답한다.",
+    "required_evidence_cues": [
+      "취소 정책",
+      "예약 무료 취소 가능",
+      "체크인 날짜 전 1일 이내",
+      "노쇼",
+      "100%"
+    ],
+    "must_not_claim": [
+      "언제든 무료 취소",
+      "노쇼 비용 없음",
+      "무료 취소 기준일을 체크인 날짜와 혼동"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "conditional_reasoning",
+      "action_usefulness"
+    ]
+  },
+  {
+    "id": "AGODA-P0-07",
+    "priority": "p0",
+    "type": "on_site_extra_costs",
+    "question": "현장에서 추가로 낼 수 있는 비용이 있어?",
+    "expected_evidence_state": "supported",
+    "expected_answer_pattern": "도시세가 현지 규정에 따라 부과될 수 있고 체크인 시 숙소에 직접 지불할 수 있다. 미니바, 전화, 세탁 서비스 등 추가 비용은 숙소에 직접 지불한다.",
+    "required_evidence_cues": [
+      "도시세 관련 안내",
+      "체크인 시 숙소로 직접 지불",
+      "미니바",
+      "전화 요금",
+      "세탁 서비스"
+    ],
+    "must_not_claim": [
+      "도시세 금액 확정",
+      "모든 비용이 이미 결제됨",
+      "추가 비용 없음"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "conditional_reasoning",
+      "action_usefulness"
+    ]
+  },
+  {
+    "id": "AGODA-P1-01",
+    "priority": "p1",
+    "type": "special_request_boundary",
+    "question": "NonSmoke, LargeBed는 확정된 조건이야?",
+    "expected_evidence_state": "needs_review",
+    "expected_answer_pattern": "Remarks에는 NonSmoke, LargeBed가 있지만, 모든 특별 요청은 체크인 시 숙소 상황에 따라 반영 여부가 결정된다고 답한다.",
+    "required_evidence_cues": [
+      "Remarks",
+      "NonSmoke",
+      "LargeBed",
+      "모든 특별 요청",
+      "숙소 측의 상황"
+    ],
+    "must_not_claim": [
+      "금연과 LargeBed가 확정 보장됨",
+      "요청이 전혀 없음"
+    ],
+    "metrics": [
+      "answer_correctness",
+      "citation_precision",
+      "evidence_state_accuracy",
+      "conditional_reasoning"
+    ]
+  }
+]

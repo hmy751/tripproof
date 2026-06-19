@@ -19,6 +19,5 @@ sample 자료는 장면 단위로 둔다. 예를 들어 `fixtures/accommodation-
 
 ## Material Handling
 
-- 실제 값을 옮기지 않고 placeholder를 쓴다.
-- 실제 원본, 실제 식별자, 원본과 sample 파일의 상세 매핑표는 commit하지 않는다.
+- 이 디렉터리에는 repo에 둘 수 있는 sample 입력만 둔다.
 - sample 자료를 만들었다고 product flow가 완성된 것으로 보지 않는다.

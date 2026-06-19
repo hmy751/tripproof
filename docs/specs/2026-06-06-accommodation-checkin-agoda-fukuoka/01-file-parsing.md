@@ -34,7 +34,6 @@
 - PDF binary 읽기, PDF text extraction, 자료함 item 생성, 다음 `SourceUnit`/`EvidenceRef` grounding 입력 생성을 분리한다.
 - 처음은 텍스트 추출 가능한 1페이지 PDF를 대상으로 한다.
 - PDF 본문 없이 질문에 답하지 않는다.
-- attachment id, Gmail message id, private booking URL은 자료함 item이나 공개 fixture에 저장하지 않는다.
 
 ## Non-goals
 
@@ -73,5 +72,4 @@
 
 ## 남은 판단
 
-- 공개 fixture 파일명은 `agoda-fukuoka-booking-confirmation.pdf`처럼 둘지.
 - 파싱 본문 preview를 자료함에 얼마나 보여줄지.
