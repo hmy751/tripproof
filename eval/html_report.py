@@ -920,6 +920,7 @@ def _render_source_unit_details(
                 ("char_length", _int_or_text(source_unit.get("char_length"))),
                 ("page", _int_or_text(source_unit.get("page"))),
                 ("unit_index", _int_or_text(source_unit.get("unit_index"))),
+                *_source_unit_metadata_rows(source_unit),
             ],
             body_label="SourceUnit text",
             body=_text(source_unit.get("text")),
@@ -969,6 +970,7 @@ def _render_retrieval_candidate_details(
                 ("score", _score_or_text(candidate.get("score"))),
                 ("vector_score", _score_or_text(candidate.get("vector_score"))),
                 ("lexical_score", _score_or_text(candidate.get("lexical_score"))),
+                *_source_unit_metadata_rows(candidate),
             ],
             body_label="후보 전문",
             body=_text(candidate.get("text")),
@@ -1010,6 +1012,7 @@ def _render_context_block_details(
                     _text(block.get("locator"), fallback="not recorded"),
                 ),
                 ("char_length", _int_or_text(block.get("char_length"))),
+                *_source_unit_metadata_rows(block),
             ],
             body_label="전달된 context 전문",
             body=_text(block.get("text")),
@@ -1017,6 +1020,31 @@ def _render_context_block_details(
         )
         for index, block in enumerate(context_blocks, start=1)
     )
+
+
+def _source_unit_metadata_rows(block: dict[str, Any]) -> list[tuple[str, object]]:
+    rows: list[tuple[str, object]] = []
+    for key in (
+        "kind",
+        "structural_kind",
+        "bbox",
+        "line_count",
+        "extraction_backend",
+        "fallback_used",
+    ):
+        if key in block:
+            rows.append((key, _metadata_value(block.get(key))))
+    return rows
+
+
+def _metadata_value(value: object) -> object:
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if value is None:
+        return "not recorded"
+    return value
 
 
 def _render_answer_item_details(items: list[dict[str, Any]]) -> str:
@@ -1339,6 +1367,10 @@ def _render_text_blocks(
                     _stat(
                         "source location",
                         _text(block.get("locator"), fallback="locator"),
+                    ),
+                    "".join(
+                        _stat(label, value)
+                        for label, value in _source_unit_metadata_rows(block)
                     ),
                     "</dl>",
                     f'<p class="text-label">{_h(text_label)}</p>',

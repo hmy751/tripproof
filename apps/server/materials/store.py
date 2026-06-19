@@ -8,6 +8,7 @@ from server.materials.ingestion import (
     MaterialIngestionEvents,
     NoopMaterialIngestionEvents,
 )
+from server.materials.layout import PageLayout
 from server.materials.models import MaterialStatus, PublicMaterial
 from server.materials.scope import MaterialScope
 from server.retrieval.embeddings import (
@@ -114,12 +115,14 @@ class MaterialStore:
         page_count: int,
         text: str,
         preview: str,
+        layout_pages: tuple[PageLayout, ...] = (),
         ingestion_events: MaterialIngestionEvents | None = None,
     ) -> PublicMaterial:
         events = ingestion_events or NoopMaterialIngestionEvents()
         ingestion_result = self._ingestion_pipeline.prepare_ready_material(
             file_name=file_name,
             text=text,
+            layout_pages=layout_pages,
             events=events,
         )
         material = StoredMaterial(

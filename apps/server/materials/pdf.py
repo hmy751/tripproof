@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import BytesIO
+from typing import Any
 
+import pdfplumber
 from pypdf import PdfReader
+
+from server.materials.layout import PageLayout, PdfWord, build_lines_from_words
 
 
 class PdfParseError(ValueError):
@@ -15,12 +19,51 @@ class ParsedPdf:
     page_count: int
     text: str
     preview: str
+    layout_pages: tuple[PageLayout, ...] = ()
 
 
 def parse_pdf(raw: bytes) -> ParsedPdf:
     if not raw:
         raise PdfParseError("비어 있는 PDF입니다.")
 
+    try:
+        parsed = _parse_pdf_with_pdfplumber(raw)
+        if parsed.text.strip():
+            return parsed
+    except Exception:
+        pass
+
+    return _parse_pdf_with_pypdf(raw)
+
+
+def _parse_pdf_with_pdfplumber(raw: bytes) -> ParsedPdf:
+    try:
+        with pdfplumber.open(BytesIO(raw)) as pdf:
+            layout_pages = tuple(
+                _page_layout_from_pdfplumber_page(page=page, page_number=index)
+                for index, page in enumerate(pdf.pages, start=1)
+            )
+    except Exception:
+        raise
+
+    page_texts = [
+        f"[page {layout.page}]\n{_text_from_layout_page(layout)}"
+        for layout in layout_pages
+        if _text_from_layout_page(layout)
+    ]
+    text = "\n\n".join(page_texts).strip()
+    if not text:
+        raise PdfParseError("텍스트를 추출할 수 없는 PDF입니다.")
+
+    return ParsedPdf(
+        page_count=len(layout_pages),
+        text=text,
+        preview=_preview(text),
+        layout_pages=layout_pages,
+    )
+
+
+def _parse_pdf_with_pypdf(raw: bytes) -> ParsedPdf:
     try:
         reader = PdfReader(BytesIO(raw))
     except Exception as error:  # pypdf raises several parser-specific exceptions.
@@ -52,6 +95,45 @@ def parse_pdf(raw: bytes) -> ParsedPdf:
     )
 
 
+def _page_layout_from_pdfplumber_page(
+    *,
+    page: Any,
+    page_number: int,
+) -> PageLayout:
+    words = [
+        PdfWord(
+            page=page_number,
+            text=str(raw_word.get("text") or ""),
+            x0=float(raw_word.get("x0") or 0.0),
+            top=float(raw_word.get("top") or 0.0),
+            x1=float(raw_word.get("x1") or 0.0),
+            bottom=float(raw_word.get("bottom") or 0.0),
+            order=index,
+            font_name=_string_or_none(raw_word.get("fontname")),
+            size=_float_or_none(raw_word.get("size")),
+        )
+        for index, raw_word in enumerate(
+            page.extract_words(
+                x_tolerance=3,
+                y_tolerance=3,
+                extra_attrs=["fontname", "size"],
+            ),
+            start=1,
+        )
+        if str(raw_word.get("text") or "").strip()
+    ]
+    return PageLayout(
+        page=page_number,
+        width=float(page.width),
+        height=float(page.height),
+        lines=build_lines_from_words(page=page_number, words=words),
+    )
+
+
+def _text_from_layout_page(layout: PageLayout) -> str:
+    return "\n".join(line.text for line in layout.lines if line.text).strip()
+
+
 def _clean_text(text: str) -> str:
     lines = [" ".join(line.split()) for line in text.splitlines()]
     return "\n".join(line for line in lines if line).strip()
@@ -60,3 +142,19 @@ def _clean_text(text: str) -> str:
 def _preview(text: str) -> str:
     single_line = " ".join(text.split())
     return single_line[:360]
+
+
+def _string_or_none(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

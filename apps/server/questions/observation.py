@@ -449,13 +449,10 @@ def retrieval_candidate_detail(
     candidate: RetrievedSource,
 ) -> dict[str, QuestionObservationFactValue]:
     source_unit = candidate.source_unit
-    return {
+    detail = {
         "source_unit_id": source_unit.id,
         "material_id": source_unit.material_id,
-        "locator": source_unit_locator_summary(
-            page=source_unit.page,
-            unit_index=source_unit.unit_index,
-        ),
+        "locator": locator_summary(source_unit.locator),
         "page": source_unit.page,
         "unit_index": source_unit.unit_index,
         "char_length": len(source_unit.text),
@@ -464,22 +461,37 @@ def retrieval_candidate_detail(
         "vector_score": candidate.vector_score,
         "text": source_unit.text,
     }
+    detail.update(source_unit_metadata_detail(source_unit.metadata))
+    return detail
 
 
 def answer_context_block(
     candidate: RetrievedSource,
 ) -> dict[str, QuestionObservationFactValue]:
     source_unit = candidate.source_unit
-    return {
+    detail = {
         "source_unit_id": source_unit.id,
         "material_id": source_unit.material_id,
-        "locator": source_unit_locator_summary(
-            page=source_unit.page,
-            unit_index=source_unit.unit_index,
-        ),
+        "locator": locator_summary(source_unit.locator),
         "char_length": len(source_unit.text),
         "text": source_unit.text,
     }
+    detail.update(source_unit_metadata_detail(source_unit.metadata))
+    return detail
+
+
+def source_unit_metadata_detail(
+    metadata: dict[str, object],
+) -> dict[str, QuestionObservationFactValue]:
+    keys = (
+        "kind",
+        "structural_kind",
+        "bbox",
+        "line_count",
+        "extraction_backend",
+        "fallback_used",
+    )
+    return {key: metadata[key] for key in keys if key in metadata}
 
 
 def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFactValue]:

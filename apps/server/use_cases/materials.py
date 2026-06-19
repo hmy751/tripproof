@@ -149,6 +149,7 @@ class UploadMaterialUseCase:
                 page_count=parsed_pdf.page_count,
                 text=parsed_pdf.text,
                 preview=parsed_pdf.preview,
+                layout_pages=parsed_pdf.layout_pages,
                 ingestion_events=observation,
             )
         except Exception:
