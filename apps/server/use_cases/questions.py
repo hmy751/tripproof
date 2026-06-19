@@ -9,7 +9,6 @@ from server.questions.observation import (
     QuestionObservationReporter,
     QuestionObservationSink,
 )
-from server.retrieval.search import retrieve_context_with_trace
 from server.runtime.config_snapshot import (
     RuntimeConfigSettings,
     answer_model_runtime_config_snapshot_from_composer,
