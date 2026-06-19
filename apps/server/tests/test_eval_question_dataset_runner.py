@@ -84,8 +84,6 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
     assert "Eval overlay" in report_html
     assert "Observation trace" in report_html
     assert "Product runtime" in report_html
-    assert "Step facts JSON" in report_html
-    assert "children_count" in report_html
     assert "Evidence path" in report_html
     assert "Data lineage" in report_html
     assert "SourceUnit" in report_html

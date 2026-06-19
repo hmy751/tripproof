@@ -562,42 +562,14 @@ def _render_trace_step(step: object) -> str:
     return "".join(
         [
             "<li>",
-            '<details class="trace-step-details">',
-            '<summary class="trace-step">',
+            '<div class="trace-step">',
             f"<strong>{_h(name)}</strong>",
             _status_badge(status),
             _render_fact_summary(facts),
-            '<span class="trace-toggle">원본 JSON</span>',
-            "</summary>",
-            _render_trace_step_json(
-                status=status,
-                failure_kind=_text(step.get("failure_kind"), fallback="none"),
-                children_count=len(children),
-                facts=facts,
-            ),
-            "</details>",
+            "</div>",
             _render_trace_tree(children) if children else "",
             "</li>",
         ]
-    )
-
-
-def _render_trace_step_json(
-    *,
-    status: str,
-    failure_kind: str,
-    children_count: int,
-    facts: dict[str, Any],
-) -> str:
-    payload = {
-        "status": status,
-        "failure_kind": failure_kind,
-        "children_count": children_count,
-        "facts": facts,
-    }
-    return (
-        '<div class="trace-step-json">'
-        '<p class="text-label">Step facts JSON</p>' + _render_json(payload) + "</div>"
     )
 
 
@@ -1601,51 +1573,18 @@ th {
 .trace-tree li {
   margin-top: 8px;
 }
-.trace-step-details {
-  display: block;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fbfcfe;
-  overflow: hidden;
-}
 .trace-step {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
-  background: transparent;
-  cursor: pointer;
-  list-style: none;
-}
-.trace-step::-webkit-details-marker {
-  display: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfcfe;
 }
 .trace-step strong {
   min-width: 170px;
-}
-.trace-toggle {
-  margin-left: auto;
-  border-radius: 999px;
-  background: #eef2f6;
-  color: #52616f;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.trace-step-details[open] .trace-toggle {
-  background: #e8f1ff;
-  color: #1d4f7a;
-}
-.trace-step-json {
-  padding: 12px;
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
-}
-.trace-step-json .json {
-  max-height: 360px;
-  overflow: auto;
-  font-size: 12px;
 }
 .fact-summary {
   display: flex;
