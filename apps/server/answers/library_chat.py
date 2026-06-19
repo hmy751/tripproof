@@ -4,10 +4,10 @@ import re
 from typing import Protocol
 
 from server.core.config import (
-    FACT_PROPOSER_BACKEND,
+    ANSWER_COMPOSER_BACKEND,
+    OLLAMA_ANSWER_MODEL,
+    OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
-    OLLAMA_FACT_MODEL,
-    OLLAMA_FACT_TIMEOUT_SECONDS,
 )
 from server.extraction.models import EvidenceState
 from server.answers.library_chat_grounding import ground_evidence_ref
@@ -101,17 +101,17 @@ def create_library_chat_answer_composer_from_config(
     *,
     backend: str | None = None,
 ) -> LibraryChatAnswerComposer:
-    active_backend = (backend or FACT_PROPOSER_BACKEND).lower()
+    active_backend = (backend or ANSWER_COMPOSER_BACKEND).lower()
     if active_backend == "ollama":
         return OllamaLibraryChatAnswerComposer(
             client=OllamaChatJsonClient(
                 OllamaChatJsonConfig(
                     base_url=OLLAMA_BASE_URL,
-                    model=OLLAMA_FACT_MODEL,
-                    timeout_seconds=OLLAMA_FACT_TIMEOUT_SECONDS,
+                    model=OLLAMA_ANSWER_MODEL,
+                    timeout_seconds=OLLAMA_ANSWER_TIMEOUT_SECONDS,
                 )
             ),
-            model=OLLAMA_FACT_MODEL,
+            model=OLLAMA_ANSWER_MODEL,
         )
     if active_backend in {"disabled", "missing"}:
         return MissingLibraryChatAnswerComposer(backend=active_backend)

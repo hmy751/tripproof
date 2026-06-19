@@ -13,7 +13,7 @@ from uuid import uuid4
 
 os.environ.setdefault("TRIPPROOF_RETRIEVAL_BACKEND", "memory")
 os.environ.setdefault("TRIPPROOF_EMBEDDING_AUTO_GENERATE", "0")
-os.environ.setdefault("TRIPPROOF_FACT_PROPOSER_BACKEND", "missing")
+os.environ.setdefault("TRIPPROOF_ANSWER_COMPOSER_BACKEND", "missing")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APPS_PATH = REPO_ROOT / "apps"

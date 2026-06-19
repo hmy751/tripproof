@@ -1182,7 +1182,7 @@ def test_question_runtime_config_snapshot_records_configured_answer_model() -> N
         create_app(
             embedding_auto_generate=False,
             retrieval_backend="memory",
-            fact_proposer_backend="disabled",
+            answer_composer_backend="disabled",
             question_observation_sink=question_observation_sink,
         )
     )

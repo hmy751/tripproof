@@ -59,7 +59,7 @@ def create_app(
     retrieval_top_k: int | None = None,
     retrieval_similarity_threshold: float | None = None,
     library_chat_answer_composer: LibraryChatAnswerComposer | None = None,
-    fact_proposer_backend: str | None = None,
+    answer_composer_backend: str | None = None,
     material_upload_observation_sink: MaterialUploadObservationSink | None = None,
     question_observation_sink: QuestionObservationSink | None = None,
     observation_exporter: ObservationExporter | None = None,
@@ -104,7 +104,7 @@ def create_app(
     app.state.library_chat_answer_composer = (
         library_chat_answer_composer
         or create_library_chat_answer_composer_from_config(
-            backend=fact_proposer_backend
+            backend=answer_composer_backend
         )
     )
     active_observation_exporter = (
