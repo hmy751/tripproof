@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
-from server.retrieval.chunking import chunk_text
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
 from server.retrieval.models import (
     AnswerContext,
@@ -20,15 +19,6 @@ from server.retrieval.vector_math import cosine_similarity
 @dataclass(frozen=True)
 class SourceUnitMatch:
     source_unit: SourceUnit
-    score: float
-    lexical_score: int
-    vector_score: float | None
-
-
-@dataclass(frozen=True)
-class SourceUnitExcerpt:
-    source_unit: SourceUnit
-    excerpt: str
     score: float
     lexical_score: int
     vector_score: float | None
@@ -63,39 +53,6 @@ class QueryEmbeddingAttempt:
     @property
     def available(self) -> bool:
         return self.vector is not None
-
-
-def select_excerpt(
-    texts: Iterable[str], query: str, *, max_chars: int = 420
-) -> str | None:
-    normalized = _collapse_whitespace("\n\n".join(texts))
-    if not normalized:
-        return None
-
-    terms = _query_terms(query)
-    chunks = chunk_text(normalized, chunk_size=max(max_chars, 800), overlap=120)
-    if not chunks:
-        return None
-
-    best_chunk = max(chunks, key=lambda chunk: _score_text(chunk.text, terms))
-    excerpt = best_chunk.text[:max_chars].strip()
-    return excerpt or None
-
-
-def select_source_unit(
-    *,
-    source_units: Iterable[SourceUnit],
-    embedding_records: Iterable[EmbeddingRecord],
-    query: str,
-    embedding_provider: EmbeddingProvider | None = None,
-) -> SourceUnitMatch | None:
-    matches = _rank_source_units(
-        source_units=source_units,
-        embedding_records=embedding_records,
-        query=query,
-        embedding_provider=embedding_provider,
-    )
-    return matches[0] if matches else None
 
 
 def retrieve_context(
@@ -167,7 +124,6 @@ def retrieve_context_with_trace(
         query=query,
         source_units=units,
         embedding_records=records,
-        embedding_provider=embedding_provider,
         query_embedding=query_embedding,
         repository_vector_attempted=repository_vector_attempted,
         top_k=top_k,
@@ -263,7 +219,6 @@ def _retrieve_ranked_context(
     query: str,
     source_units: Iterable[SourceUnit],
     embedding_records: Iterable[EmbeddingRecord],
-    embedding_provider: EmbeddingProvider | None,
     query_embedding: QueryEmbeddingAttempt,
     repository_vector_attempted: bool,
     top_k: int,
@@ -273,9 +228,7 @@ def _retrieve_ranked_context(
         source_units=source_units,
         embedding_records=records,
         query=query,
-        embedding_provider=embedding_provider,
         query_vector=query_embedding.vector,
-        resolve_query_vector=False,
     )
     candidates = [
         RetrievedSource(
@@ -340,9 +293,7 @@ def _rank_source_units(
     source_units: Iterable[SourceUnit],
     embedding_records: Iterable[EmbeddingRecord],
     query: str,
-    embedding_provider: EmbeddingProvider | None,
-    query_vector: list[float] | None = None,
-    resolve_query_vector: bool = True,
+    query_vector: list[float] | None,
 ) -> list[SourceUnitMatch]:
     embedding_records_list = list(embedding_records)
     units = list(source_units)
@@ -350,12 +301,6 @@ def _rank_source_units(
         return []
 
     terms = _query_terms(query)
-    if query_vector is None and resolve_query_vector:
-        query_vector = _query_vector(
-            query=query,
-            embedding_records=embedding_records_list,
-            embedding_provider=embedding_provider,
-        )
     vectors_by_source_unit_id = {
         record.source_unit_id: record.vector
         for record in embedding_records_list
@@ -390,65 +335,6 @@ def _rank_source_units(
     )
 
 
-def select_source_excerpt(
-    *,
-    source_units: Iterable[SourceUnit],
-    embedding_records: Iterable[EmbeddingRecord],
-    query: str,
-    embedding_provider: EmbeddingProvider | None = None,
-    retrieval_repository: RetrievalRepository | None = None,
-    material_ids: Iterable[str] | None = None,
-    max_chars: int = 420,
-) -> SourceUnitExcerpt | None:
-    records = list(embedding_records)
-    query_vector = _query_vector(
-        query=query,
-        embedding_records=records,
-        embedding_provider=embedding_provider,
-    )
-    match = None
-    if (
-        query_vector is not None
-        and retrieval_repository is not None
-        and material_ids is not None
-    ):
-        vector_matches = retrieval_repository.match_source_units(
-            material_ids=material_ids,
-            query_embedding=query_vector,
-            limit=1,
-            similarity_threshold=RAG_SIMILARITY_THRESHOLD,
-        )
-        if vector_matches:
-            vector_match = vector_matches[0]
-            terms = _query_terms(query)
-            match = SourceUnitMatch(
-                source_unit=vector_match.source_unit,
-                score=vector_match.similarity,
-                lexical_score=_score_text(vector_match.source_unit.search_text, terms),
-                vector_score=vector_match.similarity,
-            )
-    if match is None:
-        match = select_source_unit(
-            source_units=source_units,
-            embedding_records=records,
-            query=query,
-            embedding_provider=embedding_provider,
-        )
-    if match is None:
-        return None
-
-    text = match.source_unit.text[:max_chars].strip()
-    if not text:
-        return None
-    return SourceUnitExcerpt(
-        source_unit=match.source_unit,
-        excerpt=text,
-        score=match.score,
-        lexical_score=match.lexical_score,
-        vector_score=match.vector_score,
-    )
-
-
 def _score_text(text: str, terms: list[str]) -> int:
     if not terms:
         return 0
@@ -474,10 +360,6 @@ def _query_terms(query: str) -> list[str]:
         if len(term) >= 2:
             terms.append(term)
     return terms
-
-
-def _collapse_whitespace(value: str) -> str:
-    return " ".join(value.split())
 
 
 def _can_attempt_query_vector(
