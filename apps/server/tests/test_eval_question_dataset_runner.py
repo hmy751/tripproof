@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from io import BytesIO
 import json
 from pathlib import Path
 import subprocess
 import sys
+
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 
 def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
@@ -36,7 +40,15 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
 
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact["schema_version"] == "tripproof.eval_run.question_dataset.v1"
+    assert artifact["run_purpose"]["id"] == "sample_fixture_smoke"
+    assert artifact["run_purpose"]["agoda_original_pdf_baseline"] is False
+    assert artifact["run_purpose"]["sample_fixture_smoke"] is True
     assert artifact["dataset"]["question_count"] == 2
+    assert artifact["dataset"]["material_input"] == {
+        "kind": "text_fixture_rendered_pdf",
+        "source_path": "fixtures/accommodation-checkin/agoda-booking-confirmation-sample.txt",
+        "uploaded_file_name": "agoda-booking-confirmation-sample.pdf",
+    }
     assert artifact["runtime"]["embedding_provider"] == "eval_fake_vector"
     assert artifact["question_results"][0]["id"] == "AGODA-P0-01"
     assert artifact["question_results"][0]["status_code"] == 200
@@ -70,6 +82,9 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
     report_path = artifact_path.parent / artifact["html_report"]["path"]
     report_html = report_path.read_text(encoding="utf-8")
     assert "AGODA-P0-01" in report_html
+    assert "Sample fixture smoke" in report_html
+    assert "Text fixture rendered as PDF" in report_html
+    assert "Agoda original PDF baseline으로 해석하지 않습니다" in report_html
     assert "dataset_eval_test_AGODA-P0-01" in report_html
     assert "observations/observation-export.jsonl:2" in report_html
     assert "Agoda Fukuoka sample booking confirmation" in report_html
@@ -84,8 +99,13 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
     assert "Eval overlay" in report_html
     assert "Observation trace" in report_html
     assert "Product runtime" in report_html
+    assert "Raw observation step JSON" in report_html
+    assert "Raw observation JSON" in report_html
     assert "Evidence path" in report_html
     assert "Data lineage" in report_html
+    assert "Failure classification cues" in report_html
+    assert "Failure reading" in report_html
+    assert "State validation" in report_html
     assert "SourceUnit" in report_html
     assert "EvidenceRef" in report_html
     assert "SourceUnit text" in report_html
@@ -102,6 +122,65 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
     assert "Retrieval candidates" in report_html
     assert "답변에 전달된 context" in report_html
     assert "Composer context" in report_html
+
+
+def test_question_dataset_runner_accepts_original_pdf_baseline_input(
+    tmp_path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    script = repo_root / "eval" / "run_question_dataset.py"
+    material_pdf_file = tmp_path / "agoda-original.pdf"
+    material_pdf_file.write_bytes(
+        _pdf_with_text("Agoda original PDF baseline. Check-in starts at 15:00.")
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--output-dir",
+            str(tmp_path),
+            "--material-pdf-file",
+            str(material_pdf_file),
+            "--run-id",
+            "original-pdf-baseline-test",
+            "--correlation-prefix",
+            "original_pdf_eval",
+            "--question-limit",
+            "1",
+            "--json",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    output = json.loads(result.stdout)
+    artifact_path = Path(output["artifact_path"])
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    assert artifact["run_purpose"]["id"] == "original_pdf_baseline"
+    assert artifact["run_purpose"]["agoda_original_pdf_baseline"] is True
+    assert artifact["run_purpose"]["sample_fixture_smoke"] is False
+    assert artifact["dataset"]["material_pdf_file"] == str(material_pdf_file)
+    assert artifact["dataset"]["material_input"] == {
+        "kind": "pdf_file",
+        "source_path": str(material_pdf_file),
+        "uploaded_file_name": "agoda-original.pdf",
+    }
+    assert "material_text_file" not in artifact["dataset"]
+    assert artifact["question_results"][0]["id"] == "AGODA-P0-01"
+    assert artifact["question_results"][0]["status_code"] == 200
+    assert all(artifact["checks"].values())
+
+    report_html = (artifact_path.parent / artifact["html_report"]["path"]).read_text(
+        encoding="utf-8"
+    )
+    assert "Original PDF baseline" in report_html
+    assert "Original PDF file" in report_html
+    assert str(material_pdf_file) in report_html
+    assert "이 run은 원문 PDF baseline입니다" in report_html
+    assert "Agoda original PDF baseline으로 해석하지 않습니다" not in report_html
 
 
 def test_question_dataset_runner_makes_correlation_ids_unique_on_collisions(
@@ -174,6 +253,27 @@ def test_question_dataset_runner_makes_correlation_ids_unique_on_collisions(
     assert len(correlation_ids) == len(set(correlation_ids))
     assert artifact["checks"]["generated_question_correlation_ids_unique"] is True
     assert artifact["checks"]["all_question_exports_correlation_matched_inputs"] is True
+
+
+def _pdf_with_text(text: str) -> bytes:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode("utf-8"))
+    page[NameObject("/Contents")] = stream
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
 
 
 def test_html_report_keeps_product_answer_and_observation_projection_separate(

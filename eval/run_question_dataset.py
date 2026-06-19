@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
 import re
 import sys
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 os.environ.setdefault("TRIPPROOF_RETRIEVAL_BACKEND", "memory")
@@ -41,6 +42,8 @@ from server.observations.export import LocalArtifactObservationExporter  # noqa:
 from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
 
 RUN_SCHEMA_VERSION = "tripproof.eval_run.question_dataset.v1"
+RUN_PURPOSE_ORIGINAL_PDF_BASELINE = "original_pdf_baseline"
+RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE = "sample_fixture_smoke"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "eval" / "runs" / "question-dataset"
 DEFAULT_QUESTIONS_FILE = (
     REPO_ROOT / "eval" / "datasets" / "agoda-booking-confirmation" / "questions.json"
@@ -53,12 +56,24 @@ DEFAULT_MATERIAL_TEXT_FILE = (
 )
 
 
+@dataclass(frozen=True)
+class MaterialInput:
+    kind: Literal["pdf_file", "text_fixture_rendered_pdf"]
+    source_path: Path
+    display_name: str
+    upload_file_name: str
+    content: bytes
+    content_type: str
+    run_purpose: Literal["original_pdf_baseline", "sample_fixture_smoke"]
+
+
 def main() -> int:
     args = _parse_args()
     artifact, artifact_path = run_question_dataset(
         output_dir=args.output_dir,
         questions_file=args.questions_file,
         material_text_file=args.material_text_file,
+        material_pdf_file=args.material_pdf_file,
         run_id=args.run_id,
         correlation_prefix=args.correlation_prefix,
         question_limit=args.question_limit,
@@ -82,7 +97,8 @@ def run_question_dataset(
     *,
     output_dir: Path,
     questions_file: Path,
-    material_text_file: Path,
+    material_text_file: Path | None,
+    material_pdf_file: Path | None = None,
     run_id: str | None = None,
     correlation_prefix: str | None = None,
     question_limit: int | None = None,
@@ -98,7 +114,10 @@ def run_question_dataset(
     questions = _load_questions(questions_file)
     if question_limit is not None:
         questions = questions[:question_limit]
-    material_text = material_text_file.read_text(encoding="utf-8")
+    material_input = _material_input(
+        material_text_file=material_text_file,
+        material_pdf_file=material_pdf_file,
+    )
 
     exporter = LocalArtifactObservationExporter(observation_dir)
     store = MaterialStore(
@@ -116,12 +135,12 @@ def run_question_dataset(
 
     upload = client.post(
         "/api/materials",
-        data={"displayName": material_text_file.stem},
+        data={"displayName": material_input.display_name},
         files={
             "file": (
-                f"{material_text_file.stem}.pdf",
-                _pdf_with_text(material_text),
-                "application/pdf",
+                material_input.upload_file_name,
+                material_input.content,
+                material_input.content_type,
             )
         },
     )
@@ -172,7 +191,7 @@ def run_question_dataset(
     artifact = _artifact(
         run_id=active_run_id,
         questions_file=questions_file,
-        material_text_file=material_text_file,
+        material_input=material_input,
         upload_response=upload,
         material=material_body,
         question_results=question_results,
@@ -193,7 +212,7 @@ def _artifact(
     *,
     run_id: str,
     questions_file: Path,
-    material_text_file: Path,
+    material_input: MaterialInput,
     upload_response,
     material: dict[str, Any],
     question_results: list[dict[str, Any]],
@@ -233,7 +252,24 @@ def _artifact(
             for correlation_id, count in question_correlation_counts.items()
         ),
         "product_json_has_no_request_or_correlation_id": product_trace_safe,
+        "run_purpose_matches_material_input": _run_purpose_matches_material_input(
+            material_input
+        ),
     }
+    dataset: dict[str, Any] = {
+        "questions_file": _repo_relative(questions_file),
+        "question_count": len(question_results),
+        "material_input": {
+            "kind": material_input.kind,
+            "source_path": _repo_relative(material_input.source_path),
+            "uploaded_file_name": material_input.upload_file_name,
+        },
+    }
+    if material_input.kind == "pdf_file":
+        dataset["material_pdf_file"] = _repo_relative(material_input.source_path)
+    else:
+        dataset["material_text_file"] = _repo_relative(material_input.source_path)
+
     return {
         "schema_version": RUN_SCHEMA_VERSION,
         "run_id": run_id,
@@ -241,11 +277,15 @@ def _artifact(
         .isoformat(timespec="seconds")
         .replace("+00:00", "Z"),
         "kind": "question_dataset",
-        "dataset": {
-            "questions_file": _repo_relative(questions_file),
-            "material_text_file": _repo_relative(material_text_file),
-            "question_count": len(question_results),
+        "run_purpose": {
+            "id": material_input.run_purpose,
+            "label": _run_purpose_label(material_input.run_purpose),
+            "agoda_original_pdf_baseline": material_input.run_purpose
+            == RUN_PURPOSE_ORIGINAL_PDF_BASELINE,
+            "sample_fixture_smoke": material_input.run_purpose
+            == RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE,
         },
+        "dataset": dataset,
         "product_entry_point": {
             "type": "fastapi_test_client",
             "endpoints": ["POST /api/materials", "POST /api/questions"],
@@ -348,6 +388,59 @@ def _load_questions(path: Path) -> list[dict[str, Any]]:
     return questions
 
 
+def _material_input(
+    *,
+    material_text_file: Path | None,
+    material_pdf_file: Path | None,
+) -> MaterialInput:
+    if material_text_file is not None and material_pdf_file is not None:
+        raise ValueError(
+            "--material-text-file and --material-pdf-file are mutually exclusive"
+        )
+
+    if material_pdf_file is not None:
+        path = material_pdf_file
+        return MaterialInput(
+            kind="pdf_file",
+            source_path=path,
+            display_name=path.stem,
+            upload_file_name=path.name,
+            content=path.read_bytes(),
+            content_type="application/pdf",
+            run_purpose=RUN_PURPOSE_ORIGINAL_PDF_BASELINE,
+        )
+
+    path = material_text_file or DEFAULT_MATERIAL_TEXT_FILE
+    material_text = path.read_text(encoding="utf-8")
+    return MaterialInput(
+        kind="text_fixture_rendered_pdf",
+        source_path=path,
+        display_name=path.stem,
+        upload_file_name=f"{path.stem}.pdf",
+        content=_pdf_with_text(material_text),
+        content_type="application/pdf",
+        run_purpose=RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE,
+    )
+
+
+def _run_purpose_matches_material_input(material_input: MaterialInput) -> bool:
+    return (
+        material_input.kind == "pdf_file"
+        and material_input.run_purpose == RUN_PURPOSE_ORIGINAL_PDF_BASELINE
+    ) or (
+        material_input.kind == "text_fixture_rendered_pdf"
+        and material_input.run_purpose == RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE
+    )
+
+
+def _run_purpose_label(run_purpose: str) -> str:
+    if run_purpose == RUN_PURPOSE_ORIGINAL_PDF_BASELINE:
+        return "Original PDF baseline"
+    if run_purpose == RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE:
+        return "Sample fixture smoke"
+    return run_purpose
+
+
 def _response_json(response) -> dict[str, Any]:
     try:
         value = response.json()
@@ -438,8 +531,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--material-text-file",
         type=Path,
-        default=DEFAULT_MATERIAL_TEXT_FILE,
+        default=None,
         help="Text fixture that will be rendered into a temporary PDF upload.",
+    )
+    parser.add_argument(
+        "--material-pdf-file",
+        type=Path,
+        default=None,
+        help="Original PDF file that will be uploaded as-is for a baseline run.",
     )
     parser.add_argument("--run-id", help="Optional slug for the run folder.")
     parser.add_argument(
