@@ -9,8 +9,8 @@ from server.core.config import (
     OLLAMA_FACT_MODEL,
     OLLAMA_FACT_TIMEOUT_SECONDS,
 )
-from server.extraction.evidence import EvidenceGroundingError, evidence_ref_from_snippet
-from server.extraction.models import EvidenceRef, EvidenceState
+from server.extraction.models import EvidenceState
+from server.answers.library_chat_grounding import ground_evidence_ref
 from server.answers.library_chat_payload import (
     NormalizedAnswerItemPayload,
     normalize_answer_item_payload,
@@ -30,6 +30,7 @@ from server.retrieval.models import AnswerContext, SourceUnit
 LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 
 
+# ── Composer interface & implementations ────────────────────────────────────
 class LibraryChatAnswerComposer(Protocol):
     def compose(self, *, question: str, context: AnswerContext) -> ChatAnswer:
         """Build a user-facing answer from retrieved source units."""
@@ -80,7 +81,7 @@ class OllamaLibraryChatAnswerComposer:
         try:
             payload = self._client.generate_json(
                 system=self._prompt.system_message(),
-                user=_user_prompt(
+                user=_format_source_blocks(
                     question=question, context=context, prompt=self._prompt
                 ),
             )
@@ -117,7 +118,8 @@ def create_library_chat_answer_composer_from_config(
     raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
 
 
-def _user_prompt(
+# ── Prompt assembly ─────────────────────────────────────────────────────────
+def _format_source_blocks(
     *, question: str, context: AnswerContext, prompt: LibraryChatAnswerPrompt
 ) -> str:
     source_blocks = "\n\n".join(
@@ -131,6 +133,7 @@ def _user_prompt(
     return prompt.user_message(question=question, source_blocks=source_blocks)
 
 
+# ── Payload → answer mapping ────────────────────────────────────────────────
 def _answer_from_payload(
     *, question: str, payload: object, context: AnswerContext
 ) -> ChatAnswer:
@@ -218,7 +221,7 @@ def _supported_item_from_payload(
     if source_unit is None:
         return _ungrounded_item(index=index, label=payload.label)
 
-    evidence_ref = _ground_evidence_ref(
+    evidence_ref = ground_evidence_ref(
         source_unit=source_unit,
         evidence_snippet=payload.evidence_snippet,
         value=payload.value,
@@ -227,7 +230,7 @@ def _supported_item_from_payload(
         return _ungrounded_item(index=index, label=payload.label)
 
     return ChatAnswerItem(
-        id=payload.response_id(index=index),
+        id=payload.item_id(index=index),
         label=payload.label,
         body=payload.body,
         evidence_state=EvidenceState.SUPPORTED,
@@ -242,7 +245,7 @@ def _needs_review_item_from_payload(
     payload: NormalizedAnswerItemPayload,
 ) -> ChatAnswerItem:
     return ChatAnswerItem(
-        id=payload.response_id(index=index),
+        id=payload.item_id(index=index),
         label=payload.label,
         body=payload.body or f"{payload.label}은 원문 확인이 필요합니다.",
         evidence_state=EvidenceState.NEEDS_REVIEW,
@@ -257,7 +260,7 @@ def _missing_item_from_payload(
     payload: NormalizedAnswerItemPayload,
 ) -> ChatAnswerItem:
     return ChatAnswerItem(
-        id=payload.response_id(index=index),
+        id=payload.item_id(index=index),
         label=payload.label,
         body=payload.body
         or f"현재 등록된 자료에서 {payload.label}을 확인하지 못했습니다.",
@@ -265,20 +268,6 @@ def _missing_item_from_payload(
         value=None,
         evidence=[],
     )
-
-
-def _ground_evidence_ref(
-    *,
-    source_unit: SourceUnit,
-    evidence_snippet: str,
-    value: str | None,
-) -> EvidenceRef | None:
-    try:
-        return evidence_ref_from_snippet(
-            source_unit=source_unit, snippet=evidence_snippet
-        )
-    except EvidenceGroundingError:
-        return _evidence_ref_from_value(source_unit=source_unit, value=value)
 
 
 def _summary_for_items(items: list[ChatAnswerItem]) -> str:
@@ -329,89 +318,7 @@ def _source_unit_by_id(
     return None
 
 
-def _evidence_ref_from_value(
-    *, source_unit: SourceUnit, value: str | None
-) -> EvidenceRef | None:
-    if value is None:
-        return None
-
-    try:
-        return evidence_ref_from_snippet(source_unit=source_unit, snippet=value)
-    except EvidenceGroundingError:
-        pass
-
-    snippet = _numeric_value_window(source_text=source_unit.text, value=value)
-    if snippet is None:
-        return None
-
-    try:
-        return evidence_ref_from_snippet(source_unit=source_unit, snippet=snippet)
-    except EvidenceGroundingError:
-        return None
-
-
-def _numeric_value_window(*, source_text: str, value: str) -> str | None:
-    value_numbers = re.findall(r"\d+", value)
-    if not value_numbers:
-        return None
-
-    source_numbers = list(re.finditer(r"\d+", source_text))
-    if not source_numbers:
-        return None
-
-    normalized_value_numbers = [_normalize_number(number) for number in value_numbers]
-    source_index = 0
-    matched = []
-    for value_number in normalized_value_numbers:
-        while source_index < len(source_numbers):
-            candidate = source_numbers[source_index]
-            source_index += 1
-            if _normalize_number(candidate.group(0)) == value_number:
-                matched.append(candidate)
-                break
-        else:
-            return None
-
-    first = matched[0]
-    last = matched[-1]
-    if last.end() - first.start() > 220:
-        return None
-
-    window_start = _numeric_value_window_start(
-        source_text=source_text, start=first.start()
-    )
-    window_end = _numeric_value_window_end(source_text=source_text, end=last.end())
-    return source_text[window_start:window_end].strip()
-
-
-def _numeric_value_window_start(*, source_text: str, start: int) -> int:
-    fallback_start = max(0, start - 80)
-    position = start
-    for _line in range(4):
-        previous_break = source_text.rfind("\n", 0, position)
-        if previous_break < 0:
-            return fallback_start
-        position = previous_break
-    return max(fallback_start, position + 1)
-
-
-def _numeric_value_window_end(*, source_text: str, end: int) -> int:
-    position = end
-    unit_chars = set("년월일시분초원엔박명개")
-    while position < len(source_text) and position - end < 24:
-        char = source_text[position]
-        if char.isspace() or char in unit_chars:
-            position += 1
-            continue
-        break
-    return position
-
-
-def _normalize_number(value: str) -> str:
-    stripped = value.lstrip("0")
-    return stripped or "0"
-
-
+# ── Answer-shape validation (time questions) ────────────────────────────────
 def _supported_value_matches_question(
     *, question: str, value: str | None, body: str
 ) -> bool:

@@ -15,8 +15,8 @@ class NormalizedAnswerItemPayload:
     source_unit_id: str | None
     evidence_snippet: str | None
 
-    def response_id(self, *, index: int) -> str:
-        return _item_id(payload=self.raw, index=index)
+    def item_id(self, *, index: int) -> str:
+        return _build_item_id(payload=self.raw, index=index)
 
 
 def normalize_answer_item_payload(
@@ -54,7 +54,7 @@ def normalize_answer_item_payload(
     )
 
 
-def _item_id(*, payload: dict[object, object], index: int) -> str:
+def _build_item_id(*, payload: dict[object, object], index: int) -> str:
     value = _optional_string(_field(payload, "id"))
     if value is None:
         return f"answer_{index}"
