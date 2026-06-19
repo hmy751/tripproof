@@ -874,7 +874,6 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert record.step("source_retrieval").status == "succeeded"
     assert record.step("source_retrieval").facts == {
         "executed": True,
-        "strategy": "lexical",
         "query_embedding_attempted": False,
         "query_embedding_available": False,
         "vector_attempted": False,
@@ -1049,7 +1048,6 @@ def test_question_observation_records_repository_vector_source_retrieval() -> No
     assert repository.seen_similarity_threshold == 0.25
     assert record.step("source_retrieval").facts == {
         "executed": True,
-        "strategy": "repository_vector",
         "query_embedding_attempted": True,
         "query_embedding_available": True,
         "vector_attempted": True,

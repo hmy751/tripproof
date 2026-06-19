@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal
 
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
@@ -22,12 +21,8 @@ class SourceUnitMatch:
     lexical_score: int
 
 
-SourceRetrievalStrategy = Literal["repository_vector", "lexical", "none"]
-
-
 @dataclass(frozen=True)
 class SourceRetrievalTrace:
-    strategy: SourceRetrievalStrategy
     query_embedding_attempted: bool
     query_embedding_available: bool
     vector_attempted: bool
@@ -96,14 +91,12 @@ def retrieve_context_with_trace(
         embedding_records=records,
         embedding_provider=embedding_provider,
     )
-    repository_vector_attempted = _can_attempt_repository_vector(
+    if _can_attempt_repository_vector(
         query_embedding=query_embedding,
         retrieval_repository=retrieval_repository,
         material_ids=material_id_list,
-    )
-
-    if repository_vector_attempted:
-        repository_context = _retrieve_repository_vector_context(
+    ):
+        vector_context = _vector_search(
             target_id=target_id,
             query=query,
             query_embedding=query_embedding,
@@ -112,15 +105,25 @@ def retrieve_context_with_trace(
             top_k=top_k,
             similarity_threshold=similarity_threshold,
         )
-        if repository_context is not None:
-            return repository_context
+        if vector_context is not None:
+            return vector_context
+        # 임베딩 벡터 검색이 매치를 못 줌 → 명시적 lexical fallback
+        return _lexical_fallback(
+            target_id=target_id,
+            query=query,
+            source_units=units,
+            query_embedding=query_embedding,
+            vector_attempted=True,
+            top_k=top_k,
+        )
 
-    return _retrieve_ranked_context(
+    # 임베딩 자체가 없음 → 처음부터 lexical
+    return _lexical_fallback(
         target_id=target_id,
         query=query,
         source_units=units,
         query_embedding=query_embedding,
-        repository_vector_attempted=repository_vector_attempted,
+        vector_attempted=False,
         top_k=top_k,
     )
 
@@ -157,7 +160,7 @@ def _can_attempt_repository_vector(
     )
 
 
-def _retrieve_repository_vector_context(
+def _vector_search(
     *,
     target_id: str,
     query: str,
@@ -198,7 +201,6 @@ def _retrieve_repository_vector_context(
     return RetrievedContext(
         context=AnswerContext(target_id=target_id, query=query, candidates=candidates),
         source_retrieval=SourceRetrievalTrace(
-            strategy="repository_vector",
             query_embedding_attempted=query_embedding.attempted,
             query_embedding_available=query_embedding.available,
             vector_attempted=True,
@@ -208,13 +210,13 @@ def _retrieve_repository_vector_context(
     )
 
 
-def _retrieve_ranked_context(
+def _lexical_fallback(
     *,
     target_id: str,
     query: str,
     source_units: Iterable[SourceUnit],
     query_embedding: QueryEmbeddingAttempt,
-    repository_vector_attempted: bool,
+    vector_attempted: bool,
     top_k: int,
 ) -> RetrievedContext:
     matches = _rank_source_units(source_units=source_units, query=query)
@@ -233,12 +235,11 @@ def _retrieve_ranked_context(
     return RetrievedContext(
         context=AnswerContext(target_id=target_id, query=query, candidates=candidates),
         source_retrieval=SourceRetrievalTrace(
-            strategy="lexical" if candidates else "none",
             query_embedding_attempted=query_embedding.attempted,
             query_embedding_available=query_embedding.available,
-            vector_attempted=repository_vector_attempted,
+            vector_attempted=vector_attempted,
             vector_candidate_count=0,
-            fallback_used=repository_vector_attempted,
+            fallback_used=vector_attempted,
         ),
     )
 

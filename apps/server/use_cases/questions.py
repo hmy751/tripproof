@@ -9,7 +9,7 @@ from server.questions.observation import (
     QuestionObservationReporter,
     QuestionObservationSink,
 )
-from server.retrieval.search import SourceRetrievalStrategy, retrieve_context_with_trace
+from server.retrieval.search import retrieve_context_with_trace
 from server.runtime.config_snapshot import (
     RuntimeConfigSettings,
     answer_model_runtime_config_snapshot_from_composer,
@@ -36,7 +36,6 @@ class AskQuestionTrace:
     char_count: int
     source_unit_count: int | None = None
     embedding_record_count: int | None = None
-    retrieval_strategy: SourceRetrievalStrategy | None = None
     candidate_count: int | None = None
     answer_item_count: int | None = None
     final_status: QuestionStatus | None = None
@@ -176,7 +175,6 @@ class AskQuestionUseCase:
                 char_count=selection.char_count,
                 source_unit_count=len(retrieval_records.source_units),
                 embedding_record_count=len(retrieval_records.embedding_records),
-                retrieval_strategy=retrieved_context.source_retrieval.strategy,
                 candidate_count=len(answer_context.candidates),
                 answer_item_count=len(answer.items),
                 final_status="accepted",

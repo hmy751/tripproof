@@ -31,7 +31,7 @@ def test_retrieve_context_without_repository_uses_lexical_not_vector() -> None:
         embedding_provider=provider,
     )
 
-    assert retrieved.source_retrieval.strategy == "lexical"
+    assert retrieved.source_retrieval.vector_attempted is False
     assert all(
         candidate.vector_score is None for candidate in retrieved.context.candidates
     )
@@ -154,7 +154,6 @@ def test_retrieve_context_with_trace_records_repository_vector_strategy() -> Non
     assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
         "su_supabase"
     ]
-    assert retrieved.source_retrieval.strategy == "repository_vector"
     assert retrieved.source_retrieval.query_embedding_attempted is True
     assert retrieved.source_retrieval.query_embedding_available is True
     assert retrieved.source_retrieval.vector_attempted is True
@@ -212,7 +211,6 @@ def test_retrieve_context_with_trace_records_repository_fallback_to_lexical() ->
     assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
         "su_lexical"
     ]
-    assert retrieved.source_retrieval.strategy == "lexical"
     assert retrieved.source_retrieval.query_embedding_attempted is True
     assert retrieved.source_retrieval.query_embedding_available is True
     assert retrieved.source_retrieval.vector_attempted is True
@@ -220,9 +218,7 @@ def test_retrieve_context_with_trace_records_repository_fallback_to_lexical() ->
     assert retrieved.source_retrieval.fallback_used is True
 
 
-def test_retrieve_context_with_trace_records_lexical_strategy_without_query_embedding() -> (
-    None
-):
+def test_retrieve_context_with_trace_records_lexical_without_query_embedding() -> None:
     source_unit = _source_unit(
         id="su_lexical",
         text="체크인 시 예약 확정서를 제시해 주세요.",
@@ -238,7 +234,6 @@ def test_retrieve_context_with_trace_records_lexical_strategy_without_query_embe
     assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
         "su_lexical"
     ]
-    assert retrieved.source_retrieval.strategy == "lexical"
     assert retrieved.source_retrieval.query_embedding_attempted is False
     assert retrieved.source_retrieval.query_embedding_available is False
     assert retrieved.source_retrieval.vector_attempted is False

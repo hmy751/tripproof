@@ -92,7 +92,6 @@ _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
     "retrieval_pipeline": set(),
     "source_retrieval": {
         "executed",
-        "strategy",
         "query_embedding_attempted",
         "query_embedding_available",
         "vector_attempted",
@@ -423,7 +422,6 @@ def source_retrieval_facts(
 ) -> dict[str, QuestionObservationFactValue]:
     return {
         "executed": True,
-        "strategy": trace.strategy,
         "query_embedding_attempted": trace.query_embedding_attempted,
         "query_embedding_available": trace.query_embedding_available,
         "vector_attempted": trace.vector_attempted,

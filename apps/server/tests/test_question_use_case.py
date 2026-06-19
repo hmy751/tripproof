@@ -47,7 +47,6 @@ def test_ask_question_use_case_returns_accepted_trace_without_http_adapter() -> 
     )
     assert result.trace.source_unit_count == 1
     assert result.trace.embedding_record_count == 1
-    assert result.trace.retrieval_strategy == "lexical"
     assert result.trace.candidate_count == 1
     assert result.trace.answer_item_count == 1
     assert result.trace.final_status == "accepted"
