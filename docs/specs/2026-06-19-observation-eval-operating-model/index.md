@@ -2,7 +2,9 @@
 
 작성일: 2026-06-19
 
-상태: 후속 구현 기준 spec. 현재 `run.json`, local observation JSONL, LangSmith, future HTML report의 책임 경계와 local rich observation 보강 방향을 정리한다. 이 문서는 구현 완료나 eval 개선 결과를 주장하지 않는다.
+상태: 구현 기준 spec. 현재 `run.json`, local observation JSONL, LangSmith, HTML report의 책임 경계와 local rich observation 보강 방향을 정리한다.
+
+구현 상태(2026-06-19): question observation rich facts, composer context block, default LangSmith summary projection, question dataset/smoke eval runner의 `report.html` 생성, eval README의 DX entry가 구현됐다. 남은 판단은 large document text payload limit과 LangSmith text opt-in policy처럼 별도 explicit option이 필요한 항목이다.
 
 ## 왜 지금
 
@@ -82,7 +84,7 @@ product API response는 여전히 사용자-facing 결과만 반환한다. obser
 
 ## Local rich observation
 
-현재 local observation artifact는 export-safe projection을 기준으로 한다. 후속 구현에서는 local debugging을 위해 더 풍부한 projection을 추가할 수 있다.
+현재 local observation artifact는 export-safe projection을 기준으로 하되, question path에서 원인 분석에 필요한 selected text facts를 additive하게 포함한다.
 
 ```text
 internal observation record
@@ -183,7 +185,7 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
 
 ## 먼저 고를 slice
 
-첫 slice는 question observation local rich payload다.
+첫 구현 slice는 question observation local rich payload였고, 현재는 eval HTML report join까지 이어졌다.
 
 ```text
 질문 실행
@@ -194,7 +196,7 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
   -> eval report에서 correlation_id로 표시
 ```
 
-이 slice는 product response를 바꾸지 않고, LangSmith payload도 기본적으로 바꾸지 않는다. eval expected/pass-fail은 `run.json`에만 남긴다.
+이 흐름은 product response를 바꾸지 않고, LangSmith payload도 기본적으로 summary projection을 유지한다. eval expected/pass-fail은 `run.json`에만 남긴다.
 
 ## Acceptance criteria
 
@@ -222,7 +224,8 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
 - `apps/server/observations/serializers.py`: internal observation record를 export envelope로 projection하는 경계.
 - `apps/server/observations/sinks.py`: local observation artifact writer와 fanout exporter.
 - `apps/server/observations/langsmith.py`: LangSmith projection.
-- `eval/run_question_dataset.py`: question dataset runner와 `run.json` 생성.
+- `eval/run_question_dataset.py`: question dataset runner, `run.json`, `report.html` 생성.
+- `eval/html_report.py`: `run.json`과 observation JSONL을 `correlation_id`로 join하는 renderer.
 - `eval/question_runtime_recording_smoke.py`: correlation/export 연결 smoke runner.
 - `eval/find_observation_by_correlation.py`: local observation lookup helper.
 
@@ -235,8 +238,8 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
 
 ## 남은 판단
 
-- local rich observation을 기존 `observation-export.jsonl`에 같은 schema version으로 additive하게 넣을지, 별도 file 또는 mode로 둘지.
+- local rich observation은 기존 `observation-export.jsonl`에 같은 schema version으로 additive하게 들어간다. 별도 file/mode가 필요할지는 payload 크기 문제가 실제로 생길 때 다시 판단한다.
 - source unit text를 material upload observation에도 항상 넣을지, question path에서 선택된 unit만 우선 넣을지.
 - large document에서 text payload 크기를 어떤 기준으로 제한할지.
-- HTML report를 eval runner가 같이 만들지, 별도 renderer command로 둘지.
+- HTML report는 eval runner가 기본 생성하고, `eval/html_report.py`로 별도 재렌더링도 가능하게 둔다.
 - LangSmith text opt-in을 언제, 어떤 env와 field policy로 열지.

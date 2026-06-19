@@ -1,0 +1,31 @@
+Agoda Fukuoka sample booking confirmation
+
+Property: TripProof Hakata Sample Hotel
+Address: Hakata, Fukuoka, Japan
+
+Arrival / check-in date: 2026-07-01
+Departure / check-out date: 2026-07-03
+
+Check-in requirements:
+Guests must present an electronic copy or printed copy of the booking confirmation.
+A valid photo ID is required.
+For credit card bookings, the property may ask to verify the credit card used for payment.
+
+Room Type: Standard Double
+Number of Rooms: 1
+Number of Adults: 2
+Number of Children: 0
+
+Cancellation policy:
+Free cancellation is available until 2026-06-29.
+Cancellation within 1 day before the check-in date may be charged the total stay amount.
+No-show is charged 100% of the booking amount.
+
+On-site extra costs:
+City tax may apply according to local rules.
+City tax may be paid directly to the property at check-in.
+Minibar, telephone charges, and laundry service are paid directly to the property.
+
+Remarks:
+NonSmoke, LargeBed
+All special requests are subject to availability at check-in.

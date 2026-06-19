@@ -1,0 +1,450 @@
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+from datetime import UTC, datetime
+import json
+import os
+from pathlib import Path
+import re
+import sys
+from typing import Any
+from uuid import uuid4
+
+os.environ.setdefault("TRIPPROOF_RETRIEVAL_BACKEND", "memory")
+os.environ.setdefault("TRIPPROOF_EMBEDDING_AUTO_GENERATE", "0")
+os.environ.setdefault("TRIPPROOF_FACT_PROPOSER_BACKEND", "missing")
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+APPS_PATH = REPO_ROOT / "apps"
+if str(APPS_PATH) not in sys.path:
+    sys.path.insert(0, str(APPS_PATH))
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from html_report import DEFAULT_REPORT_FILE_NAME, write_html_report  # noqa: E402
+from question_runtime_recording_smoke import (  # noqa: E402
+    _answer_text_for_rules,
+    _has_no_product_trace_ids,
+    _pdf_with_text,
+    _read_jsonl,
+    _run_id,
+)
+from server.app import (  # noqa: E402
+    CORRELATION_ID_HEADER,
+    REQUEST_ID_HEADER,
+    create_app,
+)
+from server.materials.store import MaterialStore  # noqa: E402
+from server.observations.export import LocalArtifactObservationExporter  # noqa: E402
+from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
+
+RUN_SCHEMA_VERSION = "tripproof.eval_run.question_dataset.v1"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "eval" / "runs" / "question-dataset"
+DEFAULT_QUESTIONS_FILE = (
+    REPO_ROOT / "eval" / "datasets" / "agoda-booking-confirmation" / "questions.json"
+)
+DEFAULT_MATERIAL_TEXT_FILE = (
+    REPO_ROOT
+    / "fixtures"
+    / "accommodation-checkin"
+    / "agoda-booking-confirmation-sample.txt"
+)
+
+
+def main() -> int:
+    args = _parse_args()
+    artifact, artifact_path = run_question_dataset(
+        output_dir=args.output_dir,
+        questions_file=args.questions_file,
+        material_text_file=args.material_text_file,
+        run_id=args.run_id,
+        correlation_prefix=args.correlation_prefix,
+        question_limit=args.question_limit,
+        answer_composer_backend=args.answer_composer_backend,
+    )
+    if args.json:
+        print(
+            json.dumps(
+                {**artifact, "artifact_path": str(artifact_path)},
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        print(f"wrote {artifact_path}")
+    return 0
+
+
+def run_question_dataset(
+    *,
+    output_dir: Path,
+    questions_file: Path,
+    material_text_file: Path,
+    run_id: str | None = None,
+    correlation_prefix: str | None = None,
+    question_limit: int | None = None,
+    answer_composer_backend: str = "missing",
+) -> tuple[dict[str, Any], Path]:
+    active_run_id = _run_id(run_id)
+    active_correlation_prefix = correlation_prefix or f"eval_{uuid4().hex[:8]}"
+    run_dir = output_dir / active_run_id
+    observation_dir = run_dir / "observations"
+    observation_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = run_dir / "run.json"
+
+    questions = _load_questions(questions_file)
+    if question_limit is not None:
+        questions = questions[:question_limit]
+    material_text = material_text_file.read_text(encoding="utf-8")
+
+    exporter = LocalArtifactObservationExporter(observation_dir)
+    store = MaterialStore(
+        embedding_provider=DatasetEmbeddingProvider(),
+        embedding_auto_generate=True,
+        retrieval_backend="memory",
+    )
+    client = TestClient(
+        create_app(
+            store=store,
+            fact_proposer_backend=answer_composer_backend,
+            observation_exporter=exporter,
+        )
+    )
+
+    upload = client.post(
+        "/api/materials",
+        data={"displayName": material_text_file.stem},
+        files={
+            "file": (
+                f"{material_text_file.stem}.pdf",
+                _pdf_with_text(material_text),
+                "application/pdf",
+            )
+        },
+    )
+    material_body = _response_json(upload)
+    if upload.status_code != 200:
+        raise RuntimeError(
+            f"material upload failed: {upload.status_code} {upload.text}"
+        )
+    material_id = _text(material_body.get("id"))
+    if not material_id:
+        raise RuntimeError("material upload did not return a material id")
+
+    question_results: list[dict[str, Any]] = []
+    product_trace_safe = _has_no_product_trace_ids(material_body)
+    for question in questions:
+        question_id = _text(
+            question.get("id"), fallback=f"question-{len(question_results) + 1}"
+        )
+        correlation_id = _correlation_id(
+            prefix=active_correlation_prefix,
+            question_id=question_id,
+        )
+        response = client.post(
+            "/api/questions",
+            headers={CORRELATION_ID_HEADER: correlation_id},
+            json={
+                "question": _text(question.get("question")),
+                "materialIds": [material_id],
+            },
+        )
+        question_body = _response_json(response)
+        product_trace_safe = product_trace_safe and _has_no_product_trace_ids(
+            question_body
+        )
+        question_results.append(
+            _question_result(
+                question=question,
+                correlation_id=correlation_id,
+                response=response,
+                question_body=question_body,
+            )
+        )
+
+    observation_rows = _read_jsonl(exporter.path)
+    artifact = _artifact(
+        run_id=active_run_id,
+        questions_file=questions_file,
+        material_text_file=material_text_file,
+        upload_response=upload,
+        material=material_body,
+        question_results=question_results,
+        observation_export_path=Path("observations") / exporter.path.name,
+        observation_rows=observation_rows,
+        answer_composer_backend=answer_composer_backend,
+        product_trace_safe=product_trace_safe,
+    )
+    artifact_path.write_text(
+        json.dumps(artifact, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    write_html_report(run_json_path=artifact_path)
+    return artifact, artifact_path
+
+
+def _artifact(
+    *,
+    run_id: str,
+    questions_file: Path,
+    material_text_file: Path,
+    upload_response,
+    material: dict[str, Any],
+    question_results: list[dict[str, Any]],
+    observation_export_path: Path,
+    observation_rows: list[dict[str, Any]],
+    answer_composer_backend: str,
+    product_trace_safe: bool,
+) -> dict[str, Any]:
+    upload_request_id = upload_response.headers.get(REQUEST_ID_HEADER, "")
+    upload_correlation_id = upload_response.headers.get(CORRELATION_ID_HEADER, "")
+    question_correlation_ids = {
+        _text(question.get("correlation_id")) for question in question_results
+    }
+    exported_question_correlation_ids = {
+        _text(row.get("correlation_id"))
+        for row in observation_rows
+        if row.get("operation") == "question_answer"
+    }
+    checks = {
+        "upload_response_had_request_id": upload_request_id.startswith("req_"),
+        "upload_request_fell_back_to_own_correlation_id": upload_correlation_id
+        == upload_request_id,
+        "upload_status_code_ok": upload_response.status_code == 200,
+        "all_question_responses_had_request_id": all(
+            _text(question.get("request_id")).startswith("req_")
+            for question in question_results
+        ),
+        "all_question_responses_correlation_matched_input": all(
+            question.get("correlation_id") == question.get("response_correlation_id")
+            for question in question_results
+        ),
+        "all_question_exports_correlation_matched_inputs": question_correlation_ids
+        <= exported_question_correlation_ids,
+        "product_json_has_no_request_or_correlation_id": product_trace_safe,
+    }
+    return {
+        "schema_version": RUN_SCHEMA_VERSION,
+        "run_id": run_id,
+        "created_at": datetime.now(UTC)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+        "kind": "question_dataset",
+        "dataset": {
+            "questions_file": _repo_relative(questions_file),
+            "material_text_file": _repo_relative(material_text_file),
+            "question_count": len(question_results),
+        },
+        "product_entry_point": {
+            "type": "fastapi_test_client",
+            "endpoints": ["POST /api/materials", "POST /api/questions"],
+        },
+        "runtime": {
+            "retrieval_backend": "memory",
+            "embedding_auto_generate": True,
+            "embedding_provider": "eval_fake_vector",
+            "answer_composer": answer_composer_backend,
+        },
+        "requests": {
+            "material_upload": {
+                "status_code": upload_response.status_code,
+                "request_id": upload_request_id,
+                "correlation_id": upload_correlation_id,
+                "material_id": material.get("id"),
+                "material_status": material.get("status"),
+            }
+        },
+        "question_results": question_results,
+        "observation_export": {
+            "path": str(observation_export_path),
+            "record_count": len(observation_rows),
+            "records": [_observation_summary(row) for row in observation_rows],
+        },
+        "html_report": {"path": DEFAULT_REPORT_FILE_NAME},
+        "checks": checks,
+        "next_verification_point": (
+            "Open report.html, pick a failed question, and follow the observation "
+            "source path for the same correlation_id."
+        ),
+    }
+
+
+def _question_result(
+    *,
+    question: dict[str, Any],
+    correlation_id: str,
+    response,
+    question_body: dict[str, Any],
+) -> dict[str, Any]:
+    answer = _dict(question_body.get("answer"))
+    answer_items = _list(answer.get("items"))
+    evidence_state_counts = Counter(
+        item.get("evidenceState")
+        for item in answer_items
+        if isinstance(item, dict) and isinstance(item.get("evidenceState"), str)
+    )
+    expected_state = _text(question.get("expected_evidence_state"))
+    required_cues = _string_list(question.get("required_evidence_cues"))
+    must_not_claim = _string_list(question.get("must_not_claim"))
+    text_for_rules = _answer_text_for_rules(answer.get("summary"), answer_items)
+    missing_cues = [cue for cue in required_cues if cue not in text_for_rules]
+    must_not_hits = [claim for claim in must_not_claim if claim in text_for_rules]
+    state_matched = (
+        evidence_state_counts.get(expected_state, 0) > 0 if expected_state else False
+    )
+    return {
+        "id": _text(question.get("id"), fallback="question"),
+        "priority": _text(question.get("priority"), fallback="not_recorded"),
+        "type": _text(question.get("type"), fallback="not_recorded"),
+        "question": _text(question.get("question")),
+        "correlation_id": correlation_id,
+        "request_id": response.headers.get(REQUEST_ID_HEADER, ""),
+        "response_correlation_id": response.headers.get(CORRELATION_ID_HEADER, ""),
+        "status_code": response.status_code,
+        "expected": {
+            "evidence_state": expected_state,
+            "answer_pattern": _text(question.get("expected_answer_pattern")),
+            "required_evidence_cues": required_cues,
+            "must_not_claim": must_not_claim,
+            "metrics": _string_list(question.get("metrics")),
+        },
+        "observed": {
+            "status": question_body.get("status"),
+            "answer_summary": answer.get("summary"),
+            "item_count": len(answer_items),
+            "evidence_state_counts": dict(evidence_state_counts),
+        },
+        "rule_check": {
+            "passed": response.status_code == 200
+            and state_matched
+            and not missing_cues
+            and not must_not_hits,
+            "state_matched": state_matched,
+            "missing_cues": missing_cues,
+            "must_not_hits": must_not_hits,
+        },
+    }
+
+
+def _load_questions(path: Path) -> list[dict[str, Any]]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, list):
+        raise ValueError("questions file must contain a JSON array")
+    questions = [item for item in value if isinstance(item, dict)]
+    if not questions:
+        raise ValueError("questions file did not contain any question objects")
+    return questions
+
+
+def _response_json(response) -> dict[str, Any]:
+    try:
+        value = response.json()
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _observation_summary(row: dict[str, Any]) -> dict[str, Any]:
+    payload = _dict(row.get("payload"))
+    return {
+        "operation": row.get("operation"),
+        "request_id": row.get("request_id"),
+        "correlation_id": row.get("correlation_id"),
+        "final_status": payload.get("final_status"),
+        "failure_kind": payload.get("failure_kind"),
+    }
+
+
+def _correlation_id(*, prefix: str, question_id: str) -> str:
+    value = f"{prefix}_{question_id}"
+    return re.sub(r"[^A-Za-z0-9._:-]", "_", value)[:128] or f"eval_{uuid4().hex[:8]}"
+
+
+def _repo_relative(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list(value: object) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _string_list(value: object) -> list[str]:
+    return [item for item in _list(value) if isinstance(item, str)]
+
+
+def _text(value: object, *, fallback: str = "") -> str:
+    return value if isinstance(value, str) else fallback
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run a TripProof question dataset through product APIs.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help="Directory where a timestamped run folder will be written.",
+    )
+    parser.add_argument(
+        "--questions-file",
+        type=Path,
+        default=DEFAULT_QUESTIONS_FILE,
+        help="Question dataset JSON file.",
+    )
+    parser.add_argument(
+        "--material-text-file",
+        type=Path,
+        default=DEFAULT_MATERIAL_TEXT_FILE,
+        help="Text fixture that will be rendered into a temporary PDF upload.",
+    )
+    parser.add_argument("--run-id", help="Optional slug for the run folder.")
+    parser.add_argument(
+        "--correlation-prefix",
+        help="Optional prefix for generated per-question correlation ids.",
+    )
+    parser.add_argument(
+        "--question-limit",
+        type=int,
+        help="Limit the number of questions for a quick local run.",
+    )
+    parser.add_argument(
+        "--answer-composer-backend",
+        default="missing",
+        choices=("missing", "disabled", "ollama"),
+        help="Answer composer backend passed to the product app.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the artifact JSON with artifact_path.",
+    )
+    return parser.parse_args()
+
+
+class DatasetEmbeddingProvider:
+    def __init__(self) -> None:
+        self.profile = EmbeddingProfile(
+            provider="eval_fake_vector",
+            model="unit-vector",
+            dimensions=3,
+        )
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0, 0.0] for _text in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return [1.0, 0.0, 0.0]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

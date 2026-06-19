@@ -49,6 +49,7 @@ def test_question_runtime_recording_smoke_writes_correlation_artifacts(
     assert artifact["observed_answer"]["status"] == "accepted"
     assert artifact["observed_answer"]["evidence_state_counts"] == {"supported": 1}
     assert artifact["question_results"][0]["id"] == "SMOKE-QUESTION"
+    assert artifact["question_results"][0]["status_code"] == 200
     assert artifact["question_results"][0]["expected"]["evidence_state"] == "supported"
     assert artifact["question_results"][0]["rule_check"] == {
         "missing_cues": [],

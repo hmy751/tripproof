@@ -8,8 +8,8 @@ TripProof 개발 중에 쓰는 공개 가능한 sample 자료를 둔다.
 ```text
 fixtures/
   accommodation-checkin/
-    booking-confirmation.txt
-    host-message.txt
+    agoda-booking-confirmation-sample.txt
+    agoda-fukuoka-checkin-start-1600.txt
 ```
 
 sample 자료는 장면 단위로 둔다. 예를 들어 `fixtures/accommodation-checkin/`은

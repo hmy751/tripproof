@@ -123,6 +123,7 @@ class ObservationRecord:
 class QuestionReport:
     id: str
     priority: str
+    question_text: str
     correlation_id: str
     request_id: str
     expected_state: str
@@ -180,6 +181,13 @@ def _run_summary(
             1
             for request in _dict(run.get("requests")).values()
             if isinstance(request, dict) and request.get("status_code") != 200
+        )
+        + sum(
+            1
+            for question in _list(run.get("question_results"))
+            if isinstance(question, dict)
+            and isinstance(question.get("status_code"), int)
+            and question.get("status_code") != 200
         ),
         expected_state_counts=dict(expected_state_counts),
         observed_state_counts=dict(observed_state_counts),
@@ -222,6 +230,7 @@ def _question_reports(
             QuestionReport(
                 id=_text(question.get("id"), fallback=f"question-{index}"),
                 priority=_text(question.get("priority"), fallback="not_recorded"),
+                question_text=_text(question.get("question")),
                 correlation_id=correlation_id,
                 request_id=_text(question.get("request_id"), fallback="not_recorded"),
                 expected_state=_text(
@@ -272,6 +281,7 @@ def _legacy_smoke_question_result(run: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": "question_answer",
         "priority": "smoke",
+        "question": _text(run.get("question")),
         "correlation_id": _text(run.get("correlation_id")),
         "request_id": _text(request.get("request_id")),
         "expected": {},
@@ -445,6 +455,8 @@ def _render_question_detail(question: QuestionReport) -> str:
             _stat("observation", question.observation_source),
             _stat("LangSmith hint", f"search correlation_id:{question.correlation_id}"),
             "</dl>",
+            "<h3>Question</h3>",
+            f"<p>{_h(question.question_text or 'question text not recorded')}</p>",
             "<h3>Product answer</h3>",
             f"<p>{_h(question.answer_summary or 'summary not recorded')}</p>",
             _render_answer_items(question.answer_items),

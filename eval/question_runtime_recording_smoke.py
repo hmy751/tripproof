@@ -214,6 +214,7 @@ def _artifact(
         .isoformat(timespec="seconds")
         .replace("+00:00", "Z"),
         "kind": "question_runtime_recording_smoke",
+        "question": DEFAULT_QUESTION,
         "correlation_id": correlation_id,
         "product_entry_point": {
             "type": "fastapi_test_client",
@@ -371,8 +372,10 @@ def _question_result(
     return {
         "id": DEFAULT_QUESTION_ID,
         "priority": DEFAULT_QUESTION_PRIORITY,
+        "question": DEFAULT_QUESTION,
         "correlation_id": correlation_id,
         "request_id": request_id,
+        "status_code": 200,
         "expected": {
             "evidence_state": DEFAULT_EXPECTED_EVIDENCE_STATE,
             "required_evidence_cues": list(DEFAULT_REQUIRED_EVIDENCE_CUES),
