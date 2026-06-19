@@ -13,7 +13,6 @@ from server.retrieval.models import (
     SourceUnit,
 )
 from server.retrieval.repository import RetrievalRepository
-from server.retrieval.vector_math import cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -21,12 +20,9 @@ class SourceUnitMatch:
     source_unit: SourceUnit
     score: float
     lexical_score: int
-    vector_score: float | None
 
 
-SourceRetrievalStrategy = Literal[
-    "repository_vector", "local_vector", "lexical", "none"
-]
+SourceRetrievalStrategy = Literal["repository_vector", "lexical", "none"]
 
 
 @dataclass(frozen=True)
@@ -123,7 +119,6 @@ def retrieve_context_with_trace(
         target_id=target_id,
         query=query,
         source_units=units,
-        embedding_records=records,
         query_embedding=query_embedding,
         repository_vector_attempted=repository_vector_attempted,
         top_k=top_k,
@@ -218,18 +213,11 @@ def _retrieve_ranked_context(
     target_id: str,
     query: str,
     source_units: Iterable[SourceUnit],
-    embedding_records: Iterable[EmbeddingRecord],
     query_embedding: QueryEmbeddingAttempt,
     repository_vector_attempted: bool,
     top_k: int,
 ) -> RetrievedContext:
-    records = list(embedding_records)
-    matches = _rank_source_units(
-        source_units=source_units,
-        embedding_records=records,
-        query=query,
-        query_vector=query_embedding.vector,
-    )
+    matches = _rank_source_units(source_units=source_units, query=query)
     candidates = [
         RetrievedSource(
             target_id=target_id,
@@ -237,102 +225,45 @@ def _retrieve_ranked_context(
             source_unit=match.source_unit,
             score=match.score,
             lexical_score=match.lexical_score,
-            vector_score=match.vector_score,
+            vector_score=None,
         )
         for match in matches[:top_k]
         if match.score > 0
     ]
-    vector_candidate_count = sum(
-        candidate.vector_score is not None for candidate in candidates
-    )
-    strategy = _ranked_retrieval_strategy(
-        candidates=candidates,
-        vector_candidate_count=vector_candidate_count,
-    )
-    local_vector_attempted = _can_use_local_vectors(
-        query_embedding=query_embedding,
-        embedding_records=records,
-    )
     return RetrievedContext(
         context=AnswerContext(target_id=target_id, query=query, candidates=candidates),
         source_retrieval=SourceRetrievalTrace(
-            strategy=strategy,
+            strategy="lexical" if candidates else "none",
             query_embedding_attempted=query_embedding.attempted,
             query_embedding_available=query_embedding.available,
-            vector_attempted=repository_vector_attempted or local_vector_attempted,
-            vector_candidate_count=vector_candidate_count,
+            vector_attempted=repository_vector_attempted,
+            vector_candidate_count=0,
             fallback_used=repository_vector_attempted,
         ),
-    )
-
-
-def _ranked_retrieval_strategy(
-    *,
-    candidates: list[RetrievedSource],
-    vector_candidate_count: int,
-) -> SourceRetrievalStrategy:
-    if vector_candidate_count > 0:
-        return "local_vector"
-    if candidates:
-        return "lexical"
-    return "none"
-
-
-def _can_use_local_vectors(
-    *,
-    query_embedding: QueryEmbeddingAttempt,
-    embedding_records: Iterable[EmbeddingRecord],
-) -> bool:
-    return query_embedding.available and any(
-        record.status == "ready" and record.vector for record in embedding_records
     )
 
 
 def _rank_source_units(
     *,
     source_units: Iterable[SourceUnit],
-    embedding_records: Iterable[EmbeddingRecord],
     query: str,
-    query_vector: list[float] | None,
 ) -> list[SourceUnitMatch]:
-    embedding_records_list = list(embedding_records)
     units = list(source_units)
     if not units:
         return []
 
     terms = _query_terms(query)
-    vectors_by_source_unit_id = {
-        record.source_unit_id: record.vector
-        for record in embedding_records_list
-        if record.status == "ready" and record.vector
-    }
-
     matches: list[SourceUnitMatch] = []
     for unit in units:
         lexical_score = _score_text(unit.search_text, terms)
-        vector_score = None
-        if query_vector is not None:
-            document_vector = vectors_by_source_unit_id.get(unit.id)
-            if document_vector is not None:
-                vector_score = cosine_similarity(query_vector, document_vector)
-
-        if vector_score is not None:
-            score = vector_score
-        else:
-            score = float(lexical_score)
-
         matches.append(
             SourceUnitMatch(
                 source_unit=unit,
-                score=score,
+                score=float(lexical_score),
                 lexical_score=lexical_score,
-                vector_score=vector_score,
             )
         )
-
-    return sorted(
-        matches, key=lambda match: (match.score, match.lexical_score), reverse=True
-    )
+    return sorted(matches, key=lambda match: match.lexical_score, reverse=True)
 
 
 def _score_text(text: str, terms: list[str]) -> int:

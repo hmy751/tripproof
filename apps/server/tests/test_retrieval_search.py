@@ -6,7 +6,9 @@ from server.retrieval.repository import RetrievalRecords, VectorSourceUnitMatch
 from server.retrieval.search import retrieve_context, retrieve_context_with_trace
 
 
-def test_retrieve_context_prefers_vector_similarity_over_lexical_matches() -> None:
+def test_retrieve_context_without_repository_uses_lexical_not_vector() -> None:
+    # 벡터 매칭은 repository(prod=Supabase) 경로로만 한다. repository 없이 임베딩만
+    # 있어도 로컬에서 벡터 랭킹하지 않고 lexical로 떨어진다.
     relevant = _source_unit(
         id="su_relevant",
         text="입실은 오후 세 시부터 가능합니다.",
@@ -21,7 +23,7 @@ def test_retrieve_context_prefers_vector_similarity_over_lexical_matches() -> No
         _embedding_record(source_unit_id=lexical_decoy.id, vector=[0.2, 0.98]),
     ]
 
-    context = retrieve_context(
+    retrieved = retrieve_context_with_trace(
         target_id="checkin_start_time",
         query="check-in time?",
         source_units=[lexical_decoy, relevant],
@@ -29,13 +31,14 @@ def test_retrieve_context_prefers_vector_similarity_over_lexical_matches() -> No
         embedding_provider=provider,
     )
 
-    assert [candidate.source_unit.id for candidate in context.candidates] == [
-        "su_relevant",
-        "su_decoy",
+    assert retrieved.source_retrieval.strategy == "lexical"
+    assert all(
+        candidate.vector_score is None for candidate in retrieved.context.candidates
+    )
+    # lexical 점수만으로 정렬되므로 lexical 매칭이 있는 decoy만 남는다.
+    assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
+        "su_decoy"
     ]
-    assert context.candidates[0].vector_score == 1.0
-    assert context.candidates[0].lexical_score == 0
-    assert context.candidates[1].lexical_score > context.candidates[0].lexical_score
 
 
 def test_retrieve_context_uses_lexical_search_when_vectors_are_not_ready() -> None:
@@ -183,15 +186,13 @@ def test_retrieve_context_falls_back_to_lexical_when_repository_vector_match_is_
     assert [candidate.source_unit.id for candidate in context.candidates] == [
         "su_lexical"
     ]
-    assert context.candidates[0].vector_score == 1.0
+    assert context.candidates[0].vector_score is None
     assert context.candidates[0].lexical_score > 0
 
 
-def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector() -> (
-    None
-):
+def test_retrieve_context_with_trace_records_repository_fallback_to_lexical() -> None:
     source_unit = _source_unit(
-        id="su_local_vector",
+        id="su_lexical",
         text="체크인 시 예약 확정서를 제시해 주세요.",
     )
     embedding = _embedding_record(source_unit_id=source_unit.id, vector=[1.0, 0.0])
@@ -209,13 +210,13 @@ def test_retrieve_context_with_trace_records_repository_fallback_to_local_vector
     )
 
     assert [candidate.source_unit.id for candidate in retrieved.context.candidates] == [
-        "su_local_vector"
+        "su_lexical"
     ]
-    assert retrieved.source_retrieval.strategy == "local_vector"
+    assert retrieved.source_retrieval.strategy == "lexical"
     assert retrieved.source_retrieval.query_embedding_attempted is True
     assert retrieved.source_retrieval.query_embedding_available is True
     assert retrieved.source_retrieval.vector_attempted is True
-    assert retrieved.source_retrieval.vector_candidate_count == 1
+    assert retrieved.source_retrieval.vector_candidate_count == 0
     assert retrieved.source_retrieval.fallback_used is True
 
 
