@@ -26,6 +26,8 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
             "dataset_eval_test",
             "--question-limit",
             "2",
+            "--runtime-mode",
+            "deterministic",
             "--json",
         ],
         check=True,
@@ -49,7 +51,10 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
         "source_path": "fixtures/accommodation-checkin/agoda-booking-confirmation-sample.txt",
         "uploaded_file_name": "agoda-booking-confirmation-sample.pdf",
     }
+    assert artifact["runtime"]["mode"] == "deterministic"
+    assert artifact["runtime"]["production_like"] is False
     assert artifact["runtime"]["embedding_provider"] == "eval_fake_vector"
+    assert artifact["runtime"]["answer_composer"] == "missing"
     assert artifact["question_results"][0]["id"] == "AGODA-P0-01"
     assert artifact["question_results"][0]["status_code"] == 200
     assert artifact["question_results"][0]["correlation_id"] == (
@@ -148,6 +153,8 @@ def test_question_dataset_runner_accepts_original_pdf_baseline_input(
             "original_pdf_eval",
             "--question-limit",
             "1",
+            "--runtime-mode",
+            "deterministic",
             "--json",
         ],
         check=True,
@@ -235,6 +242,8 @@ def test_question_dataset_runner_makes_correlation_ids_unique_on_collisions(
             "collision-test",
             "--correlation-prefix",
             "collision_eval",
+            "--runtime-mode",
+            "deterministic",
             "--json",
         ],
         check=True,

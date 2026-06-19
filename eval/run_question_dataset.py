@@ -4,17 +4,13 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from io import BytesIO
 import json
-import os
 from pathlib import Path
 import re
 import sys
 from typing import Any, Literal
 from uuid import uuid4
-
-os.environ.setdefault("TRIPPROOF_RETRIEVAL_BACKEND", "memory")
-os.environ.setdefault("TRIPPROOF_EMBEDDING_AUTO_GENERATE", "0")
-os.environ.setdefault("TRIPPROOF_FACT_PROPOSER_BACKEND", "missing")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APPS_PATH = REPO_ROOT / "apps"
@@ -22,16 +18,14 @@ if str(APPS_PATH) not in sys.path:
     sys.path.insert(0, str(APPS_PATH))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from pypdf import PdfWriter  # noqa: E402
+from pypdf.generic import (  # noqa: E402
+    DecodedStreamObject,
+    DictionaryObject,
+    NameObject,
+)
 
 from html_report import DEFAULT_REPORT_FILE_NAME, write_html_report  # noqa: E402
-from question_runtime_recording_smoke import (  # noqa: E402
-    _answer_item_summaries,
-    _answer_text_for_rules,
-    _has_no_product_trace_ids,
-    _pdf_with_text,
-    _read_jsonl,
-    _run_id,
-)
 from server.app import (  # noqa: E402
     CORRELATION_ID_HEADER,
     REQUEST_ID_HEADER,
@@ -40,10 +34,15 @@ from server.app import (  # noqa: E402
 from server.materials.store import MaterialStore  # noqa: E402
 from server.observations.export import LocalArtifactObservationExporter  # noqa: E402
 from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
+from server.runtime.config_snapshot import (  # noqa: E402
+    answer_model_runtime_config_snapshot_from_composer,
+)
 
 RUN_SCHEMA_VERSION = "tripproof.eval_run.question_dataset.v1"
 RUN_PURPOSE_ORIGINAL_PDF_BASELINE = "original_pdf_baseline"
 RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE = "sample_fixture_smoke"
+RUNTIME_MODE_PRODUCTION = "production"
+RUNTIME_MODE_DETERMINISTIC = "deterministic"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "eval" / "runs" / "question-dataset"
 DEFAULT_QUESTIONS_FILE = (
     REPO_ROOT / "eval" / "datasets" / "agoda-booking-confirmation" / "questions.json"
@@ -67,6 +66,9 @@ class MaterialInput:
     run_purpose: Literal["original_pdf_baseline", "sample_fixture_smoke"]
 
 
+RuntimeMode = Literal["production", "deterministic"]
+
+
 def main() -> int:
     args = _parse_args()
     artifact, artifact_path = run_question_dataset(
@@ -77,6 +79,7 @@ def main() -> int:
         run_id=args.run_id,
         correlation_prefix=args.correlation_prefix,
         question_limit=args.question_limit,
+        runtime_mode=args.runtime_mode,
         answer_composer_backend=args.answer_composer_backend,
     )
     if args.json:
@@ -102,7 +105,8 @@ def run_question_dataset(
     run_id: str | None = None,
     correlation_prefix: str | None = None,
     question_limit: int | None = None,
-    answer_composer_backend: str = "missing",
+    runtime_mode: RuntimeMode = RUNTIME_MODE_PRODUCTION,
+    answer_composer_backend: str | None = None,
 ) -> tuple[dict[str, Any], Path]:
     active_run_id = _run_id(run_id)
     active_correlation_prefix = correlation_prefix or f"eval_{uuid4().hex[:8]}"
@@ -120,18 +124,12 @@ def run_question_dataset(
     )
 
     exporter = LocalArtifactObservationExporter(observation_dir)
-    store = MaterialStore(
-        embedding_provider=DatasetEmbeddingProvider(),
-        embedding_auto_generate=True,
-        retrieval_backend="memory",
+    app = _create_dataset_app(
+        runtime_mode=runtime_mode,
+        answer_composer_backend=answer_composer_backend,
+        observation_exporter=exporter,
     )
-    client = TestClient(
-        create_app(
-            store=store,
-            fact_proposer_backend=answer_composer_backend,
-            observation_exporter=exporter,
-        )
-    )
+    client = TestClient(app)
 
     upload = client.post(
         "/api/materials",
@@ -197,7 +195,7 @@ def run_question_dataset(
         question_results=question_results,
         observation_export_path=Path("observations") / exporter.path.name,
         observation_rows=observation_rows,
-        answer_composer_backend=answer_composer_backend,
+        runtime=_runtime_artifact(app=app, runtime_mode=runtime_mode),
         product_trace_safe=product_trace_safe,
     )
     artifact_path.write_text(
@@ -218,7 +216,7 @@ def _artifact(
     question_results: list[dict[str, Any]],
     observation_export_path: Path,
     observation_rows: list[dict[str, Any]],
-    answer_composer_backend: str,
+    runtime: dict[str, Any],
     product_trace_safe: bool,
 ) -> dict[str, Any]:
     upload_request_id = upload_response.headers.get(REQUEST_ID_HEADER, "")
@@ -290,12 +288,7 @@ def _artifact(
             "type": "fastapi_test_client",
             "endpoints": ["POST /api/materials", "POST /api/questions"],
         },
-        "runtime": {
-            "retrieval_backend": "memory",
-            "embedding_auto_generate": True,
-            "embedding_provider": "eval_fake_vector",
-            "answer_composer": answer_composer_backend,
-        },
+        "runtime": runtime,
         "requests": {
             "material_upload": {
                 "status_code": upload_response.status_code,
@@ -317,6 +310,55 @@ def _artifact(
             "Open report.html, pick a failed question, and follow the observation "
             "source path for the same correlation_id."
         ),
+    }
+
+
+def _create_dataset_app(
+    *,
+    runtime_mode: RuntimeMode,
+    answer_composer_backend: str | None,
+    observation_exporter: LocalArtifactObservationExporter,
+):
+    if runtime_mode == RUNTIME_MODE_DETERMINISTIC:
+        store = MaterialStore(
+            embedding_provider=DatasetEmbeddingProvider(),
+            embedding_auto_generate=True,
+            retrieval_backend="memory",
+        )
+        return create_app(
+            store=store,
+            fact_proposer_backend=answer_composer_backend or "missing",
+            observation_exporter=observation_exporter,
+        )
+
+    if runtime_mode != RUNTIME_MODE_PRODUCTION:
+        raise ValueError(f"Unsupported runtime mode: {runtime_mode}")
+
+    return create_app(
+        fact_proposer_backend=answer_composer_backend,
+        observation_exporter=observation_exporter,
+    )
+
+
+def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
+    settings = app.state.runtime_config_settings
+    answer_model = answer_model_runtime_config_snapshot_from_composer(
+        app.state.library_chat_answer_composer
+    )
+    answer_composer = answer_model.backend if answer_model is not None else "unknown"
+    answer_model_name = answer_model.model if answer_model is not None else None
+    return {
+        "mode": runtime_mode,
+        "production_like": runtime_mode == RUNTIME_MODE_PRODUCTION,
+        "retrieval_backend": settings.retrieval_backend,
+        "retrieval_top_k": settings.retrieval_top_k,
+        "retrieval_similarity_threshold": settings.retrieval_similarity_threshold,
+        "embedding_auto_generate": settings.embedding_auto_generate,
+        "embedding_provider": settings.embedding_profile.provider,
+        "embedding_model": settings.embedding_profile.model,
+        "embedding_dimensions": settings.embedding_profile.dimensions,
+        "answer_composer": answer_composer,
+        "answer_model": answer_model_name,
     }
 
 
@@ -388,6 +430,18 @@ def _load_questions(path: Path) -> list[dict[str, Any]]:
     return questions
 
 
+def _run_id(value: str | None) -> str:
+    if value is not None:
+        slug = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", slug):
+            raise ValueError(
+                "run_id must be 1-128 characters of A-Z, a-z, 0-9, '.', '_', ':', or '-'."
+            )
+        return slug
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return f"{timestamp}-{uuid4().hex[:8]}"
+
+
 def _material_input(
     *,
     material_text_file: Path | None,
@@ -439,6 +493,103 @@ def _run_purpose_label(run_purpose: str) -> str:
     if run_purpose == RUN_PURPOSE_SAMPLE_FIXTURE_SMOKE:
         return "Sample fixture smoke"
     return run_purpose
+
+
+def _pdf_with_text(text: str) -> bytes:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=612, height=792)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+    )
+    stream = DecodedStreamObject()
+    stream.set_data(f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode("utf-8"))
+    page[NameObject("/Contents")] = stream
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _answer_text_for_rules(summary: object, answer_items: object) -> str:
+    parts: list[str] = []
+    if isinstance(summary, str):
+        parts.append(summary)
+    if isinstance(answer_items, list):
+        for item in answer_items:
+            if not isinstance(item, dict):
+                continue
+            body = item.get("body")
+            if isinstance(body, str):
+                parts.append(body)
+            evidence = item.get("evidence")
+            if not isinstance(evidence, list):
+                continue
+            for ref in evidence:
+                if isinstance(ref, dict) and isinstance(ref.get("snippet"), str):
+                    parts.append(ref["snippet"])
+    return "\n".join(parts)
+
+
+def _answer_item_summaries(answer_items: object) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    if not isinstance(answer_items, list):
+        return summaries
+    for item in answer_items:
+        if not isinstance(item, dict):
+            continue
+        summaries.append(
+            {
+                "id": item.get("id"),
+                "label": item.get("label"),
+                "body": item.get("body"),
+                "value": item.get("value"),
+                "evidence_state": item.get("evidenceState"),
+                "evidence": _evidence_summaries(item.get("evidence")),
+            }
+        )
+    return summaries
+
+
+def _evidence_summaries(evidence_items: object) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    if not isinstance(evidence_items, list):
+        return summaries
+    for evidence in evidence_items:
+        if not isinstance(evidence, dict):
+            continue
+        summaries.append(
+            {
+                "material_id": evidence.get("materialId"),
+                "source_unit_id": evidence.get("sourceUnitId"),
+                "label": evidence.get("label"),
+                "locator": evidence.get("locator"),
+                "snippet": evidence.get("snippet"),
+            }
+        )
+    return summaries
+
+
+def _has_no_product_trace_ids(payload: object) -> bool:
+    if isinstance(payload, dict):
+        return not any(
+            key in payload
+            for key in ("requestId", "correlationId", "request_id", "correlation_id")
+        )
+    return True
 
 
 def _response_json(response) -> dict[str, Any]:
@@ -551,10 +702,20 @@ def _parse_args() -> argparse.Namespace:
         help="Limit the number of questions for a quick local run.",
     )
     parser.add_argument(
+        "--runtime-mode",
+        default=RUNTIME_MODE_PRODUCTION,
+        choices=(RUNTIME_MODE_PRODUCTION, RUNTIME_MODE_DETERMINISTIC),
+        help=(
+            "Runtime mode. production uses the app's configured product runtime; "
+            "deterministic uses fake embeddings, memory retrieval, and a missing "
+            "composer unless explicitly overridden."
+        ),
+    )
+    parser.add_argument(
         "--answer-composer-backend",
-        default="missing",
+        default=None,
         choices=("missing", "disabled", "ollama"),
-        help="Answer composer backend passed to the product app.",
+        help=("Optional answer composer backend override. Omit for production config."),
     )
     parser.add_argument(
         "--json",
