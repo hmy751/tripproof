@@ -48,6 +48,14 @@ def test_question_runtime_recording_smoke_writes_correlation_artifacts(
     assert artifact["requests"]["question_answer"]["correlation_id"] == "flow_eval_test"
     assert artifact["observed_answer"]["status"] == "accepted"
     assert artifact["observed_answer"]["evidence_state_counts"] == {"supported": 1}
+    assert artifact["question_results"][0]["id"] == "SMOKE-QUESTION"
+    assert artifact["question_results"][0]["expected"]["evidence_state"] == "supported"
+    assert artifact["question_results"][0]["rule_check"] == {
+        "missing_cues": [],
+        "must_not_hits": [],
+        "passed": True,
+        "state_matched": True,
+    }
     assert all(artifact["checks"].values())
 
     observation_export_path = (
@@ -59,3 +67,20 @@ def test_question_runtime_recording_smoke_writes_correlation_artifacts(
     ]
     assert [row["operation"] for row in rows] == ["material_upload", "question_answer"]
     assert rows[1]["correlation_id"] == "flow_eval_test"
+    observation_json = json.dumps(rows, ensure_ascii=False)
+    assert "required_evidence_cues" not in observation_json
+    assert "must_not_claim" not in observation_json
+    assert "rule_check" not in observation_json
+    assert "expected" not in observation_json
+
+    report_path = artifact_path.parent / artifact["html_report"]["path"]
+    assert report_path == tmp_path / "smoke-test" / "report.html"
+    report_html = report_path.read_text(encoding="utf-8")
+    assert "TripProof eval" in report_html
+    assert "SMOKE-QUESTION" in report_html
+    assert "flow_eval_test" in report_html
+    assert "observations/observation-export.jsonl:2" in report_html
+    assert "Hotel address is Hakata. Check-in starts at 15:00." in report_html
+    assert "Check-in starts at 15:00." in report_html
+    assert "Composer context" in report_html
+    assert "LangSmith hint" in report_html

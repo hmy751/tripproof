@@ -8,7 +8,7 @@ _RUN_NAMES = {
     "material_upload": "tripproof.material_upload",
     "question_answer": "tripproof.question_answer",
 }
-_LOCAL_RICH_FACT_KEYS = {"candidates", "items"}
+_LOCAL_RICH_FACT_KEYS = {"candidates", "context_blocks", "items"}
 
 
 class LangSmithRunWriter(Protocol):

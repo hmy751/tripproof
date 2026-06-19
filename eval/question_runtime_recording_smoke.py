@@ -40,11 +40,17 @@ from server.schemas.answers import (
     ChatAnswerResponse,
 )  # noqa: E402
 from server.schemas.facts import EvidenceRefResponse  # noqa: E402
+from html_report import DEFAULT_REPORT_FILE_NAME, write_html_report  # noqa: E402
 
 DEFAULT_MATERIAL_TEXT = "Hotel address is Hakata. Check-in starts at 15:00."
 DEFAULT_QUESTION = "check-in time?"
+DEFAULT_QUESTION_ID = "SMOKE-QUESTION"
+DEFAULT_QUESTION_PRIORITY = "smoke"
+DEFAULT_EXPECTED_EVIDENCE_STATE = "supported"
 DEFAULT_ANSWER_BODY = "Check-in starts at 15:00."
 DEFAULT_EVIDENCE_SNIPPET = "Check-in starts at 15:00."
+DEFAULT_REQUIRED_EVIDENCE_CUES = ("Check-in starts at 15:00",)
+DEFAULT_MUST_NOT_CLAIM = ("18:00",)
 RUN_SCHEMA_VERSION = "tripproof.eval_run.question_runtime_recording.v1"
 
 
@@ -134,6 +140,7 @@ def run_smoke_eval(
         json.dumps(artifact, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    write_html_report(run_json_path=artifact_path)
     return artifact, artifact_path
 
 
@@ -241,11 +248,20 @@ def _artifact(
             "page_count": question_body.get("pageCount"),
             "char_count": question_body.get("charCount"),
         },
+        "question_results": [
+            _question_result(
+                correlation_id=correlation_id,
+                request_id=question_request_id,
+                question_body=question_body,
+                evidence_state_counts=dict(evidence_state_counts),
+            )
+        ],
         "observation_export": {
             "path": str(observation_export_path),
             "record_count": len(observation_rows),
             "records": observation_summaries,
         },
+        "html_report": {"path": DEFAULT_REPORT_FILE_NAME},
         "checks": checks,
         "next_verification_point": (
             "For a real material/question run, find local observation JSONL and LangSmith trace "
@@ -324,6 +340,76 @@ def _payload_value(row: dict[str, object], key: str) -> object:
     if not isinstance(payload, dict):
         return None
     return payload.get(key)
+
+
+def _question_result(
+    *,
+    correlation_id: str,
+    request_id: str,
+    question_body: dict[str, object],
+    evidence_state_counts: dict[object, int],
+) -> dict[str, object]:
+    answer = (
+        question_body.get("answer")
+        if isinstance(question_body.get("answer"), dict)
+        else {}
+    )
+    answer_summary = answer.get("summary") if isinstance(answer, dict) else None
+    answer_items = (
+        answer.get("items")
+        if isinstance(answer, dict) and isinstance(answer.get("items"), list)
+        else []
+    )
+    text_for_rules = _answer_text_for_rules(answer_summary, answer_items)
+    missing_cues = [
+        cue for cue in DEFAULT_REQUIRED_EVIDENCE_CUES if cue not in text_for_rules
+    ]
+    must_not_hits = [
+        claim for claim in DEFAULT_MUST_NOT_CLAIM if claim in text_for_rules
+    ]
+    state_matched = evidence_state_counts.get(DEFAULT_EXPECTED_EVIDENCE_STATE, 0) > 0
+    return {
+        "id": DEFAULT_QUESTION_ID,
+        "priority": DEFAULT_QUESTION_PRIORITY,
+        "correlation_id": correlation_id,
+        "request_id": request_id,
+        "expected": {
+            "evidence_state": DEFAULT_EXPECTED_EVIDENCE_STATE,
+            "required_evidence_cues": list(DEFAULT_REQUIRED_EVIDENCE_CUES),
+            "must_not_claim": list(DEFAULT_MUST_NOT_CLAIM),
+        },
+        "observed": {
+            "status": question_body.get("status"),
+            "answer_summary": answer_summary,
+            "evidence_state_counts": evidence_state_counts,
+        },
+        "rule_check": {
+            "passed": state_matched and not missing_cues and not must_not_hits,
+            "state_matched": state_matched,
+            "missing_cues": missing_cues,
+            "must_not_hits": must_not_hits,
+        },
+    }
+
+
+def _answer_text_for_rules(summary: object, answer_items: object) -> str:
+    parts: list[str] = []
+    if isinstance(summary, str):
+        parts.append(summary)
+    if isinstance(answer_items, list):
+        for item in answer_items:
+            if not isinstance(item, dict):
+                continue
+            body = item.get("body")
+            if isinstance(body, str):
+                parts.append(body)
+            evidence = item.get("evidence")
+            if not isinstance(evidence, list):
+                continue
+            for ref in evidence:
+                if isinstance(ref, dict) and isinstance(ref.get("snippet"), str):
+                    parts.append(ref["snippet"])
+    return "\n".join(parts)
 
 
 def _has_no_product_trace_ids(payload: object) -> bool:

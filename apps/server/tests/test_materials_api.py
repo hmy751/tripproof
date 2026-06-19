@@ -394,6 +394,13 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert _export_step(question_export, "question_status")["facts"] == {
         "status": "accepted"
     }
+    context_facts = _export_step(question_export, "context_assembly")["facts"]
+    assert context_facts["context_blocks"][0]["source_unit_id"]
+    assert context_facts["context_blocks"][0]["locator"].endswith("p.1 u.1")
+    assert (
+        context_facts["context_blocks"][0]["text"]
+        == "Hotel address is Hakata. Check-in starts at 15:00."
+    )
     candidate_facts = _export_step(question_export, "candidate_summary")["facts"]
     assert candidate_facts["candidate_count"] == 1
     assert candidate_facts["candidates"][0]["source_unit_id"]
@@ -846,6 +853,13 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert context_facts["candidate_source_unit_ids"] == [
         composer.last_context.candidates[0].source_unit.id
     ]
+    assert context_facts["context_blocks"][0]["source_unit_id"] == (
+        composer.last_context.candidates[0].source_unit.id
+    )
+    assert (
+        context_facts["context_blocks"][0]["text"]
+        == "Hotel address is Hakata. Check-in starts at 15:00."
+    )
     assert record.step("candidate_summary").status == "succeeded"
     candidate_facts = record.step("candidate_summary").facts
     assert candidate_facts["candidate_count"] == 1

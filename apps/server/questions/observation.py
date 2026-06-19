@@ -99,7 +99,12 @@ _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
         "vector_candidate_count",
         "fallback_used",
     },
-    "context_assembly": {"executed", "target_id", "candidate_source_unit_ids"},
+    "context_assembly": {
+        "executed",
+        "target_id",
+        "candidate_source_unit_ids",
+        "context_blocks",
+    },
     "candidate_summary": {
         "candidate_count",
         "candidates_with_vector_score",
@@ -343,6 +348,10 @@ class QuestionObservationReporter:
                 "candidate_source_unit_ids": [
                     candidate.source_unit.id for candidate in answer_context.candidates
                 ],
+                "context_blocks": [
+                    answer_context_block(candidate)
+                    for candidate in answer_context.candidates
+                ],
             },
         )
         self._recorder.succeed(
@@ -453,6 +462,22 @@ def retrieval_candidate_detail(
         "score": candidate.score,
         "lexical_score": candidate.lexical_score,
         "vector_score": candidate.vector_score,
+        "text": source_unit.text,
+    }
+
+
+def answer_context_block(
+    candidate: RetrievedSource,
+) -> dict[str, QuestionObservationFactValue]:
+    source_unit = candidate.source_unit
+    return {
+        "source_unit_id": source_unit.id,
+        "material_id": source_unit.material_id,
+        "locator": source_unit_locator_summary(
+            page=source_unit.page,
+            unit_index=source_unit.unit_index,
+        ),
+        "char_length": len(source_unit.text),
         "text": source_unit.text,
     }
 
