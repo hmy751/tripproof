@@ -136,4 +136,4 @@ StoredMaterial(text, fileName, pageCount)
 - Supabase `source_embeddings.material_id` denormalization을 DB constraint로 더 강하게 묶을지.
 - Ollama 실제 호출은 설치된 embedding model과 `.env` model을 맞춘 뒤 수동 또는 integration test로 언제 검증할지.
 - lexical score와 vector score를 같은 retrieval 단계에서 합칠지, 03에서 rerank나 `AnswerContext` 구성으로 넘길지.
-- 03에서 `RetrievedSource`와 `EvidenceRef`를 만들 때 현재 `SourceUnitExcerpt` smoke helper를 유지할지, 03 전용 candidate 타입으로 교체할지.
+- 03에서 `RetrievedSource`와 `EvidenceRef`를 만든다. (미사용 `SourceUnitExcerpt`/excerpt helper는 이후 제거됨.)

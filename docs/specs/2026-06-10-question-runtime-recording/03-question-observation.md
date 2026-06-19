@@ -117,7 +117,7 @@ question_answer
 | `query_snapshot` | `question_length` | `empty_question` |
 | `ready_material_selection` | `ready_material_count`, `ready_material_ids` | `no_ready_materials` |
 | `retrieval_record_load` | `executed`, `source_unit_count`, `embedding_record_count` | `retrieval_failed` |
-| `source_retrieval` | `executed`, `strategy`, `query_embedding_attempted`, `query_embedding_available`, `vector_attempted`, `vector_candidate_count`, `fallback_used` | `retrieval_failed` |
+| `source_retrieval` | `executed`, `query_embedding_attempted`, `query_embedding_available`, `vector_attempted`, `vector_candidate_count`, `fallback_used` | `retrieval_failed` |
 | `context_assembly` | `executed`, `target_id` | `retrieval_failed` |
 | `candidate_summary` | `candidate_count`, `candidates_with_vector_score`, `candidates_with_lexical_score` | 없음 |
 | `prompt_snapshot` | `available`, `prompt_domain`, `prompt_name`, `prompt_version`, `prompt_body_hash`, `prompt_file_hash`, `prompt_asset_path` | 없음 |
@@ -169,7 +169,7 @@ question_answer
     question_status
 ```
 
-`source_retrieval`은 step이지만, `lexical fallback`은 지금 단계에서는 `source_retrieval`의 fact에 가깝다. 예: `strategy`, `vector_attempted`, `vector_candidate_count`, `fallback_used`. rerank, judge, grounding check가 실제 product module로 들어와 후보 순서나 answer state를 바꾸면 독립 step으로 승격한다.
+`source_retrieval`은 step이지만, `lexical fallback`은 지금 단계에서는 `source_retrieval`의 fact에 가깝다. 예: `vector_attempted`, `vector_candidate_count`, `fallback_used`. rerank, judge, grounding check가 실제 product module로 들어와 후보 순서나 answer state를 바꾸면 독립 step으로 승격한다.
 
 step/fact 판단 기준은 함수 크기나 route visibility가 아니라 AI/runtime 원인 추적력이다. raw SourceUnit text, embedding vector, raw LLM payload, exception stack은 기본 record에 넣지 않는다. 필요하면 id/count/hash/status summary만 남긴다.
 
@@ -211,7 +211,7 @@ question_answer
 ## 구현 중 주의할 점
 
 - route-level `composer_call` result는 composer 내부 provider 성공 여부가 아니라 `compose()` 호출이 `ChatAnswerResponse`를 반환했는지에 대한 관측이다.
-- retrieval 후보 count는 `AnswerContext.candidates` 길이로 시작한다. vector/lexical 세부는 `source_retrieval`의 strategy/count/fallback summary와 `candidate_summary`의 count까지만 남긴다.
+- retrieval 후보 count는 `AnswerContext.candidates` 길이로 시작한다. vector/lexical 세부는 `source_retrieval`의 vector_attempted/vector_candidate_count/fallback_used summary와 `candidate_summary`의 count까지만 남긴다.
 - material id 목록은 ready material id만 남긴다. 요청 payload에 들어왔지만 failed이거나 존재하지 않는 material id를 별도 진단하는 것은 다음 slice다.
 - prompt snapshot은 composer가 prompt identity를 노출할 때만 version/hash/asset path summary를 남긴다. prompt 전문은 저장하지 않는다.
 - config snapshot은 이 record와 나중에 연결할 수 있지만, 이번 record가 config snapshot 없이도 닫히도록 둔다.

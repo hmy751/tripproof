@@ -80,7 +80,7 @@ SourceUnit[] / EmbeddingRecord[] / question
 
 - 02의 `SourceUnit`과 `EmbeddingRecord`를 입력으로 받아 Library Chat 질문용 `AnswerContext`를 만든다.
 - `TRIPPROOF_RETRIEVAL_BACKEND=supabase`에서는 ready vector가 있으면 Supabase `match_tripproof_source_units` RPC 후보를 우선 사용하고, ready vector나 match 결과가 없으면 lexical fallback 후보를 사용한다.
-- `TRIPPROOF_FACT_PROPOSER_BACKEND=ollama` 이름은 남아 있지만, 현재 `/api/questions` 경로에서는 Ollama chat JSON backend가 Library Chat answer composer로 소비되어 `ChatAnswer` item payload를 만든다.
+- `TRIPPROOF_ANSWER_COMPOSER_BACKEND=ollama`로 Ollama chat JSON backend가 Library Chat answer composer로 소비되어 `ChatAnswer` item payload를 만든다.
 - server grounding은 answer item payload의 evidence snippet이 `SourceUnit` 원문에 포함될 때만 `supported` evidence로 받아들인다.
 - LLM이 줄바꿈이나 공백을 정리한 snippet을 반환하면 server grounding이 `SourceUnit` 원문 span으로 다시 grounding한다.
 - 예약 확정서 제시 항목은 LLM이 맞는 `SourceUnit`을 고르되 snippet을 의역한 경우 해당 `SourceUnit` 원문에서 복구한 snippet/window를 `EvidenceRef`로 사용한다.
