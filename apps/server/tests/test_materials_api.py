@@ -587,6 +587,29 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
         retrieval_pipeline["metadata"]["tripproof.runtime_hint.retrieval_backend"]
         == "memory"
     )
+    context_assembly = _langsmith_child_run(question_run, "context_assembly")
+    assert context_assembly["outputs"]["facts"] == {
+        "executed": True,
+        "target_id": "library_chat_answer",
+        "candidate_source_unit_ids": [
+            composer.last_context.candidates[0].source_unit.id
+        ],
+    }
+    assert context_assembly["metadata"]["tripproof.step.facts"] == {
+        "executed": True,
+        "target_id": "library_chat_answer",
+        "candidate_source_unit_ids": [
+            composer.last_context.candidates[0].source_unit.id
+        ],
+    }
+    candidate_summary = _langsmith_child_run(question_run, "candidate_summary")
+    assert candidate_summary["outputs"]["facts"] == {
+        "candidate_count": 1,
+        "candidates_with_vector_score": 0,
+        "candidates_with_lexical_score": 1,
+    }
+    assert "candidates" not in candidate_summary["metadata"]["tripproof.step.facts"]
+    assert "context_blocks" not in context_assembly["metadata"]["tripproof.step.facts"]
     source_retrieval = _langsmith_child_run(question_run, "source_retrieval")
     assert (
         source_retrieval["metadata"]["tripproof.runtime_hint.embedding_provider"]
@@ -605,6 +628,18 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
         "item_count": 1,
         "evidence_state_counts": {"supported": 1},
     }
+    assert (
+        _langsmith_event(question_run, "context_assembly")["kwargs"]["facts"]
+        == context_assembly["outputs"]["facts"]
+    )
+    assert (
+        _langsmith_event(question_run, "candidate_summary")["kwargs"]["facts"]
+        == candidate_summary["outputs"]["facts"]
+    )
+    assert (
+        "items"
+        not in _langsmith_event(question_run, "answer_projection")["kwargs"]["facts"]
+    )
 
     exported_json = json.dumps(writer.runs, ensure_ascii=False)
     assert "booking-secret-name.pdf" not in exported_json
