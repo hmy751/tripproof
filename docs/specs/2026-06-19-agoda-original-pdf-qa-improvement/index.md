@@ -12,6 +12,12 @@
 - `docs/specs/2026-06-19-observation-eval-operating-model/index.md`
 - `eval/datasets/agoda-booking-confirmation/questions.json`
 
+기준 artifact:
+
+- 최신 production-like baseline: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/`
+- 기준 report: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/report.html`
+- 기준 run 원장: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/run.json`
+
 ## 읽는 순서
 
 1. `01-original-pdf-observation-baseline.md`
@@ -24,6 +30,8 @@
 현재 observation/report 흐름은 질문 실행 뒤 `run.json`, local observation JSONL, `report.html`을 함께 확인하게 해준다. 이제 필요한 것은 관찰 도구를 더 키우는 일이 아니라, 그 관찰을 통해 확인된 실패를 product 동작 개선으로 연결하는 일이다.
 
 Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. sample text fixture를 임시 PDF로 만들어 product API를 호출하는 실행은 runner smoke나 report 렌더링 확인에는 쓸 수 있지만, Agoda 원문 PDF 개선의 근거가 될 수 없다.
+
+2026-06-19 production-like baseline은 `supabase` retrieval, Ollama embedding, Ollama answer composer로 실행했다. API/observation 연결은 정상으로 확인됐지만 8개 질문의 rule check는 모두 실패했다. 이 묶음의 다음 작업은 이 baseline artifact를 before 기준으로 삼는다.
 
 ## 중심 흐름
 
