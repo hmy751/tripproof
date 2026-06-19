@@ -24,6 +24,12 @@
    원문 PDF를 product API에 넣어 현재 실패를 확인하고, 실패 유형을 source unit, retrieval, answer composer, 상태 검증 문제로 나누는 기준이다.
 2. `02-source-unit-structure-improvement.md`
    baseline에서 확인한 문제를 바탕으로 먼저 적용할 product 개선 slice다. 원문 PDF를 더 좋은 source unit으로 쪼개 retrieval과 evidence 경로를 개선하는 데 집중한다.
+3. `03-question-decomposition.md`
+   source unit이 의미 단위로 잡힌 뒤, 하나의 사용자 질문을 체크인/체크아웃, 객실/인원, 취소/노쇼 같은 하위 정보 요청으로 나누는 기준이다.
+4. `04-subrequest-retrieval.md`
+   하위 요청별로 필요한 source unit 후보를 따로 찾고, 후보 coverage와 missing 원인을 읽을 수 있게 만드는 기준이다.
+5. `05-state-validation-answer-assembly.md`
+   값과 조건 문맥을 함께 검증하고, LLM을 넓은 문서 탐색자가 아니라 찾아온 근거를 설명하는 조립자로 제한하는 기준이다.
 
 ## 왜 지금
 
@@ -39,8 +45,10 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 원문 Agoda PDF 실행
 -> report/observation으로 실패 유형 분류
 -> 첫 product 개선: source unit 구조화
+-> 질문을 하위 정보 요청으로 분해
+-> 하위 요청별 retrieval candidate 확보
+-> 상태 검증과 답변 조립 경계 정리
 -> 같은 원문 PDF 질문셋으로 before/after 확인
--> 다음 개선 slice 선택
 ```
 
 ## 공유 규칙
@@ -60,7 +68,22 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 1. 원문 PDF run과 sample fixture smoke run의 목적이 문서와 report에서 섞이지 않는다.
 2. 원문 PDF baseline에서 8개 질문의 실패를 source unit, retrieval, answer composer, 상태 검증 중 어디에 가까운지 읽을 수 있다.
 3. 첫 product 개선은 source unit 구조화에 집중하고, 같은 원문 PDF 질문셋으로 before/after를 비교한다.
-4. 개선 결과는 `run.json` 필드 증가가 아니라 retrieval candidate와 answer/evidence 경로 변화로 확인한다.
+4. source unit 구조화 뒤에도 남는 실패는 질문 분해, 하위 요청별 retrieval, 상태 검증/답변 조립 중 어디에서 생기는지 이어서 분류할 수 있다.
+5. 개선 결과는 `run.json` 필드 증가가 아니라 retrieval candidate와 answer/evidence 경로 변화로 확인한다.
+
+## Slice 순서
+
+이 묶음의 product 개선은 아래 순서를 기본으로 삼는다. 각 단계는 같은 원문 PDF 질문셋으로 다시 실행해 before/after evidence path를 읽은 뒤 다음 단계로 넘어간다.
+
+| 순서 | 문서 | 핵심 질문 | 다음 단계로 넘어가는 신호 |
+| --- | --- | --- | --- |
+| 0 | `01-original-pdf-observation-baseline.md` | 원문 PDF baseline을 믿고 읽을 수 있는가 | production-like run에서 candidate/evidence/status를 질문별로 볼 수 있다 |
+| 1 | `02-source-unit-structure-improvement.md` | 원문이 질문 가능한 source unit으로 들어오는가 | page-length 덩어리 대신 라벨-값, 정책, 비용, 요청 단위가 candidate로 보인다 |
+| 2 | `03-question-decomposition.md` | 사용자 질문의 하위 정보 요청을 놓치지 않는가 | 체크인/체크아웃, 객실/인원, 취소/노쇼가 항목별 요청으로 분리된다 |
+| 3 | `04-subrequest-retrieval.md` | 각 하위 요청이 자기 근거 후보를 받는가 | 하나의 큰 후보가 모든 질문을 대표하지 않고 subrequest별 candidate가 달라진다 |
+| 4 | `05-state-validation-answer-assembly.md` | 값과 조건 문맥이 함께 검증되는가 | 특별 요청, 취소/노쇼, 추가 비용이 근거 부족한 supported로 확정되지 않는다 |
+
+prompt 수정은 4단계 이후에 다룬다. 입력 source unit과 retrieval candidate가 넓고 흐릿한 상태에서 prompt만 고치는 것은 이 묶음의 기본 해법이 아니다.
 
 ## 이번 묶음에서 섞지 않는 범위
 
@@ -72,12 +95,11 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 
 ## 다음 slice 후보
 
-source unit 구조화 뒤에도 실패가 남으면 아래를 이어서 연다.
+source unit 구조화 뒤에도 실패가 남으면 새 방향을 임의로 열기보다 아래 문서 순서대로 확인한다.
 
-- 질문 분해: 체크인/체크아웃, 객실/인원, 취소/노쇼처럼 한 질문 안의 여러 요청을 분리한다.
-- 하위 요청별 retrieval: 각 하위 요청마다 필요한 source unit 후보를 따로 찾는다.
-- 상태 검증 강화: 값과 조건 문맥을 함께 보지 못하면 supported를 막는다.
-- 답변 조립 개선: LLM은 넓은 문서를 뒤지는 역할이 아니라 찾아온 근거를 사용자에게 읽기 좋게 설명하는 역할로 둔다.
+- `03-question-decomposition.md`: 체크인/체크아웃, 객실/인원, 취소/노쇼처럼 한 질문 안의 여러 요청을 분리한다.
+- `04-subrequest-retrieval.md`: 각 하위 요청마다 필요한 source unit 후보를 따로 찾는다.
+- `05-state-validation-answer-assembly.md`: 값과 조건 문맥을 함께 보지 못하면 supported를 막고, LLM은 찾아온 근거를 사용자에게 읽기 좋게 설명하는 역할로 둔다.
 
 ## 남은 판단
 
