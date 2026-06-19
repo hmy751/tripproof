@@ -9,6 +9,7 @@ from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 from server.materials.observation import InMemoryMaterialUploadObservationSink
 from server.materials.store import MaterialStore
 from server.runtime.config_snapshot import RuntimeConfigSettings
+from server.testing import InMemoryRetrievalRepository
 from server.use_cases.materials import (
     MaterialUploadTooLargeError,
     UploadMaterialCommand,
@@ -18,7 +19,9 @@ from server.use_cases.materials import (
 
 def test_upload_material_use_case_returns_ready_trace_without_http_adapter() -> None:
     sink = InMemoryMaterialUploadObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     use_case = UploadMaterialUseCase(
         store=store,
         observation_sink=sink,
@@ -56,7 +59,9 @@ def test_upload_material_use_case_records_too_large_failure_without_http_adapter
     None
 ):
     sink = InMemoryMaterialUploadObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     use_case = UploadMaterialUseCase(
         store=store,
         observation_sink=sink,

@@ -27,7 +27,11 @@ from server.prompts.renderers.answer.library_chat_answer import (
 )
 from server.questions.observation import InMemoryQuestionObservationSink
 from server.retrieval.embeddings import EmbeddingProfile
-from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
+from server.retrieval.repository import RetrievalRecords
+from server.testing import (
+    InMemoryRetrievalRepository,
+    MissingLibraryChatAnswerComposer,
+)
 
 
 def test_upload_text_pdf_returns_ready_material() -> None:
@@ -35,7 +39,7 @@ def test_upload_text_pdf_returns_ready_material() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             material_upload_observation_sink=observation_sink,
         )
     )
@@ -136,7 +140,7 @@ def test_upload_blank_pdf_returns_failed_material() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             material_upload_observation_sink=observation_sink,
         )
     )
@@ -179,7 +183,7 @@ def test_upload_non_pdf_records_unsupported_file_observation() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             material_upload_observation_sink=observation_sink,
         )
     )
@@ -220,7 +224,7 @@ def test_upload_too_large_pdf_records_size_limit_observation(monkeypatch) -> Non
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             material_upload_observation_sink=observation_sink,
         )
     )
@@ -258,7 +262,10 @@ def test_upload_invalid_correlation_id_header_falls_back_without_product_error()
     None
 ):
     client = TestClient(
-        create_app(embedding_auto_generate=False, retrieval_backend="memory")
+        create_app(
+            embedding_auto_generate=False,
+            retrieval_repository=InMemoryRetrievalRepository(),
+        )
     )
 
     response = client.post(
@@ -282,7 +289,7 @@ def test_upload_observation_sink_failure_does_not_change_ready_response() -> Non
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             material_upload_observation_sink=FailingObservationSink(),
         )
     )
@@ -317,7 +324,7 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=composer,
             observation_exporter=exporter,
         )
@@ -455,7 +462,7 @@ def test_langsmith_observation_exporter_records_safe_material_and_question_runs(
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=composer,
             observation_exporter=exporter,
         )
@@ -655,7 +662,7 @@ def test_langsmith_observation_exporter_failure_does_not_change_product_response
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
             observation_exporter=LangSmithObservationExporter(
                 FailingLangSmithRunWriter()
@@ -736,7 +743,7 @@ def test_observation_exporter_failure_does_not_change_product_responses() -> Non
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
             observation_exporter=FailingObservationExporter(),
         )
@@ -778,7 +785,7 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=composer,
             question_observation_sink=question_observation_sink,
         )
@@ -952,7 +959,7 @@ def test_question_treats_empty_material_ids_as_empty_scope() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=composer,
             question_observation_sink=question_observation_sink,
         )
@@ -1015,6 +1022,7 @@ def test_question_observation_records_repository_vector_source_retrieval() -> No
         embedding_provider=FakeEmbeddingProvider(dimensions=3),
         embedding_auto_generate=True,
         retrieval_repository=repository,
+        retrieval_backend="memory",
     )
     client = TestClient(
         create_app(
@@ -1073,7 +1081,7 @@ def test_question_route_calls_library_chat_answer_composer_contract() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=composer,
         )
     )
@@ -1118,7 +1126,7 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=PromptAwareSpyLibraryChatAnswerComposer(),
             question_observation_sink=question_observation_sink,
         )
@@ -1179,8 +1187,8 @@ def test_question_runtime_config_snapshot_records_configured_answer_model() -> N
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
-            answer_composer_backend="disabled",
+            retrieval_repository=InMemoryRetrievalRepository(),
+            library_chat_answer_composer=MissingLibraryChatAnswerComposer(),
             question_observation_sink=question_observation_sink,
         )
     )
@@ -1207,12 +1215,14 @@ def test_question_runtime_config_snapshot_records_configured_answer_model() -> N
     record = question_observation_sink.records[0]
     assert record.runtime_config_snapshot is not None
     assert record.runtime_config_snapshot.answer_model is not None
-    assert record.runtime_config_snapshot.answer_model.backend == "disabled"
+    assert record.runtime_config_snapshot.answer_model.backend == "missing"
     assert record.runtime_config_snapshot.answer_model.model is None
 
 
 def test_ready_material_builds_source_units_and_pending_embeddings() -> None:
-    store = MaterialStore()
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
 
     material = store.add_ready(
         name="Agoda Fukuoka",
@@ -1236,7 +1246,12 @@ def test_ready_material_builds_source_units_and_pending_embeddings() -> None:
 
 def test_material_store_can_generate_embedding_records_with_provider() -> None:
     provider = FakeEmbeddingProvider(dimensions=3)
-    store = MaterialStore(embedding_provider=provider, embedding_auto_generate=True)
+    store = MaterialStore(
+        embedding_provider=provider,
+        embedding_auto_generate=True,
+        retrieval_repository=InMemoryRetrievalRepository(),
+        retrieval_backend="memory",
+    )
 
     material = store.add_ready(
         name="Agoda Fukuoka",
@@ -1260,7 +1275,9 @@ def test_material_store_can_generate_embedding_records_with_provider() -> None:
 def test_material_store_does_not_publish_ready_material_when_retrieval_upsert_fails() -> (
     None
 ):
-    store = MaterialStore(retrieval_repository=FailingRetrievalRepository())
+    store = MaterialStore(
+        retrieval_repository=FailingRetrievalRepository(), retrieval_backend="memory"
+    )
 
     with pytest.raises(RuntimeError, match="upsert failed"):
         store.add_ready(
@@ -1279,7 +1296,9 @@ def test_upload_records_repository_upsert_failure_without_publishing_ready_mater
     None
 ):
     observation_sink = InMemoryMaterialUploadObservationSink()
-    store = MaterialStore(retrieval_repository=FailingRetrievalRepository())
+    store = MaterialStore(
+        retrieval_repository=FailingRetrievalRepository(), retrieval_backend="memory"
+    )
     client = TestClient(
         create_app(store=store, material_upload_observation_sink=observation_sink),
         raise_server_exceptions=False,
@@ -1338,7 +1357,7 @@ def test_question_blocks_when_only_failed_material_exists() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             question_observation_sink=question_observation_sink,
         )
     )
@@ -1386,7 +1405,7 @@ def test_question_records_empty_question_validation_failure() -> None:
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             question_observation_sink=question_observation_sink,
         )
     )
@@ -1417,7 +1436,7 @@ def test_question_observation_sink_failure_does_not_change_accepted_response() -
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=SpyLibraryChatAnswerComposer(),
             question_observation_sink=FailingQuestionObservationSink(),
         )
@@ -1451,7 +1470,10 @@ def test_question_records_retrieval_failure_without_changing_exception_behavior(
     None
 ):
     question_observation_sink = InMemoryQuestionObservationSink()
-    store = MaterialStore(retrieval_repository=FailingReadRetrievalRepository())
+    store = MaterialStore(
+        retrieval_repository=FailingReadRetrievalRepository(),
+        retrieval_backend="memory",
+    )
     client = TestClient(
         create_app(
             store=store,
@@ -1509,7 +1531,7 @@ def test_question_records_answer_composer_failure_without_changing_exception_beh
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=FailingLibraryChatAnswerComposer(),
             question_observation_sink=question_observation_sink,
         ),
@@ -1555,9 +1577,8 @@ def test_question_records_answer_composer_failure_without_changing_exception_beh
     assert record.failure_kind == "answer_composer_failed"
 
 
-def test_create_app_uses_supabase_repository_when_backend_enabled(monkeypatch) -> None:
+def test_create_app_builds_supabase_repository_by_default(monkeypatch) -> None:
     repository = InMemoryRetrievalRepository()
-    monkeypatch.setattr(server_app, "RETRIEVAL_BACKEND", "supabase")
     monkeypatch.setattr(
         server_app,
         "create_supabase_retrieval_repository_from_config",
@@ -1567,13 +1588,15 @@ def test_create_app_uses_supabase_repository_when_backend_enabled(monkeypatch) -
     app = server_app.create_app(embedding_auto_generate=False)
 
     assert app.state.material_store.retrieval_repository is repository
+    assert app.state.material_store.retrieval_backend == "supabase"
 
 
 def test_create_app_uses_provided_store_without_building_supabase_repository(
     monkeypatch,
 ) -> None:
-    store = MaterialStore()
-    monkeypatch.setattr(server_app, "RETRIEVAL_BACKEND", "supabase")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
 
     def fail_if_called():
         raise AssertionError(

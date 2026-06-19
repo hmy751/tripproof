@@ -4,7 +4,6 @@ import re
 from typing import Protocol
 
 from server.core.config import (
-    ANSWER_COMPOSER_BACKEND,
     OLLAMA_ANSWER_MODEL,
     OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
@@ -34,26 +33,6 @@ LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 class LibraryChatAnswerComposer(Protocol):
     def compose(self, *, question: str, context: AnswerContext) -> ChatAnswer:
         """Build a user-facing answer from retrieved source units."""
-
-
-class MissingLibraryChatAnswerComposer:
-    def __init__(
-        self,
-        *,
-        reason: str = "답변 생성기가 비활성화되어 있습니다.",
-        backend: str = "missing",
-    ) -> None:
-        self._reason = reason
-        self._backend = backend
-
-    def compose(self, *, question: str, context: AnswerContext) -> ChatAnswer:
-        return _missing_answer(reason=self._reason)
-
-    def runtime_answer_model_snapshot(self) -> dict[str, str | None]:
-        return {
-            "backend": self._backend,
-            "model": None,
-        }
 
 
 class OllamaLibraryChatAnswerComposer:
@@ -97,25 +76,17 @@ class OllamaLibraryChatAnswerComposer:
         }
 
 
-def create_library_chat_answer_composer_from_config(
-    *,
-    backend: str | None = None,
-) -> LibraryChatAnswerComposer:
-    active_backend = (backend or ANSWER_COMPOSER_BACKEND).lower()
-    if active_backend == "ollama":
-        return OllamaLibraryChatAnswerComposer(
-            client=OllamaChatJsonClient(
-                OllamaChatJsonConfig(
-                    base_url=OLLAMA_BASE_URL,
-                    model=OLLAMA_ANSWER_MODEL,
-                    timeout_seconds=OLLAMA_ANSWER_TIMEOUT_SECONDS,
-                )
-            ),
-            model=OLLAMA_ANSWER_MODEL,
-        )
-    if active_backend in {"disabled", "missing"}:
-        return MissingLibraryChatAnswerComposer(backend=active_backend)
-    raise ValueError(f"Unsupported library chat answer backend: {active_backend}")
+def create_library_chat_answer_composer_from_config() -> LibraryChatAnswerComposer:
+    return OllamaLibraryChatAnswerComposer(
+        client=OllamaChatJsonClient(
+            OllamaChatJsonConfig(
+                base_url=OLLAMA_BASE_URL,
+                model=OLLAMA_ANSWER_MODEL,
+                timeout_seconds=OLLAMA_ANSWER_TIMEOUT_SECONDS,
+            )
+        ),
+        model=OLLAMA_ANSWER_MODEL,
+    )
 
 
 # ── Prompt assembly ─────────────────────────────────────────────────────────

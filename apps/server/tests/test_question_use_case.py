@@ -6,14 +6,17 @@ from server.extraction.models import EvidenceState
 from server.answers.models import ChatAnswer, ChatAnswerItem
 from server.materials.store import MaterialStore
 from server.questions.observation import InMemoryQuestionObservationSink
-from server.retrieval.repository import InMemoryRetrievalRepository, RetrievalRecords
+from server.retrieval.repository import RetrievalRecords
+from server.testing import InMemoryRetrievalRepository
 from server.runtime.config_snapshot import RuntimeConfigSettings
 from server.use_cases.questions import AskQuestionCommand, AskQuestionUseCase
 
 
 def test_ask_question_use_case_returns_accepted_trace_without_http_adapter() -> None:
     sink = InMemoryQuestionObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     material = store.add_ready(
         name="Booking",
         file_name="booking.pdf",
@@ -63,7 +66,9 @@ def test_ask_question_use_case_returns_accepted_trace_without_http_adapter() -> 
 
 def test_ask_question_use_case_returns_blocked_trace_without_ready_materials() -> None:
     sink = InMemoryQuestionObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     use_case = AskQuestionUseCase(
         store=store,
         answer_composer=SpyAnswerComposer(),
@@ -87,7 +92,9 @@ def test_ask_question_use_case_returns_blocked_trace_without_ready_materials() -
 
 def test_ask_question_use_case_treats_empty_material_ids_as_empty_scope() -> None:
     sink = InMemoryQuestionObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     store.add_ready(
         name="Booking",
         file_name="booking.pdf",
@@ -123,7 +130,10 @@ def test_ask_question_use_case_treats_empty_material_ids_as_empty_scope() -> Non
 
 def test_ask_question_use_case_records_retrieval_failure_without_http_adapter() -> None:
     sink = InMemoryQuestionObservationSink()
-    store = MaterialStore(retrieval_repository=FailingReadRetrievalRepository())
+    store = MaterialStore(
+        retrieval_repository=FailingReadRetrievalRepository(),
+        retrieval_backend="memory",
+    )
     material = store.add_ready(
         name="Booking",
         file_name="booking.pdf",
