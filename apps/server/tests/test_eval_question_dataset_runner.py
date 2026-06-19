@@ -74,7 +74,35 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
     assert "observations/observation-export.jsonl:2" in report_html
     assert "Agoda Fukuoka sample booking confirmation" in report_html
     assert "TripProof Hakata Sample Hotel" in report_html
+    assert "Source" in report_html
+    assert (
+        "fixtures/accommodation-checkin/agoda-booking-confirmation-sample.txt"
+        in report_html
+    )
+    assert "source location" in report_html
+    assert "Eval verdict" in report_html
+    assert "Eval overlay" in report_html
+    assert "Observation trace" in report_html
+    assert "Product runtime" in report_html
+    assert "Step facts JSON" in report_html
+    assert "children_count" in report_html
+    assert "Evidence path" in report_html
+    assert "Data lineage" in report_html
+    assert "SourceUnit" in report_html
+    assert "EvidenceRef" in report_html
+    assert "SourceUnit text" in report_html
+    assert "sent_to_composer" in report_html
+    assert "No EvidenceRef created for this run." in report_html
+    assert "source_retrieval" in report_html
+    assert "candidate_summary" in report_html
+    assert "context_assembly" in report_html
+    assert "composer_call" in report_html
+    assert "answer_projection" in report_html
+    assert "판정 요약" in report_html
+    assert "제품이 사용자에게 돌려준 답" in report_html
+    assert "검색된 근거 후보" in report_html
     assert "Retrieval candidates" in report_html
+    assert "답변에 전달된 context" in report_html
     assert "Composer context" in report_html
 
 
@@ -189,3 +217,5 @@ def test_html_report_keeps_product_answer_and_observation_projection_separate(
     assert report_html.index("Product response body") < report_html.index(
         "Answer projection facts"
     )
+    assert "제품이 사용자에게 돌려준 답" in report_html
+    assert "Raw details" in report_html

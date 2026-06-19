@@ -27,6 +27,7 @@ out/
 
 # Local eval run artifacts
 eval/runs/question-runtime-recording/
+eval/runs/question-dataset/
 
 /doc
 
