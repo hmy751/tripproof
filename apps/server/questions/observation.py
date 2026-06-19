@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from uuid import uuid4
 
 from server.observations.steps import (
@@ -11,8 +11,8 @@ from server.observations.steps import (
     first_child_failure,
     merge_safe_facts,
 )
-from server.answers.models import ChatAnswer
-from server.retrieval.models import AnswerContext
+from server.answers.models import ChatAnswer, ChatAnswerItem
+from server.retrieval.models import AnswerContext, RetrievedSource
 from server.retrieval.search import SourceRetrievalTrace
 from server.runtime.config_snapshot import (
     PromptRuntimeConfigSnapshot,
@@ -44,9 +44,7 @@ QuestionObservationFailureKind = Literal[
     "retrieval_failed",
     "answer_composer_failed",
 ]
-QuestionObservationFactValue = (
-    str | int | float | bool | None | dict[str, int] | list[str]
-)
+QuestionObservationFactValue = Any
 
 _STEP_ROOTS: tuple[QuestionObservationStepName, ...] = (
     "question_preparation",
@@ -101,11 +99,12 @@ _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
         "vector_candidate_count",
         "fallback_used",
     },
-    "context_assembly": {"executed", "target_id"},
+    "context_assembly": {"executed", "target_id", "candidate_source_unit_ids"},
     "candidate_summary": {
         "candidate_count",
         "candidates_with_vector_score",
         "candidates_with_lexical_score",
+        "candidates",
     },
     "answer_pipeline": set(),
     "prompt_snapshot": {
@@ -118,7 +117,7 @@ _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
         "prompt_asset_path",
     },
     "composer_call": {"result"},
-    "answer_projection": {"item_count", "evidence_state_counts"},
+    "answer_projection": {"item_count", "evidence_state_counts", "items"},
     "finalization": set(),
     "question_status": {"status"},
 }
@@ -196,6 +195,7 @@ class QuestionObservationRecorder:
             current=self._steps[step_name].facts,
             updates=facts or {},
             allow_string_lists=True,
+            allow_json_values=True,
         )
         self._steps[step_name] = QuestionObservationStep(
             name=step_name,
@@ -215,6 +215,7 @@ class QuestionObservationRecorder:
             current=self._steps[step_name].facts,
             updates=facts or {},
             allow_string_lists=True,
+            allow_json_values=True,
         )
         self._steps[step_name] = QuestionObservationStep(
             name=step_name,
@@ -336,7 +337,13 @@ class QuestionObservationReporter:
         )
         self._recorder.succeed(
             "context_assembly",
-            facts={"executed": True, "target_id": answer_context.target_id},
+            facts={
+                "executed": True,
+                "target_id": answer_context.target_id,
+                "candidate_source_unit_ids": [
+                    candidate.source_unit.id for candidate in answer_context.candidates
+                ],
+            },
         )
         self._recorder.succeed(
             "candidate_summary", facts=retrieval_candidate_facts(answer_context)
@@ -396,6 +403,9 @@ def retrieval_candidate_facts(
         "candidates_with_lexical_score": sum(
             candidate.lexical_score > 0 for candidate in context.candidates
         ),
+        "candidates": [
+            retrieval_candidate_detail(candidate) for candidate in context.candidates
+        ],
     }
 
 
@@ -422,7 +432,59 @@ def answer_projection_facts(
     return {
         "item_count": len(answer.items),
         "evidence_state_counts": evidence_state_counts,
+        "items": [answer_item_detail(item) for item in answer.items],
     }
+
+
+def retrieval_candidate_detail(
+    candidate: RetrievedSource,
+) -> dict[str, QuestionObservationFactValue]:
+    source_unit = candidate.source_unit
+    return {
+        "source_unit_id": source_unit.id,
+        "material_id": source_unit.material_id,
+        "locator": source_unit_locator_summary(
+            page=source_unit.page,
+            unit_index=source_unit.unit_index,
+        ),
+        "page": source_unit.page,
+        "unit_index": source_unit.unit_index,
+        "char_length": len(source_unit.text),
+        "score": candidate.score,
+        "lexical_score": candidate.lexical_score,
+        "vector_score": candidate.vector_score,
+        "text": source_unit.text,
+    }
+
+
+def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFactValue]:
+    return {
+        "id": item.id,
+        "label": item.label,
+        "body": item.body,
+        "value": item.value,
+        "evidence_state": item.evidence_state.value,
+        "evidence": [
+            {
+                "material_id": evidence.material_id,
+                "source_unit_id": evidence.source_unit_id,
+                "locator": locator_summary(evidence.locator),
+                "snippet": evidence.snippet,
+            }
+            for evidence in item.evidence
+        ],
+    }
+
+
+def source_unit_locator_summary(*, page: int, unit_index: int) -> str:
+    return f"p.{page} u.{unit_index}"
+
+
+def locator_summary(locator: str) -> str:
+    marker = " p."
+    if marker not in locator:
+        return locator
+    return f"p.{locator.rsplit(marker, maxsplit=1)[1]}"
 
 
 def emit_question_observation(

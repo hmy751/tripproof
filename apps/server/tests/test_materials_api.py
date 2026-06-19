@@ -394,12 +394,27 @@ def test_local_artifact_observation_exporter_records_material_and_question_paylo
     assert _export_step(question_export, "question_status")["facts"] == {
         "status": "accepted"
     }
+    candidate_facts = _export_step(question_export, "candidate_summary")["facts"]
+    assert candidate_facts["candidate_count"] == 1
+    assert candidate_facts["candidates"][0]["source_unit_id"]
+    assert candidate_facts["candidates"][0]["locator"].endswith("p.1 u.1")
+    assert (
+        candidate_facts["candidates"][0]["text"]
+        == "Hotel address is Hakata. Check-in starts at 15:00."
+    )
+    answer_facts = _export_step(question_export, "answer_projection")["facts"]
+    assert answer_facts["items"][0]["label"] == "답변"
+    assert answer_facts["items"][0]["body"] == "체크인 시작 시각은 15:00입니다."
+    assert (
+        answer_facts["items"][0]["evidence"][0]["snippet"]
+        == "Check-in starts at 15:00."
+    )
 
     exported_json = json.dumps(rows, ensure_ascii=False)
     assert "booking-secret-name.pdf" not in exported_json
     assert "check-in time?" not in exported_json
-    assert "Hotel address is Hakata" not in exported_json
-    assert "체크인 시작 시각은 15:00입니다." not in exported_json
+    assert "Hotel address is Hakata" in exported_json
+    assert "체크인 시작 시각은 15:00입니다." in exported_json
 
 
 def test_fanout_observation_exporter_continues_after_sink_failure() -> None:
@@ -825,16 +840,24 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
         "fallback_used": False,
     }
     assert record.step("context_assembly").status == "succeeded"
-    assert record.step("context_assembly").facts == {
-        "executed": True,
-        "target_id": "library_chat_answer",
-    }
+    context_facts = record.step("context_assembly").facts
+    assert context_facts["executed"] is True
+    assert context_facts["target_id"] == "library_chat_answer"
+    assert context_facts["candidate_source_unit_ids"] == [
+        composer.last_context.candidates[0].source_unit.id
+    ]
     assert record.step("candidate_summary").status == "succeeded"
-    assert record.step("candidate_summary").facts == {
-        "candidate_count": 1,
-        "candidates_with_vector_score": 0,
-        "candidates_with_lexical_score": 1,
-    }
+    candidate_facts = record.step("candidate_summary").facts
+    assert candidate_facts["candidate_count"] == 1
+    assert candidate_facts["candidates_with_vector_score"] == 0
+    assert candidate_facts["candidates_with_lexical_score"] == 1
+    assert candidate_facts["candidates"][0]["source_unit_id"] == (
+        composer.last_context.candidates[0].source_unit.id
+    )
+    assert (
+        candidate_facts["candidates"][0]["text"]
+        == "Hotel address is Hakata. Check-in starts at 15:00."
+    )
     assert _child_step_names(record.step("answer_pipeline")) == [
         "prompt_snapshot",
         "composer_call",
@@ -846,10 +869,14 @@ def test_question_returns_chat_answer_for_ready_materials() -> None:
     assert record.step("composer_call").status == "succeeded"
     assert record.step("composer_call").facts == {"result": "succeeded"}
     assert record.step("answer_projection").status == "succeeded"
-    assert record.step("answer_projection").facts == {
-        "item_count": 1,
-        "evidence_state_counts": {"supported": 1},
-    }
+    answer_facts = record.step("answer_projection").facts
+    assert answer_facts["item_count"] == 1
+    assert answer_facts["evidence_state_counts"] == {"supported": 1}
+    assert answer_facts["items"][0]["body"] == "체크인 시작 시각은 15:00입니다."
+    assert (
+        answer_facts["items"][0]["evidence"][0]["snippet"]
+        == "Check-in starts at 15:00."
+    )
     assert _child_step_names(record.step("finalization")) == ["question_status"]
     assert record.step("finalization").status == "succeeded"
     assert record.step("question_status").status == "succeeded"
@@ -1465,11 +1492,11 @@ def test_question_records_answer_composer_failure_without_changing_exception_beh
     assert record.step("query_snapshot").status == "succeeded"
     assert record.step("ready_material_selection").status == "succeeded"
     assert record.step("retrieval_pipeline").status == "succeeded"
-    assert record.step("candidate_summary").facts == {
-        "candidate_count": 1,
-        "candidates_with_vector_score": 0,
-        "candidates_with_lexical_score": 1,
-    }
+    candidate_facts = record.step("candidate_summary").facts
+    assert candidate_facts["candidate_count"] == 1
+    assert candidate_facts["candidates_with_vector_score"] == 0
+    assert candidate_facts["candidates_with_lexical_score"] == 1
+    assert candidate_facts["candidates"][0]["text"] == "Check-in starts at 15:00."
     assert record.step("answer_pipeline").status == "failed"
     assert record.step("prompt_snapshot").status == "succeeded"
     assert record.step("prompt_snapshot").facts == {"available": False}

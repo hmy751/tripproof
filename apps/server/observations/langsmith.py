@@ -8,6 +8,7 @@ _RUN_NAMES = {
     "material_upload": "tripproof.material_upload",
     "question_answer": "tripproof.question_answer",
 }
+_LOCAL_RICH_FACT_KEYS = {"candidates", "items"}
 
 
 class LangSmithRunWriter(Protocol):
@@ -80,7 +81,7 @@ def langsmith_run_payload(envelope: ObservationExportEnvelope) -> dict[str, Any]
     runtime_config_snapshot = _dict_payload(payload.get("runtime_config_snapshot"))
     final_status = payload.get("final_status")
     failure_kind = payload.get("failure_kind")
-    steps = _list_payload(payload.get("steps"))
+    steps = _summary_steps(_list_payload(payload.get("steps")))
 
     metadata: dict[str, Any] = {
         "tripproof.schema_version": envelope.schema_version,
@@ -175,6 +176,22 @@ def _step_child_runs(
             }
         )
     return child_runs
+
+
+def _summary_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summary_steps: list[dict[str, Any]] = []
+    for step in steps:
+        summary_step = dict(step)
+        summary_step["facts"] = _summary_facts(_dict_payload(step.get("facts")))
+        summary_step["children"] = _summary_steps(_list_payload(step.get("children")))
+        summary_steps.append(summary_step)
+    return summary_steps
+
+
+def _summary_facts(facts: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value for key, value in facts.items() if key not in _LOCAL_RICH_FACT_KEYS
+    }
 
 
 def _create_child_run_tree(parent: Any, child_runs: list[dict[str, Any]]) -> None:

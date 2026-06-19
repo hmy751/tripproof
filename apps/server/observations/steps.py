@@ -39,17 +39,20 @@ def merge_safe_facts(
     current: dict[str, Any],
     updates: dict[str, Any],
     allow_string_lists: bool = False,
+    allow_json_values: bool = False,
 ) -> dict[str, Any]:
     return {
         **safe_facts(
             allowed_keys=allowed_keys,
             facts=current,
             allow_string_lists=allow_string_lists,
+            allow_json_values=allow_json_values,
         ),
         **safe_facts(
             allowed_keys=allowed_keys,
             facts=updates,
             allow_string_lists=allow_string_lists,
+            allow_json_values=allow_json_values,
         ),
     }
 
@@ -59,23 +62,41 @@ def safe_facts(
     allowed_keys: set[str],
     facts: dict[str, Any],
     allow_string_lists: bool = False,
+    allow_json_values: bool = False,
 ) -> dict[str, Any]:
     return {
         key: value
         for key, value in facts.items()
         if key in allowed_keys
-        and is_safe_fact_value(value, allow_string_lists=allow_string_lists)
+        and is_safe_fact_value(
+            value,
+            allow_string_lists=allow_string_lists,
+            allow_json_values=allow_json_values,
+        )
     }
 
 
-def is_safe_fact_value(value: Any, *, allow_string_lists: bool = False) -> bool:
+def is_safe_fact_value(
+    value: Any,
+    *,
+    allow_string_lists: bool = False,
+    allow_json_values: bool = False,
+) -> bool:
     if value is None or isinstance(value, str | int | float | bool):
         return True
     if isinstance(value, dict):
+        if allow_json_values:
+            return all(
+                isinstance(key, str)
+                and is_safe_fact_value(item, allow_json_values=True)
+                for key, item in value.items()
+            )
         return all(
             isinstance(key, str) and isinstance(item, int)
             for key, item in value.items()
         )
-    if allow_string_lists and isinstance(value, list):
+    if isinstance(value, list) and allow_json_values:
+        return all(is_safe_fact_value(item, allow_json_values=True) for item in value)
+    if isinstance(value, list) and allow_string_lists:
         return all(isinstance(item, str) for item in value)
     return False
