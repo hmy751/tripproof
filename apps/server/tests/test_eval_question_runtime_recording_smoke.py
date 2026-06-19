@@ -51,6 +51,9 @@ def test_question_runtime_recording_smoke_writes_correlation_artifacts(
     assert artifact["question_results"][0]["id"] == "SMOKE-QUESTION"
     assert artifact["question_results"][0]["status_code"] == 200
     assert artifact["question_results"][0]["expected"]["evidence_state"] == "supported"
+    assert artifact["question_results"][0]["observed"]["answer_items"][0]["body"] == (
+        "Check-in starts at 15:00."
+    )
     assert artifact["question_results"][0]["rule_check"] == {
         "missing_cues": [],
         "must_not_hits": [],

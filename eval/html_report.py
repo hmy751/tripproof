@@ -224,7 +224,9 @@ def _question_reports(
         observed = _dict(question.get("observed"))
         rule_check = _dict(question.get("rule_check"))
         answer_projection = _step_facts(observation, "answer_projection")
-        answer_items = _list(answer_projection.get("items"))
+        product_answer_items = _list(observed.get("answer_items")) or _list(
+            answer_projection.get("items")
+        )
 
         reports.append(
             QuestionReport(
@@ -245,7 +247,9 @@ def _question_reports(
                 missing_cues=_string_list(rule_check.get("missing_cues")),
                 must_not_hits=_string_list(rule_check.get("must_not_hits")),
                 answer_summary=_text(observed.get("answer_summary")),
-                answer_items=[item for item in answer_items if isinstance(item, dict)],
+                answer_items=[
+                    item for item in product_answer_items if isinstance(item, dict)
+                ],
                 retrieval_candidates=[
                     item
                     for item in _list(

@@ -384,6 +384,7 @@ def _question_result(
         "observed": {
             "status": question_body.get("status"),
             "answer_summary": answer_summary,
+            "answer_items": _answer_item_summaries(answer_items),
             "evidence_state_counts": evidence_state_counts,
         },
         "rule_check": {
@@ -413,6 +414,45 @@ def _answer_text_for_rules(summary: object, answer_items: object) -> str:
                 if isinstance(ref, dict) and isinstance(ref.get("snippet"), str):
                     parts.append(ref["snippet"])
     return "\n".join(parts)
+
+
+def _answer_item_summaries(answer_items: object) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    if not isinstance(answer_items, list):
+        return summaries
+    for item in answer_items:
+        if not isinstance(item, dict):
+            continue
+        summaries.append(
+            {
+                "id": item.get("id"),
+                "label": item.get("label"),
+                "body": item.get("body"),
+                "value": item.get("value"),
+                "evidence_state": item.get("evidenceState"),
+                "evidence": _evidence_summaries(item.get("evidence")),
+            }
+        )
+    return summaries
+
+
+def _evidence_summaries(evidence_items: object) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    if not isinstance(evidence_items, list):
+        return summaries
+    for evidence in evidence_items:
+        if not isinstance(evidence, dict):
+            continue
+        summaries.append(
+            {
+                "material_id": evidence.get("materialId"),
+                "source_unit_id": evidence.get("sourceUnitId"),
+                "label": evidence.get("label"),
+                "locator": evidence.get("locator"),
+                "snippet": evidence.get("snippet"),
+            }
+        )
+    return summaries
 
 
 def _has_no_product_trace_ids(payload: object) -> bool:

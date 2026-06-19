@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from html_report import DEFAULT_REPORT_FILE_NAME, write_html_report  # noqa: E402
 from question_runtime_recording_smoke import (  # noqa: E402
+    _answer_item_summaries,
     _answer_text_for_rules,
     _has_no_product_trace_ids,
     _pdf_with_text,
@@ -313,6 +314,7 @@ def _question_result(
         "observed": {
             "status": question_body.get("status"),
             "answer_summary": answer.get("summary"),
+            "answer_items": _answer_item_summaries(answer_items),
             "item_count": len(answer_items),
             "evidence_state_counts": dict(evidence_state_counts),
         },
