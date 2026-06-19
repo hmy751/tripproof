@@ -181,6 +181,8 @@ def _supported_item_from_payload(
         or payload.evidence_snippet is None
     ):
         return _ungrounded_item(index=index, label=payload.label)
+    # 시간 질문인데 답 모양이 시각이 아니면 SUPPORTED라도 ungrounded로 강등하는 정직성
+    # 게이트. 결과 MISSING은 실제 grounding 실패와 구분되지 않는다(시간 외 질문은 통과).
     if not _supported_value_matches_question(
         question=question, value=payload.value, body=payload.body
     ):

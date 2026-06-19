@@ -79,6 +79,8 @@ _ALL_STEP_NAMES: tuple[QuestionObservationStepName, ...] = (
     "finalization",
     "question_status",
 )
+# step별 export 허용 fact key allowlist. 여기 없는 key는 merge_safe_facts에서 조용히
+# 버려지므로, reporter가 새 fact를 emit하면 같은 step에 key를 반드시 추가한다.
 _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
     "question_preparation": set(),
     "query_snapshot": {"question_length"},
