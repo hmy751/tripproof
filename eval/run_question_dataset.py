@@ -11,9 +11,9 @@ import sys
 from typing import Any
 from uuid import uuid4
 
-os.environ.setdefault("TRIPPROOF_RETRIEVAL_BACKEND", "memory")
 os.environ.setdefault("TRIPPROOF_EMBEDDING_AUTO_GENERATE", "0")
-os.environ.setdefault("TRIPPROOF_FACT_PROPOSER_BACKEND", "missing")
+os.environ.setdefault("TRIPPROOF_SUPABASE_URL", "http://localhost:54321")
+os.environ.setdefault("TRIPPROOF_SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APPS_PATH = REPO_ROOT / "apps"
@@ -39,6 +39,10 @@ from server.app import (  # noqa: E402
 from server.materials.store import MaterialStore  # noqa: E402
 from server.observations.export import LocalArtifactObservationExporter  # noqa: E402
 from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
+from server.testing import (  # noqa: E402
+    InMemoryRetrievalRepository,
+    MissingLibraryChatAnswerComposer,
+)
 
 RUN_SCHEMA_VERSION = "tripproof.eval_run.question_dataset.v1"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "eval" / "runs" / "question-dataset"
@@ -104,12 +108,18 @@ def run_question_dataset(
     store = MaterialStore(
         embedding_provider=DatasetEmbeddingProvider(),
         embedding_auto_generate=True,
+        retrieval_repository=InMemoryRetrievalRepository(),
         retrieval_backend="memory",
+    )
+    composer = (
+        None
+        if answer_composer_backend == "ollama"
+        else MissingLibraryChatAnswerComposer()
     )
     client = TestClient(
         create_app(
             store=store,
-            fact_proposer_backend=answer_composer_backend,
+            library_chat_answer_composer=composer,
             observation_exporter=exporter,
         )
     )
