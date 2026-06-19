@@ -4,7 +4,7 @@
 
 상태: 구현 기준 spec. 현재 `run.json`, local observation JSONL, LangSmith, HTML report의 책임 경계와 local rich observation 보강 방향을 정리한다.
 
-구현 상태(2026-06-19): question observation rich facts, composer context block, default LangSmith summary projection, question dataset/smoke eval runner의 `report.html` 생성, eval README의 DX entry가 구현됐다. 남은 판단은 large document text payload limit과 LangSmith text opt-in policy처럼 별도 explicit option이 필요한 항목이다.
+구현 상태(2026-06-19): question observation rich facts, composer context block, default LangSmith summary projection, question dataset/smoke eval runner의 `report.html` 생성, eval README의 DX entry가 구현됐다. HTML report는 `Eval verdict`, `Observation trace`, `Evidence path`, `Raw details`로 나누고, 전문/상세 데이터 확인은 `Evidence path`와 raw details가 맡는다.
 
 ## 왜 지금
 
@@ -52,7 +52,7 @@ product API response는 여전히 사용자-facing 결과만 반환한다. obser
 - 실패 질문 detail은 같은 `correlation_id`의 runtime observation을 보여주되, eval expected/pass-fail과 runtime facts를 구분한다.
 - local observation artifact는 count만이 아니라 질문 판단 경로에 오른 전문을 포함할 수 있다.
 - 전문 포함은 "전체 원문 저장"이 아니라 "그 단계가 실제로 선택하거나 생성한 대상"으로 제한한다.
-- LangSmith는 기본적으로 summary projection을 유지한다. 전문 전송은 별도 explicit option이나 후속 판단으로 둔다.
+- LangSmith는 기본적으로 summary projection을 유지한다. 현재 slice에서는 전문 전송 옵션을 만들지 않고, 별도 요구가 생길 때 새 policy로 다시 판단한다.
 - product response body는 기존처럼 사용자-facing 결과만 담는다.
 
 ## Rules
@@ -65,6 +65,7 @@ product API response는 여전히 사용자-facing 결과만 반환한다. obser
 - HTML report는 `run.json`과 observation JSONL을 join해서 보여주는 view다. report가 별도 truth source가 되면 안 된다.
 - local observation artifact는 개발자 디버깅용으로 rich text를 담을 수 있다.
 - LangSmith는 같은 envelope를 소비하더라도 기본 payload는 summary 중심으로 둔다.
+- material upload observation은 SourceUnit text 전체를 싣는 곳이 아니라 source unit count, locator, char length 같은 구조 요약을 남기는 곳이다. 전문 확인은 question path에서 실제 선택된 candidate/context 중심으로 한다.
 - product response body에는 `observation`, `debug`, `runtimeConfig`, `traceId`, `requestId`, `correlationId`, `eval` field를 추가하지 않는다.
 
 ## 전문 포함 기준
@@ -73,18 +74,18 @@ product API response는 여전히 사용자-facing 결과만 반환한다. obser
 
 | 단계 | 넣을 수 있는 전문 | 넣지 않는 것 |
 | --- | --- | --- |
-| material upload | 작은 문서나 local rich mode에서 SourceUnit text, locator, char length, kind | 원본 PDF bytes, 파싱 전 raw blob, 모든 자료의 반복 덤프 |
-| source unit build | 생성된 SourceUnit의 id, locator, text, char length. 큰 문서는 전체가 아니라 후속 question path에서 선택된 unit 중심 | 전체 document archive를 observation마다 중복 저장 |
+| material upload | source unit count, locator, char length, kind 같은 구조 요약 | SourceUnit text 전체, 원본 PDF bytes, 파싱 전 raw blob, 모든 자료의 반복 덤프 |
+| source unit build | 생성된 SourceUnit의 id, locator, char length. 전문은 후속 question path에서 선택된 unit 중심 | 전체 document archive를 observation마다 중복 저장 |
 | retrieval | top-k candidate의 source_unit_id, locator, score, source unit text | retrieval 대상 전체 SourceUnit 목록 |
 | context assembly | answer composer에 실제 전달된 context block 전문 | 후보였지만 전달되지 않은 모든 원문 |
 | answer projection | answer item의 label/body/value/evidence state, evidence snippet, evidence source_unit_id/locator | raw LLM request/response 전체 |
 | failure/missing | 실패한 단계의 입력/후보 전문과 product failure reason | eval expected/pass-fail, stack trace, provider raw payload |
 
-첫 보강은 question observation에 집중한다. 질문 실패를 분석할 때 가장 필요한 것은 해당 질문에서 선택된 retrieval candidate와 composer context, answer item/evidence이기 때문이다. material upload observation은 구조 요약을 유지하되, 작은 문서 또는 local rich mode에서만 source unit text를 포함하는 쪽이 안전하다.
+첫 보강은 question observation에 집중한다. 질문 실패를 분석할 때 가장 필요한 것은 해당 질문에서 선택된 retrieval candidate와 composer context, answer item/evidence이기 때문이다. material upload observation은 구조 요약을 유지한다. SourceUnit 전문이 필요하면 material upload record에 전체를 반복 저장하지 않고, question path에서 선택된 unit이나 별도 source-unit inspection 기능으로 다시 연다.
 
 ## Local rich observation
 
-현재 local observation artifact는 export-safe projection을 기준으로 하되, question path에서 원인 분석에 필요한 selected text facts를 additive하게 포함한다.
+현재 local observation artifact는 export-safe projection을 기준으로 하되, question path에서 원인 분석에 필요한 selected text facts를 additive하게 포함한다. 이 문서의 rich projection은 2026-06-10 runtime observation/export spec의 기본 summary-safe projection 위에 얹는 좁은 예외다. LangSmith와 default summary projection은 여전히 전문 text를 기본 payload로 삼지 않는다.
 
 ```text
 internal observation record
@@ -150,12 +151,14 @@ answer projection도 count만으로 끝내지 않고, product answer composer가
 
 HTML report는 사람이 보는 eval run view다. report는 local rich observation을 복사해 새 truth로 삼지 않고, `run.json`과 observation JSONL을 읽어 질문 detail 화면에 함께 표시한다.
 
-처음 HTML report가 보여줄 내용은 작게 시작한다.
+HTML report의 질문 detail은 다음 네 영역으로 나눈다.
 
-- run summary: question count, passed rule checks, request failures, expected/observed evidence state counts.
-- question list: id, priority, expected state, observed states, rule passed, missing cues, must-not hits.
-- question detail: product answer summary/items/evidence, retrieval candidate text, composer context text, answer projection facts.
-- drill-down: `correlation_id`, artifact-relative observation path/line, optional LangSmith project/search hint.
+- `Eval verdict`: `run.json`의 eval overlay다. expected/observed state, rule check, missing cue, product answer를 보여준다.
+- `Observation trace`: product-owned control-flow step tree다. step name, status, safe fact summary chip을 보여주며 eval expected/pass-fail이나 전문 토글을 넣지 않는다.
+- `Evidence path`: SourceUnit -> Retrieval candidate -> Composer context -> Answer item -> EvidenceRef로 이어지는 data lineage다. 여기에서 선택된 candidate/context/answer/evidence 상세와 전문을 토글로 펼쳐 본다.
+- `Raw details`: `correlation_id`, request id, artifact-relative observation path/line, optional LangSmith search hint, answer projection JSON처럼 재확인용 원자료를 둔다.
+
+Run summary와 question list는 실패 질문을 고르는 입구다. Observation trace는 "어떤 product step이 지나갔는가"를 보는 곳이고, Evidence path는 "어떤 데이터가 답변/evidence까지 이어졌는가"를 보는 곳이다.
 
 HTML report는 product response를 바꾸지 않고, eval runner가 observation schema를 소유하게 만들지도 않는다.
 
@@ -171,16 +174,16 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
 - runtime config snapshot summary.
 - retrieval/prompt/model 같은 검색용 metadata.
 
-전문 text는 기본으로 LangSmith에 보내지 않는다. 외부 viewer에서 전문 확인이 필요해지면 `TRIPPROOF_LANGSMITH_INCLUDE_TEXT` 같은 explicit option이나 별도 adapter policy로 다시 판단한다. 이 판단 전까지는 local observation artifact와 HTML report가 rich text DX를 맡는다.
+전문 text는 기본으로 LangSmith에 보내지 않는다. 현재 slice에서는 LangSmith 전문 전송 옵션을 만들지 않는다. 외부 viewer에서 전문 확인이 실제로 필요해지는 별도 요구가 생길 때만 explicit option이나 adapter policy를 새 spec으로 다시 연다. 그 전까지는 local observation artifact와 HTML report가 rich text DX를 맡는다.
 
 ## 구현면 펼치기
 
 | 구현면 | 필요한 이유 | 첫 기준 |
 | --- | --- | --- |
 | Question rich facts | 실패 질문에서 실제 retrieval 후보와 answer item을 바로 봐야 한다 | question observation local rich payload에 selected candidate text와 answer item/evidence가 있다 |
-| Material source unit summary | source unit이 너무 크거나 적은 문제를 알아야 한다 | source unit count 외에 locator, char length, optional text를 볼 수 있다 |
+| Material source unit summary | source unit이 너무 크거나 적은 문제를 알아야 한다 | source unit count, locator, char length 같은 구조 요약을 볼 수 있다 |
 | Eval/report join | eval 실패와 runtime observation을 한 화면에서 봐야 한다 | `correlation_id`로 `run.json` question과 observation record를 연결한다 |
-| LangSmith policy | 외부 trace viewer가 observation schema를 끌고 가지 않아야 한다 | default LangSmith payload는 summary이고, text include는 별도 opt-in이다 |
+| LangSmith policy | 외부 trace viewer가 observation schema를 끌고 가지 않아야 한다 | default LangSmith payload는 summary이고, 전문 전송 옵션은 현재 만들지 않는다 |
 | Docs/DX entry | 개발자가 어떤 파일을 먼저 볼지 알아야 한다 | eval README나 report가 `run.json -> observation -> LangSmith` 순서를 설명한다 |
 
 ## 먼저 고를 slice
@@ -204,7 +207,8 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
 2. question local rich observation은 answer item의 label/body/value/evidence state와 evidence snippet/source reference를 확인할 수 있어야 한다.
 3. observation payload에는 eval expected state, required cue, rule pass/fail이 들어가지 않아야 한다.
 4. eval report는 `run.json`과 observation JSONL을 `correlation_id`로 join해 보여주되, observation schema의 owner가 되면 안 된다.
-5. default product API response body와 default LangSmith summary payload는 rich local observation 때문에 바뀌지 않아야 한다.
+5. eval report는 `Eval verdict`, `Observation trace`, `Evidence path`, `Raw details`를 구분하고, 전문/상세 데이터 토글은 `Evidence path` 중심으로 제공해야 한다.
+6. default product API response body와 default LangSmith summary payload는 rich local observation 때문에 바뀌지 않아야 한다.
 
 ## Non-goals
 
@@ -238,8 +242,12 @@ LangSmith는 `ObservationExportEnvelope`를 외부 trace UI로 보여주는 sink
 
 ## 남은 판단
 
-- local rich observation은 기존 `observation-export.jsonl`에 같은 schema version으로 additive하게 들어간다. 별도 file/mode가 필요할지는 payload 크기 문제가 실제로 생길 때 다시 판단한다.
-- source unit text를 material upload observation에도 항상 넣을지, question path에서 선택된 unit만 우선 넣을지.
-- large document에서 text payload 크기를 어떤 기준으로 제한할지.
-- HTML report는 eval runner가 기본 생성하고, `eval/html_report.py`로 별도 재렌더링도 가능하게 둔다.
-- LangSmith text opt-in을 언제, 어떤 env와 field policy로 열지.
+이번 slice에서 열린 판단은 없다.
+
+닫은 판단은 다음과 같다.
+
+- local rich observation은 기존 `observation-export.jsonl`에 같은 schema version으로 additive하게 들어간다.
+- large document 문제는 전체 원문 payload limit으로 먼저 풀지 않는다. question path에서 실제 선택된 candidate/context/answer/evidence만 담는 방식으로 범위를 제한한다.
+- material upload observation에는 SourceUnit text 전체를 넣지 않는다. source unit 구조 요약을 유지하고, 전문 확인은 question path selected unit 또는 별도 inspection 기능으로 연다.
+- HTML report는 eval runner가 기본 생성하고, `eval/html_report.py`로 별도 재렌더링할 수 있다.
+- LangSmith 전문 전송 옵션은 현재 만들지 않는다. LangSmith 기본 역할은 summary trace viewer이고, 전문 확인은 local observation artifact와 HTML report가 맡는다.
