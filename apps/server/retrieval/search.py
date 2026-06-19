@@ -5,6 +5,11 @@ from dataclasses import dataclass
 
 from server.core.config import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import EmbeddingProvider, EmbeddingProviderError
+from server.retrieval.lexical_ranking import (
+    query_terms,
+    rank_source_units,
+    score_text,
+)
 from server.retrieval.models import (
     AnswerContext,
     EmbeddingRecord,
@@ -12,13 +17,6 @@ from server.retrieval.models import (
     SourceUnit,
 )
 from server.retrieval.repository import RetrievalRepository
-
-
-@dataclass(frozen=True)
-class SourceUnitMatch:
-    source_unit: SourceUnit
-    score: float
-    lexical_score: int
 
 
 @dataclass(frozen=True)
@@ -161,14 +159,14 @@ def _vector_search(
     if not vector_matches:
         return None
 
-    terms = _query_terms(query)
+    terms = query_terms(query)
     candidates = [
         RetrievedSource(
             target_id=target_id,
             query=query,
             source_unit=match.source_unit,
             score=match.similarity,
-            lexical_score=_score_text(match.source_unit.search_text, terms),
+            lexical_score=score_text(match.source_unit.search_text, terms),
             vector_score=match.similarity,
         )
         for match in vector_matches
@@ -194,7 +192,7 @@ def _lexical_fallback(
     vector_attempted: bool,
     top_k: int,
 ) -> RetrievedContext:
-    matches = _rank_source_units(source_units=source_units, query=query)
+    matches = rank_source_units(source_units=source_units, query=query)
     candidates = [
         RetrievedSource(
             target_id=target_id,
@@ -217,56 +215,6 @@ def _lexical_fallback(
             fallback_used=vector_attempted,
         ),
     )
-
-
-def _rank_source_units(
-    *,
-    source_units: Iterable[SourceUnit],
-    query: str,
-) -> list[SourceUnitMatch]:
-    units = list(source_units)
-    if not units:
-        return []
-
-    terms = _query_terms(query)
-    matches: list[SourceUnitMatch] = []
-    for unit in units:
-        lexical_score = _score_text(unit.search_text, terms)
-        matches.append(
-            SourceUnitMatch(
-                source_unit=unit,
-                score=float(lexical_score),
-                lexical_score=lexical_score,
-            )
-        )
-    return sorted(matches, key=lambda match: match.lexical_score, reverse=True)
-
-
-def _score_text(text: str, terms: list[str]) -> int:
-    if not terms:
-        return 0
-
-    lower_text = text.lower()
-    return sum(1 for term in set(terms) if term in lower_text)
-
-
-def _query_terms(query: str) -> list[str]:
-    terms: list[str] = []
-    current: list[str] = []
-    for char in query.lower():
-        if char.isalnum() or char == "_":
-            current.append(char)
-            continue
-        if current:
-            term = "".join(current)
-            if len(term) >= 2:
-                terms.append(term)
-            current = []
-    if current:
-        term = "".join(current)
-        if len(term) >= 2:
-            terms.append(term)
-    return terms
 
 
 def _can_attempt_query_vector(
