@@ -203,11 +203,11 @@ def _question_reports(
     observations: list[ObservationRecord],
     run_dir: Path,
 ) -> list[QuestionReport]:
-    by_correlation_id: dict[str, ObservationRecord] = {}
+    by_correlation_id: dict[str, list[ObservationRecord]] = {}
     for observation in observations:
         if observation.operation != "question_answer":
             continue
-        by_correlation_id.setdefault(observation.correlation_id, observation)
+        by_correlation_id.setdefault(observation.correlation_id, []).append(observation)
 
     question_results = _list(run.get("question_results"))
     if not question_results:
@@ -221,7 +221,12 @@ def _question_reports(
             question.get("correlation_id"),
             fallback=_text(run.get("correlation_id")),
         )
-        observation = by_correlation_id.get(correlation_id)
+        request_id = _text(question.get("request_id"), fallback="not_recorded")
+        observation_matches = by_correlation_id.get(correlation_id, [])
+        observation = _select_observation(
+            matches=observation_matches,
+            request_id=request_id,
+        )
         expected = _dict(question.get("expected"))
         observed = _dict(question.get("observed"))
         rule_check = _dict(question.get("rule_check"))
@@ -237,7 +242,7 @@ def _question_reports(
                 priority=_text(question.get("priority"), fallback="not_recorded"),
                 question_text=_text(question.get("question")),
                 correlation_id=correlation_id,
-                request_id=_text(question.get("request_id"), fallback="not_recorded"),
+                request_id=request_id,
                 expected_state=_text(
                     expected.get("evidence_state"), fallback="not_recorded"
                 ),
@@ -272,14 +277,52 @@ def _question_reports(
                 answer_projection=answer_projection,
                 material_sources=material_sources,
                 observation=observation,
-                observation_source=(
-                    observation.relative_source(run_dir=run_dir)
-                    if observation is not None
-                    else "not_found"
+                observation_source=_observation_source_label(
+                    observation=observation,
+                    matches=observation_matches,
+                    request_id=request_id,
+                    run_dir=run_dir,
                 ),
             )
         )
     return reports
+
+
+def _select_observation(
+    *,
+    matches: list[ObservationRecord],
+    request_id: str,
+) -> ObservationRecord | None:
+    if len(matches) == 1:
+        return matches[0]
+    request_matches = [
+        observation for observation in matches if observation.request_id == request_id
+    ]
+    if len(request_matches) == 1:
+        return request_matches[0]
+    return None
+
+
+def _observation_source_label(
+    *,
+    observation: ObservationRecord | None,
+    matches: list[ObservationRecord],
+    request_id: str,
+    run_dir: Path,
+) -> str:
+    if observation is not None:
+        return observation.relative_source(run_dir=run_dir)
+    if not matches:
+        return "not_found"
+    request_match_count = sum(
+        1 for observation_match in matches if observation_match.request_id == request_id
+    )
+    if request_match_count > 1:
+        return (
+            "ambiguous: "
+            f"{request_match_count} observations matched correlation_id and request_id"
+        )
+    return f"ambiguous: {len(matches)} observations matched correlation_id"
 
 
 def _legacy_smoke_question_result(run: dict[str, Any]) -> dict[str, Any]:

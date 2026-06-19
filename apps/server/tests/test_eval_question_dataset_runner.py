@@ -104,6 +104,78 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
     assert "Composer context" in report_html
 
 
+def test_question_dataset_runner_makes_correlation_ids_unique_on_collisions(
+    tmp_path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    script = repo_root / "eval" / "run_question_dataset.py"
+    questions_file = tmp_path / "questions.json"
+    material_text_file = tmp_path / "material.txt"
+    questions_file.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "DUP/A",
+                    "priority": "p0",
+                    "type": "fact",
+                    "question": "check-in time?",
+                    "expected_evidence_state": "supported",
+                    "required_evidence_cues": [],
+                    "must_not_claim": [],
+                },
+                {
+                    "id": "DUP A",
+                    "priority": "p0",
+                    "type": "fact",
+                    "question": "hotel address?",
+                    "expected_evidence_state": "supported",
+                    "required_evidence_cues": [],
+                    "must_not_claim": [],
+                },
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    material_text_file.write_text(
+        "Hotel address is Hakata. Check-in starts at 15:00.",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--output-dir",
+            str(tmp_path),
+            "--questions-file",
+            str(questions_file),
+            "--material-text-file",
+            str(material_text_file),
+            "--run-id",
+            "collision-test",
+            "--correlation-prefix",
+            "collision_eval",
+            "--json",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    output = json.loads(result.stdout)
+    artifact = json.loads(Path(output["artifact_path"]).read_text(encoding="utf-8"))
+    correlation_ids = [
+        question["correlation_id"] for question in artifact["question_results"]
+    ]
+
+    assert correlation_ids[0] == "collision_eval_DUP_A"
+    assert correlation_ids[1].startswith("collision_eval_DUP_A_2_")
+    assert len(correlation_ids) == len(set(correlation_ids))
+    assert artifact["checks"]["generated_question_correlation_ids_unique"] is True
+    assert artifact["checks"]["all_question_exports_correlation_matched_inputs"] is True
+
+
 def test_html_report_keeps_product_answer_and_observation_projection_separate(
     tmp_path,
 ) -> None:
@@ -217,3 +289,166 @@ def test_html_report_keeps_product_answer_and_observation_projection_separate(
     )
     assert "제품이 사용자에게 돌려준 답" in report_html
     assert "Raw details" in report_html
+
+
+def test_html_report_uses_request_id_when_correlation_id_is_duplicated(
+    tmp_path,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    script = repo_root / "eval" / "html_report.py"
+    run_path = tmp_path / "run.json"
+    observation_path = tmp_path / "observations" / "observation-export.jsonl"
+    observation_path.parent.mkdir()
+    observation_rows = [
+        {
+            "schema_version": "tripproof.observation_export.v1",
+            "operation": "question_answer",
+            "record_id": "obs_question_1",
+            "request_id": "req_first",
+            "correlation_id": "duplicated_correlation",
+            "payload": {
+                "subject": {},
+                "final_status": "accepted",
+                "failure_kind": None,
+                "steps": [
+                    {
+                        "name": "answer_projection",
+                        "status": "succeeded",
+                        "failure_kind": None,
+                        "facts": {
+                            "item_count": 1,
+                            "evidence_state_counts": {"supported": 1},
+                            "items": [
+                                {
+                                    "id": "answer",
+                                    "label": "Observation item",
+                                    "body": "First observation body",
+                                    "value": None,
+                                    "evidence_state": "supported",
+                                    "evidence": [],
+                                }
+                            ],
+                        },
+                        "children": [],
+                    }
+                ],
+            },
+        },
+        {
+            "schema_version": "tripproof.observation_export.v1",
+            "operation": "question_answer",
+            "record_id": "obs_question_2",
+            "request_id": "req_second",
+            "correlation_id": "duplicated_correlation",
+            "payload": {
+                "subject": {},
+                "final_status": "accepted",
+                "failure_kind": None,
+                "steps": [
+                    {
+                        "name": "answer_projection",
+                        "status": "succeeded",
+                        "failure_kind": None,
+                        "facts": {
+                            "item_count": 1,
+                            "evidence_state_counts": {"supported": 1},
+                            "items": [
+                                {
+                                    "id": "answer",
+                                    "label": "Observation item",
+                                    "body": "Second observation body",
+                                    "value": None,
+                                    "evidence_state": "supported",
+                                    "evidence": [],
+                                }
+                            ],
+                        },
+                        "children": [],
+                    }
+                ],
+            },
+        },
+    ]
+    observation_path.write_text(
+        "\n".join(json.dumps(row) for row in observation_rows) + "\n",
+        encoding="utf-8",
+    )
+    run_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "tripproof.eval_run.question_dataset.v1",
+                "run_id": "duplicate-correlation-report-test",
+                "kind": "question_dataset",
+                "created_at": "2026-06-19T00:00:00Z",
+                "requests": {},
+                "question_results": [
+                    {
+                        "id": "QUESTION-1",
+                        "priority": "p0",
+                        "question": "first?",
+                        "correlation_id": "duplicated_correlation",
+                        "request_id": "req_first",
+                        "status_code": 200,
+                        "expected": {"evidence_state": "supported"},
+                        "observed": {
+                            "status": "accepted",
+                            "answer_summary": "First product summary",
+                            "answer_items": [],
+                            "evidence_state_counts": {"supported": 1},
+                        },
+                        "rule_check": {
+                            "passed": True,
+                            "missing_cues": [],
+                            "must_not_hits": [],
+                        },
+                    },
+                    {
+                        "id": "QUESTION-2",
+                        "priority": "p0",
+                        "question": "second?",
+                        "correlation_id": "duplicated_correlation",
+                        "request_id": "req_second",
+                        "status_code": 200,
+                        "expected": {"evidence_state": "supported"},
+                        "observed": {
+                            "status": "accepted",
+                            "answer_summary": "Second product summary",
+                            "answer_items": [],
+                            "evidence_state_counts": {"supported": 1},
+                        },
+                        "rule_check": {
+                            "passed": True,
+                            "missing_cues": [],
+                            "must_not_hits": [],
+                        },
+                    },
+                ],
+                "observation_export": {
+                    "path": "observations/observation-export.jsonl",
+                    "record_count": 2,
+                    "records": [],
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subprocess.run(
+        [sys.executable, str(script), str(run_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    report_html = (tmp_path / "report.html").read_text(encoding="utf-8")
+    first_section = report_html.split('id="question-1"', maxsplit=1)[1].split(
+        'id="question-2"', maxsplit=1
+    )[0]
+    second_section = report_html.split('id="question-2"', maxsplit=1)[1]
+
+    assert "observations/observation-export.jsonl:1" in first_section
+    assert "First observation body" in first_section
+    assert "Second observation body" not in first_section
+    assert "observations/observation-export.jsonl:2" in second_section
+    assert "Second observation body" in second_section

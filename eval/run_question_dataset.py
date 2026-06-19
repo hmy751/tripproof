@@ -135,14 +135,17 @@ def run_question_dataset(
         raise RuntimeError("material upload did not return a material id")
 
     question_results: list[dict[str, Any]] = []
+    used_correlation_ids: set[str] = set()
     product_trace_safe = _has_no_product_trace_ids(material_body)
-    for question in questions:
+    for question_index, question in enumerate(questions, start=1):
         question_id = _text(
             question.get("id"), fallback=f"question-{len(question_results) + 1}"
         )
-        correlation_id = _correlation_id(
+        correlation_id = _unique_correlation_id(
             prefix=active_correlation_prefix,
             question_id=question_id,
+            question_index=question_index,
+            used_ids=used_correlation_ids,
         )
         response = client.post(
             "/api/questions",
@@ -201,14 +204,15 @@ def _artifact(
 ) -> dict[str, Any]:
     upload_request_id = upload_response.headers.get(REQUEST_ID_HEADER, "")
     upload_correlation_id = upload_response.headers.get(CORRELATION_ID_HEADER, "")
-    question_correlation_ids = {
+    question_correlation_ids = [
         _text(question.get("correlation_id")) for question in question_results
-    }
-    exported_question_correlation_ids = {
+    ]
+    question_correlation_counts = Counter(question_correlation_ids)
+    exported_question_correlation_counts = Counter(
         _text(row.get("correlation_id"))
         for row in observation_rows
         if row.get("operation") == "question_answer"
-    }
+    )
     checks = {
         "upload_response_had_request_id": upload_request_id.startswith("req_"),
         "upload_request_fell_back_to_own_correlation_id": upload_correlation_id
@@ -222,8 +226,12 @@ def _artifact(
             question.get("correlation_id") == question.get("response_correlation_id")
             for question in question_results
         ),
-        "all_question_exports_correlation_matched_inputs": question_correlation_ids
-        <= exported_question_correlation_ids,
+        "generated_question_correlation_ids_unique": len(question_correlation_ids)
+        == len(question_correlation_counts),
+        "all_question_exports_correlation_matched_inputs": all(
+            exported_question_correlation_counts[correlation_id] >= count
+            for correlation_id, count in question_correlation_counts.items()
+        ),
         "product_json_has_no_request_or_correlation_id": product_trace_safe,
     }
     return {
@@ -362,6 +370,30 @@ def _observation_summary(row: dict[str, Any]) -> dict[str, Any]:
 def _correlation_id(*, prefix: str, question_id: str) -> str:
     value = f"{prefix}_{question_id}"
     return re.sub(r"[^A-Za-z0-9._:-]", "_", value)[:128] or f"eval_{uuid4().hex[:8]}"
+
+
+def _unique_correlation_id(
+    *,
+    prefix: str,
+    question_id: str,
+    question_index: int,
+    used_ids: set[str],
+) -> str:
+    base = _correlation_id(prefix=prefix, question_id=question_id)
+    candidate = base
+    collision_count = 1
+    while candidate in used_ids:
+        suffix = f"_{question_index}_{collision_count}"
+        candidate = _with_suffix(base, suffix=suffix, limit=128)
+        collision_count += 1
+    used_ids.add(candidate)
+    return candidate
+
+
+def _with_suffix(value: str, *, suffix: str, limit: int) -> str:
+    if len(suffix) >= limit:
+        return suffix[-limit:]
+    return f"{value[: limit - len(suffix)]}{suffix}"
 
 
 def _repo_relative(path: Path) -> str:
