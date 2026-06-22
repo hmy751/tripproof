@@ -10,7 +10,7 @@ description: TripProof에서 현재 대화/작업 세션에 docs/implementation-
 ## 먼저 볼 것
 
 - `docs/implementation-notes/README.md`
-- `docs/development-notes.md`
+- `docs/engineering/README.md`
 - 필요하면 관련 `docs/specs/**`, `docs/decisions/**`, `docs/work-log.md`, 최근 commit
 
 ## 저장할 만한 신호

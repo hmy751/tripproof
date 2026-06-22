@@ -40,3 +40,8 @@
 - 제목과 본문은 기본적으로 한국어로 쓴다. type, scope, 파일명, API 이름, 명령어는 영어를 그대로 둔다.
 - 여러 영역을 함께 바꾸면 가장 중심이 되는 scope를 고르고, 필요한 세부 내용은 본문에 적는다.
 - 아직 구현되지 않은 product flow, eval result, proof를 완료된 것처럼 commit message에 쓰지 않는다.
+
+## 코드 변경 원칙
+
+- 코드 설계·변경·추상화 판단은 `docs/engineering/`을 참고한다 (`principle.md` / `architecture.md` / `testing.md` / `ai-coding.md`).
+- 강제 관문이 아니라 참고 기준이며, 제품 동작의 강제는 테스트가 맡는다.
