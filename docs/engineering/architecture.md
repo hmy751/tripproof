@@ -5,10 +5,13 @@
 ## 모듈 지도
 
 - `apps/client` (React/Vite) — 사용자 UI. 서버에는 api 레이어로만 접근한다.
-- `apps/server` (FastAPI) — route → use_case → retrieval / extraction / answers / materials.
-  - route: HTTP 입출력 변환만.
+- `apps/server` (FastAPI) — 요청은 route → use_case → 아래 도메인·인프라로 흐른다.
+  - route(`api`): HTTP 입출력 변환만.
   - use_case: 한 요청의 흐름을 조립.
-  - 그 아래: 검색, 추출, 답변 합성, 자료 저장(materials).
+  - 도메인: 자료 저장·수집(`materials`), 검색(`retrieval`), 근거 grounding(`extraction` — EvidenceState·EvidenceRef. 텍스트 추출 자체는 `materials/pdf`), 답변 합성(`answers`), 질문(`questions`).
+  - 인프라: 프롬프트(`prompts`), LLM 클라이언트(`llm`), 스키마(`schemas`), 설정·에러(`core`), 실행 설정(`runtime`).
+  - 관측: 내부 record와 외부 export(`observations`).
+  - 아직 흐름이 없는 빈 scaffold는 지도에 넣지 않는다.
 - `eval` — product를 밖에서 호출하는 관찰 계층. product 로직은 두지 않는다(경계는 아래).
 
 ## 의존 방향
@@ -20,8 +23,7 @@
 ## product / 관측 / eval 경계
 
 - product: 사용자에게 보이는 흐름과 결과 계약.
-- 관측: 내부 record가 먼저, 외부 export는 그걸 소비하는 sink다. exporter가 꺼져도 product 응답은 같다.
-- 관측으로는 개수·상태 같은 요약만 내보낸다. 원본 자료·추출 전문·벡터는 내보내지 않는다.
+- 관측(`observations`): 내부 record가 먼저, 외부 export는 그걸 소비하는 sink다. exporter가 꺼져도 product 응답은 같다.
 - 한 요청을 client → server → 관측까지 같은 식별자로 꿴다. 사후에 한 흐름을 재구성하기 위해서다.
 - 같은 코드라도 프롬프트·모델·설정이 바뀌면 동작이 바뀐다. 실행 설정은 스냅샷으로 남긴다.
 - eval은 product를 관찰만 한다. product 로직을 eval에 중복하지 않고, product 응답이 eval에 의존하지 않는다.
@@ -29,4 +31,5 @@
 
 ## 조립 지점
 
-- `create_app`이 의존성을 한곳에서 조립한다 — `principle.md`의 DIP가 실제로 사는 자리다. 설정·환경값은 한 모듈에 모은다.
+- `create_app`은 외부 의존(store·repository·composer·exporter·sink·실행 설정)을 조립한다 — `principle.md`의 DIP가 실제로 사는 자리다. use_case 인스턴스는 route에서 요청별로 만들고, use_case 내부 협력자는 use_case가 직접 조립한다.
+- 설정값 정의는 `core` 한 모듈에 모으되, 일부 기본값은 쓰는 쪽이 직접 읽는다.
