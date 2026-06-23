@@ -5,7 +5,7 @@ from pydantic import Field
 from server.answers.models import ChatAnswer, ChatAnswerItem
 from server.extraction.models import EvidenceState
 from server.schemas.base import ApiModel
-from server.schemas.facts import EvidenceRefResponse
+from server.schemas.evidence import EvidenceRefResponse
 
 
 class ChatAnswerItemResponse(ApiModel):

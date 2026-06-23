@@ -97,6 +97,8 @@ def is_safe_fact_value(
         )
     if isinstance(value, list) and allow_json_values:
         return all(is_safe_fact_value(item, allow_json_values=True) for item in value)
+    # list는 기본 차단(redaction guard). allow_string_lists는 ready_material_ids 같은
+    # string list fact를 emit하는 question observation에 한해서만 켠다.
     if isinstance(value, list) and allow_string_lists:
         return all(isinstance(item, str) for item in value)
     return False

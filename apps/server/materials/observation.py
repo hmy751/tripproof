@@ -66,6 +66,8 @@ _ALL_STEP_NAMES: tuple[MaterialUploadStepName, ...] = (
     "finalization",
     "material_status",
 )
+# step별 export 허용 fact key allowlist. 여기 없는 key는 merge_safe_facts에서 조용히
+# 버려지므로, reporter가 새 fact를 emit하면 같은 step에 key를 반드시 추가한다.
 _ALLOWED_FACT_KEYS: dict[MaterialUploadStepName, set[str]] = {
     "material_intake": set(),
     "upload_snapshot": {"file_name", "content_type", "size_bytes", "size_limit_bytes"},
@@ -114,11 +116,6 @@ class MaterialUploadObservationRecord:
 class MaterialUploadObservationSink(Protocol):
     def record_material_upload(self, record: MaterialUploadObservationRecord) -> None:
         raise NotImplementedError
-
-
-class NoopMaterialUploadObservationSink:
-    def record_material_upload(self, record: MaterialUploadObservationRecord) -> None:
-        return None
 
 
 class InMemoryMaterialUploadObservationSink:

@@ -79,6 +79,8 @@ _ALL_STEP_NAMES: tuple[QuestionObservationStepName, ...] = (
     "finalization",
     "question_status",
 )
+# step별 export 허용 fact key allowlist. 여기 없는 key는 merge_safe_facts에서 조용히
+# 버려지므로, reporter가 새 fact를 emit하면 같은 step에 key를 반드시 추가한다.
 _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
     "question_preparation": set(),
     "query_snapshot": {"question_length"},
@@ -92,7 +94,6 @@ _ALLOWED_FACT_KEYS: dict[QuestionObservationStepName, set[str]] = {
     "retrieval_pipeline": set(),
     "source_retrieval": {
         "executed",
-        "strategy",
         "query_embedding_attempted",
         "query_embedding_available",
         "vector_attempted",
@@ -157,11 +158,6 @@ class QuestionObservationRecord:
 class QuestionObservationSink(Protocol):
     def record_question_answer(self, record: QuestionObservationRecord) -> None:
         raise NotImplementedError
-
-
-class NoopQuestionObservationSink:
-    def record_question_answer(self, record: QuestionObservationRecord) -> None:
-        return None
 
 
 class InMemoryQuestionObservationSink:
@@ -423,7 +419,6 @@ def source_retrieval_facts(
 ) -> dict[str, QuestionObservationFactValue]:
     return {
         "executed": True,
-        "strategy": trace.strategy,
         "query_embedding_attempted": trace.query_embedding_attempted,
         "query_embedding_available": trace.query_embedding_available,
         "vector_attempted": trace.vector_attempted,

@@ -1,18 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from server.answers.library_chat import LIBRARY_CHAT_TARGET_ID
 from server.materials.store import MaterialStore
 from server.retrieval.repository import RetrievalRecords
 from server.retrieval.search import RetrievedContext, retrieve_context_with_trace
 from server.runtime.config_snapshot import RuntimeConfigSettings
-
-
-@dataclass(frozen=True)
-class QuestionContextRetrievalResult:
-    retrieval_records: RetrievalRecords
-    retrieved_context: RetrievedContext
 
 
 class QuestionContextRetriever:

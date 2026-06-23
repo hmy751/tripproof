@@ -13,16 +13,10 @@ from server.observations.envelope import (
     ObservationExportEnvelope,
     ObservationExportOperation,
 )
-from server.observations.redaction import (
-    export_safe_facts as _export_safe_facts,
-    file_name_summary as _file_name_summary,
-    is_export_safe_value as _is_export_safe_value,
-)
 from server.observations.serializers import (
     material_upload_observation_export,
     observation_export_to_dict,
     question_observation_export,
-    runtime_config_snapshot_to_payload as _runtime_config_snapshot_to_payload,
 )
 from server.observations.sinks import (
     FanoutObservationExporter,
@@ -31,7 +25,6 @@ from server.observations.sinks import (
     NoopObservationExporter,
     ObservationExporter,
     QuestionObservationExportSink,
-    create_observation_exporter_from_directory,
 )
 
 __all__ = [
@@ -46,11 +39,6 @@ __all__ = [
     "ObservationExporter",
     "ObservationRequestContext",
     "QuestionObservationExportSink",
-    "_export_safe_facts",
-    "_file_name_summary",
-    "_is_export_safe_value",
-    "_runtime_config_snapshot_to_payload",
-    "create_observation_exporter_from_directory",
     "current_observation_request_context",
     "material_upload_observation_export",
     "new_observation_request_context",

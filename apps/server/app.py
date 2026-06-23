@@ -20,7 +20,6 @@ from server.core.config import (
     LANGSMITH_OBSERVATION_ENABLED,
     LANGSMITH_PROJECT,
     OBSERVATION_EXPORT_DIR,
-    RETRIEVAL_BACKEND,
 )
 from server.materials.observation import MaterialUploadObservationSink
 from server.materials.store import MaterialStore
@@ -43,6 +42,7 @@ from server.observations.langsmith import (
 from server.questions.observation import QuestionObservationSink
 from server.retrieval.search import RAG_SIMILARITY_THRESHOLD, RAG_TOP_K
 from server.retrieval.embeddings import create_ollama_embedding_provider_from_config
+from server.retrieval.repository import RetrievalRepository
 from server.retrieval.supabase import create_supabase_retrieval_repository_from_config
 from server.runtime.config_snapshot import RuntimeConfigSettings
 
@@ -55,11 +55,10 @@ def create_app(
     store: MaterialStore | None = None,
     *,
     embedding_auto_generate: bool | None = None,
-    retrieval_backend: str | None = None,
+    retrieval_repository: RetrievalRepository | None = None,
     retrieval_top_k: int | None = None,
     retrieval_similarity_threshold: float | None = None,
     library_chat_answer_composer: LibraryChatAnswerComposer | None = None,
-    fact_proposer_backend: str | None = None,
     material_upload_observation_sink: MaterialUploadObservationSink | None = None,
     question_observation_sink: QuestionObservationSink | None = None,
     observation_exporter: ObservationExporter | None = None,
@@ -78,16 +77,18 @@ def create_app(
             if active_embedding_auto_generate
             else None
         )
-        active_retrieval_backend = (retrieval_backend or RETRIEVAL_BACKEND).lower()
-        retrieval_repository = (
-            create_supabase_retrieval_repository_from_config()
-            if active_retrieval_backend == "supabase"
-            else None
-        )
+        if retrieval_repository is not None:
+            active_retrieval_repository = retrieval_repository
+            active_retrieval_backend = "memory"
+        else:
+            active_retrieval_repository = (
+                create_supabase_retrieval_repository_from_config()
+            )
+            active_retrieval_backend = "supabase"
         app.state.material_store = MaterialStore(
             embedding_provider=embedding_provider,
             embedding_auto_generate=active_embedding_auto_generate,
-            retrieval_repository=retrieval_repository,
+            retrieval_repository=active_retrieval_repository,
             retrieval_backend=active_retrieval_backend,
         )
     app.state.runtime_config_settings = RuntimeConfigSettings(
@@ -103,9 +104,7 @@ def create_app(
     )
     app.state.library_chat_answer_composer = (
         library_chat_answer_composer
-        or create_library_chat_answer_composer_from_config(
-            backend=fact_proposer_backend
-        )
+        or create_library_chat_answer_composer_from_config()
     )
     active_observation_exporter = (
         observation_exporter or _create_default_observation_exporter()
