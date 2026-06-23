@@ -18,8 +18,6 @@ from server.retrieval.embeddings import (
 )
 from server.retrieval.models import EmbeddingRecord, SourceUnit
 from server.retrieval.repository import (
-    ClearableRetrievalRepository,
-    InMemoryRetrievalRepository,
     RetrievalRecords,
     RetrievalRepository,
 )
@@ -56,27 +54,18 @@ class MaterialStore:
     def __init__(
         self,
         *,
+        retrieval_repository: RetrievalRepository,
+        retrieval_backend: str,
         embedding_provider: EmbeddingProvider | None = None,
         embedding_profile: EmbeddingProfile | None = None,
         embedding_auto_generate: bool = False,
-        retrieval_repository: RetrievalRepository | None = None,
-        retrieval_backend: str | None = None,
     ) -> None:
         self._materials: dict[str, StoredMaterial] = {}
         self._embedding_provider = embedding_provider
         self._embedding_profile = embedding_profile or default_embedding_profile()
         self._embedding_auto_generate = embedding_auto_generate
-        self._retrieval_repository = (
-            retrieval_repository or InMemoryRetrievalRepository()
-        )
-        if retrieval_backend is not None:
-            self._retrieval_backend = retrieval_backend
-        elif retrieval_repository is None or isinstance(
-            retrieval_repository, InMemoryRetrievalRepository
-        ):
-            self._retrieval_backend = "memory"
-        else:
-            self._retrieval_backend = "custom"
+        self._retrieval_repository = retrieval_repository
+        self._retrieval_backend = retrieval_backend
         self._ingestion_pipeline = MaterialIngestionPipeline(
             embedding_provider=self._embedding_provider,
             embedding_profile=self._embedding_profile,
@@ -186,8 +175,3 @@ class MaterialStore:
             material.id for material in self.ready_materials(material_ids)
         ]
         return self._retrieval_repository.records_for_materials(ready_material_ids)
-
-    def clear(self) -> None:
-        self._materials.clear()
-        if isinstance(self._retrieval_repository, ClearableRetrievalRepository):
-            self._retrieval_repository.clear()

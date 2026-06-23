@@ -65,9 +65,9 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 
 - `apps/server/api/routes/questions.py`: `/api/questions`가 ready material, retrieval records, `retrieve_context_with_trace`, answer composer, `QuestionResponse`를 연결한다.
 - `apps/server/api/deps.py`: material store, answer composer, question observation sink dependency를 제공한다.
-- `apps/server/app.py`: 기본 no-op sink와 테스트용 sink를 app state에 연결한다.
+- `apps/server/app.py`: 기본 export sink와 테스트용 sink를 app state에 연결한다.
 - `apps/server/questions/observation.py`: question observation record, recorder, sink, safe facts allowlist를 정의한다.
-- `apps/server/materials/observation.py`: material upload observation의 step model, sink protocol, no-op/in-memory sink, safe facts allowlist 패턴이다.
+- `apps/server/materials/observation.py`: material upload observation의 step model, sink protocol, 테스트용 in-memory sink, safe facts allowlist 패턴이다.
 - `apps/server/materials/store.py`: ready material과 retrieval record를 조회하는 경계다.
 - `apps/server/retrieval/search.py`: `retrieve_context_with_trace`가 answer composer에 넘길 `AnswerContext`와 source retrieval summary를 만든다.
 - `apps/server/answers/library_chat.py`: `LibraryChatAnswerComposer.compose` 계약과 `ChatAnswerResponse` 생성 경계다.
@@ -79,7 +79,7 @@ API 응답은 기존처럼 `accepted` 또는 `blocked` question response다. 개
 | 구현 요소 | 필요한 이유 | 현재 코드/문서 | 처음 닫을 기준 |
 | --- | --- | --- | --- |
 | Question observation model | 한 질문 요청의 관측 결과를 안정된 형태로 남겨야 한다 | `questions/observation.py` | question preparation, material scope, retrieval pipeline, answer pipeline, finalization을 담는 계층형 ordered step record가 있다 |
-| Observation sink | record 생성과 저장 방식을 product logic에서 분리해야 한다 | material upload는 no-op/in-memory sink 패턴을 쓴다 | 기본 no-op sink와 테스트용 in-memory sink가 있고 비활성화 시 응답이 바뀌지 않는다 |
+| Observation sink | record 생성과 저장 방식을 product logic에서 분리해야 한다 | material upload와 동일하게 테스트용 in-memory sink와 no-op exporter 패턴을 쓴다 | export가 비활성화돼도 응답이 바뀌지 않는다 |
 | Route boundary capture | ready material count/id, retrieval record load, SourceUnit retrieval, `AnswerContext` assembly, composer 호출 결과는 route가 연결한다 | `routes/questions.py`가 product path를 모두 연결한다 | blocked/accepted/exception 경계에서 record가 finalize된다 |
 | Failure summary | 실패를 나중에 비교하려면 최소 failure kind가 필요하다 | question route에는 아직 내부 failure kind가 없다 | `empty_question`, `no_ready_materials`, `retrieval_failed`, `answer_composer_failed`를 구분한다 |
 | Safe facts allowlist | raw SourceUnit text, raw answer, provider payload가 새지 않아야 한다 | material observation은 step별 allowlist를 둔다 | step별 허용 fact만 record에 남긴다 |
@@ -117,7 +117,7 @@ question_answer
 | `query_snapshot` | `question_length` | `empty_question` |
 | `ready_material_selection` | `ready_material_count`, `ready_material_ids` | `no_ready_materials` |
 | `retrieval_record_load` | `executed`, `source_unit_count`, `embedding_record_count` | `retrieval_failed` |
-| `source_retrieval` | `executed`, `strategy`, `query_embedding_attempted`, `query_embedding_available`, `vector_attempted`, `vector_candidate_count`, `fallback_used` | `retrieval_failed` |
+| `source_retrieval` | `executed`, `query_embedding_attempted`, `query_embedding_available`, `vector_attempted`, `vector_candidate_count`, `fallback_used` | `retrieval_failed` |
 | `context_assembly` | `executed`, `target_id` | `retrieval_failed` |
 | `candidate_summary` | `candidate_count`, `candidates_with_vector_score`, `candidates_with_lexical_score` | 없음 |
 | `prompt_snapshot` | `available`, `prompt_domain`, `prompt_name`, `prompt_version`, `prompt_body_hash`, `prompt_file_hash`, `prompt_asset_path` | 없음 |
@@ -169,7 +169,7 @@ question_answer
     question_status
 ```
 
-`source_retrieval`은 step이지만, `lexical fallback`은 지금 단계에서는 `source_retrieval`의 fact에 가깝다. 예: `strategy`, `vector_attempted`, `vector_candidate_count`, `fallback_used`. rerank, judge, grounding check가 실제 product module로 들어와 후보 순서나 answer state를 바꾸면 독립 step으로 승격한다.
+`source_retrieval`은 step이지만, `lexical fallback`은 지금 단계에서는 `source_retrieval`의 fact에 가깝다. 예: `vector_attempted`, `vector_candidate_count`, `fallback_used`. rerank, judge, grounding check가 실제 product module로 들어와 후보 순서나 answer state를 바꾸면 독립 step으로 승격한다.
 
 step/fact 판단 기준은 함수 크기나 route visibility가 아니라 AI/runtime 원인 추적력이다. raw SourceUnit text, embedding vector, raw LLM payload, exception stack은 기본 record에 넣지 않는다. 필요하면 id/count/hash/status summary만 남긴다.
 
@@ -206,12 +206,12 @@ question_answer
     question_status
 ```
 
-기본 sink는 no-op이고, 테스트에서는 in-memory sink로 record를 확인한다. sink가 실패해도 product 응답, 예외 propagation, material store 상태를 바꾸지 않는다.
+기본 sink는 export sink(미설정 시 no-op exporter)이고, 테스트에서는 in-memory sink로 record를 확인한다. sink가 실패해도 product 응답, 예외 propagation, material store 상태를 바꾸지 않는다.
 
 ## 구현 중 주의할 점
 
 - route-level `composer_call` result는 composer 내부 provider 성공 여부가 아니라 `compose()` 호출이 `ChatAnswerResponse`를 반환했는지에 대한 관측이다.
-- retrieval 후보 count는 `AnswerContext.candidates` 길이로 시작한다. vector/lexical 세부는 `source_retrieval`의 strategy/count/fallback summary와 `candidate_summary`의 count까지만 남긴다.
+- retrieval 후보 count는 `AnswerContext.candidates` 길이로 시작한다. vector/lexical 세부는 `source_retrieval`의 vector_attempted/vector_candidate_count/fallback_used summary와 `candidate_summary`의 count까지만 남긴다.
 - material id 목록은 ready material id만 남긴다. 요청 payload에 들어왔지만 failed이거나 존재하지 않는 material id를 별도 진단하는 것은 다음 slice다.
 - prompt snapshot은 composer가 prompt identity를 노출할 때만 version/hash/asset path summary를 남긴다. prompt 전문은 저장하지 않는다.
 - config snapshot은 이 record와 나중에 연결할 수 있지만, 이번 record가 config snapshot 없이도 닫히도록 둔다.

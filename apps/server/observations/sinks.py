@@ -79,11 +79,3 @@ class QuestionObservationExportSink:
 
     def record_question_answer(self, record: QuestionObservationRecord) -> None:
         self._exporter.export_observation(question_observation_export(record))
-
-
-def create_observation_exporter_from_directory(
-    directory: str | Path | None,
-) -> ObservationExporter:
-    if directory is None or str(directory).strip() == "":
-        return NoopObservationExporter()
-    return LocalArtifactObservationExporter(directory)

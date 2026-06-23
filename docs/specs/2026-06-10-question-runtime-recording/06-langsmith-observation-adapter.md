@@ -331,7 +331,7 @@ LangSmith adapter의 기본 payload 기준은 "실행을 다시 설명하는 데
 - operation, record id, final status, failure kind
 - step name, path, status, failure kind
 - SourceUnit, EmbeddingRecord, retrieval 후보(RetrievedSource), answer item 같은 count/status summary
-- retrieval strategy, fallback 여부, vector candidate count
+- vector 시도 여부, fallback 여부, vector candidate count
 - runtime config의 retrieval, embedding, prompt identity, answer model summary
 - answer projection의 item count와 evidence state counts
 

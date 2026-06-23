@@ -35,7 +35,7 @@
 - retrieval snapshot은 backend, top-k, similarity threshold처럼 후보 선택을 바꾸는 값을 남긴다.
 - embedding snapshot은 auto-generate 여부, provider, model, dimensions처럼 source unit embedding 생성과 query embedding 가능성을 바꾸는 값을 남긴다.
 - prompt snapshot은 domain, name, version, body hash, file hash, asset path summary만 남긴다.
-- answer composer backend/model은 현재 코드가 실제로 소비하는 `FACT_PROPOSER_BACKEND`, `OLLAMA_FACT_MODEL`에서 시작할 수 있다. 다만 provider-neutral answer runtime이 생기기 전까지 route가 provider detail을 임의 추정해 채우지는 않는다.
+- answer composer backend/model은 composer가 노출하는 runtime identity(현재 backend는 `ollama` 고정, model은 `OLLAMA_ANSWER_MODEL`)에서 온다. 다만 provider-neutral answer runtime이 생기기 전까지 route가 provider detail을 임의 추정해 채우지는 않는다.
 - snapshot 생성 실패나 sink 실패는 material upload, question answer, exception propagation을 바꾸지 않는다.
 
 ## Non-goals
@@ -51,7 +51,7 @@
 - `apps/server/core/config.py`: retrieval, embedding, answer composer 관련 env constant의 현재 원천이다.
 - `apps/server/app.py`: config 값을 app state의 material store, retrieval repository, answer composer로 wiring한다.
 - `apps/server/materials/store.py`: embedding provider/profile/auto-generate와 retrieval repository를 사용해 ready material을 만든다.
-- `apps/server/retrieval/search.py`: `RAG_TOP_K`, `RAG_SIMILARITY_THRESHOLD`, retrieval strategy 경계다.
+- `apps/server/retrieval/search.py`: `RAG_TOP_K`, `RAG_SIMILARITY_THRESHOLD`, vector 검색/lexical fallback 경계다.
 - `apps/server/runtime/config_snapshot.py`: runtime config settings와 safe snapshot dataclass를 정의한다.
 - `apps/server/materials/observation.py`: material upload observation record가 runtime config snapshot을 직접 가진다.
 - `apps/server/questions/observation.py`: question observation의 prompt snapshot safe facts 패턴이다.
@@ -96,7 +96,7 @@ runtime_config_snapshot
     model
 ```
 
-`answer_model.backend`와 `answer_model.model`은 현재 `FACT_PROPOSER_BACKEND`, `OLLAMA_FACT_MODEL`을 안전한 내부 snapshot으로 남길 수 있다. 장기적으로는 answer composer가 노출하는 runtime identity로 바꾸는 편이 더 정확할 수 있다. route가 provider detail을 임의 추정해 채우지는 않는다.
+`answer_model.backend`와 `answer_model.model`은 answer composer가 노출하는 runtime identity(`runtime_answer_model_snapshot`)에서 남긴다. 현재 backend는 `ollama`, model은 `OLLAMA_ANSWER_MODEL`이다. route가 provider detail을 임의 추정해 채우지는 않는다.
 
 ## 이번 AC
 

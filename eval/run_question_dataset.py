@@ -37,6 +37,10 @@ from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
 from server.runtime.config_snapshot import (  # noqa: E402
     answer_model_runtime_config_snapshot_from_composer,
 )
+from server.testing import (  # noqa: E402
+    InMemoryRetrievalRepository,
+    MissingLibraryChatAnswerComposer,
+)
 
 RUN_SCHEMA_VERSION = "tripproof.eval_run.question_dataset.v1"
 RUN_PURPOSE_ORIGINAL_PDF_BASELINE = "original_pdf_baseline"
@@ -323,19 +327,30 @@ def _create_dataset_app(
         store = MaterialStore(
             embedding_provider=DatasetEmbeddingProvider(),
             embedding_auto_generate=True,
+            retrieval_repository=InMemoryRetrievalRepository(),
             retrieval_backend="memory",
+        )
+        composer = (
+            None
+            if answer_composer_backend == "ollama"
+            else MissingLibraryChatAnswerComposer()
         )
         return create_app(
             store=store,
-            fact_proposer_backend=answer_composer_backend or "missing",
+            library_chat_answer_composer=composer,
             observation_exporter=observation_exporter,
         )
 
     if runtime_mode != RUNTIME_MODE_PRODUCTION:
         raise ValueError(f"Unsupported runtime mode: {runtime_mode}")
 
+    composer = (
+        MissingLibraryChatAnswerComposer()
+        if answer_composer_backend in ("missing", "disabled")
+        else None
+    )
     return create_app(
-        fact_proposer_backend=answer_composer_backend,
+        library_chat_answer_composer=composer,
         observation_exporter=observation_exporter,
     )
 

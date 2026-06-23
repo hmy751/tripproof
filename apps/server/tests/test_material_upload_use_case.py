@@ -12,6 +12,7 @@ from server.materials.pdf import ParsedPdf
 from server.materials.store import MaterialStore
 import server.use_cases.materials as materials_use_case
 from server.runtime.config_snapshot import RuntimeConfigSettings
+from server.testing import InMemoryRetrievalRepository
 from server.use_cases.materials import (
     MaterialUploadTooLargeError,
     UploadMaterialCommand,
@@ -21,7 +22,9 @@ from server.use_cases.materials import (
 
 def test_upload_material_use_case_returns_ready_trace_without_http_adapter() -> None:
     sink = InMemoryMaterialUploadObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     use_case = UploadMaterialUseCase(
         store=store,
         observation_sink=sink,
@@ -57,7 +60,9 @@ def test_upload_material_use_case_returns_ready_trace_without_http_adapter() -> 
 
 def test_upload_material_use_case_builds_layout_source_units(monkeypatch) -> None:
     sink = InMemoryMaterialUploadObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     use_case = UploadMaterialUseCase(
         store=store,
         observation_sink=sink,
@@ -112,7 +117,9 @@ def test_upload_material_use_case_records_too_large_failure_without_http_adapter
     None
 ):
     sink = InMemoryMaterialUploadObservationSink()
-    store = MaterialStore(retrieval_backend="memory")
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
     use_case = UploadMaterialUseCase(
         store=store,
         observation_sink=sink,

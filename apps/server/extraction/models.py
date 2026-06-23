@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -18,31 +18,3 @@ class EvidenceRef:
     label: str
     locator: str
     snippet: str
-
-
-@dataclass(frozen=True)
-class FactTarget:
-    id: str
-    label: str
-    query: str
-
-
-@dataclass(frozen=True)
-class FactProposal:
-    target_id: str
-    label: str
-    value: str | None
-    evidence_state: EvidenceState
-    evidence_snippet: str | None = None
-    source_unit_id: str | None = None
-    reason: str | None = None
-
-
-@dataclass(frozen=True)
-class FactCandidate:
-    id: str
-    label: str
-    value: str | None
-    evidence_state: EvidenceState
-    evidence: list[EvidenceRef] = field(default_factory=list)
-    reason: str | None = None

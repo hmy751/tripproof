@@ -112,7 +112,7 @@ StoredMaterial(text, fileName, pageCount)
 - `EmbeddingRecord`는 유지한다. embedding은 provider, model, dimensions, vector, status 수명주기가 원문 text와 다르므로 Supabase에서도 `tripproof_source_embeddings` 테이블로 분리한다.
 - 첫 개발 기본 profile은 local Ollama `nomic-embed-text-v2-moe`, 768 dimensions로 둔다. upload가 로컬 Ollama 실행 여부에 막히지 않게 provider 실패는 `EmbeddingRecord.status=failed`로 저장한다.
 - auto-generate가 꺼져 있거나 provider가 없으면 `EmbeddingRecord.status`는 `pending`이다. 이 상태도 `source_unit_id`, provider, model, dimensions를 보존하므로 나중에 background job이 이어받을 수 있다.
-- `RetrievalRepository`는 in-memory 구현과 Supabase adapter를 가진다. product 실행은 `TRIPPROOF_RETRIEVAL_BACKEND=supabase`일 때 Supabase `match_tripproof_source_units` RPC를 우선 사용하고, 테스트는 memory backend로 분리한다.
+- `RetrievalRepository`의 product 구현은 Supabase adapter 단일이다. product 실행은 Supabase `match_tripproof_source_units` RPC를 우선 사용하고, 테스트는 `apps/server/testing.py`의 in-memory 더블을 주입해 분리한다.
 - local `.env`에는 실제 Supabase URL과 service role key를 둘 수 있지만, 커밋 대상은 값이 비어 있는 `.env.example`뿐이다.
 - 과거 02 smoke 응답면의 `excerpt`, `excerptLocator`, `excerptSourceUnitId`는 현재 public `/api/questions` response body가 아니다. 현재 product response에서는 `QuestionResponse.answer.items[].evidence[]`의 `EvidenceRef`가 `SourceUnit` 원문으로 되돌아가는 경계를 보여준다.
 - retrieval helper에는 체크인 제시물, 체크인 시작 시각, Agoda 전용 문구 같은 도메인 target 하드코딩을 넣지 않는다. query/text token과 optional vector similarity로 `RetrievedSource` 후보만 고른다.
@@ -136,4 +136,4 @@ StoredMaterial(text, fileName, pageCount)
 - Supabase `source_embeddings.material_id` denormalization을 DB constraint로 더 강하게 묶을지.
 - Ollama 실제 호출은 설치된 embedding model과 `.env` model을 맞춘 뒤 수동 또는 integration test로 언제 검증할지.
 - lexical score와 vector score를 같은 retrieval 단계에서 합칠지, 03에서 rerank나 `AnswerContext` 구성으로 넘길지.
-- 03에서 `RetrievedSource`와 `EvidenceRef`를 만들 때 현재 `SourceUnitExcerpt` smoke helper를 유지할지, 03 전용 candidate 타입으로 교체할지.
+- 03에서 `RetrievedSource`와 `EvidenceRef`를 만든다. (미사용 `SourceUnitExcerpt`/excerpt helper는 이후 제거됨.)

@@ -10,7 +10,7 @@ description: TripProof에서 현재 대화/작업 세션에 docs/implementation-
 ## 먼저 볼 것
 
 - `docs/implementation-notes/README.md`
-- `docs/development-notes.md`
+- `docs/engineering/README.md`
 - 필요하면 관련 `docs/specs/**`, `docs/decisions/**`, `docs/work-log.md`, 최근 commit
 
 ## 저장할 만한 신호
@@ -36,7 +36,7 @@ description: TripProof에서 현재 대화/작업 세션에 docs/implementation-
 2. 현재 세션에서 관찰 후보를 1-3개로 압축한다.
 3. `docs/implementation-notes/`가 맞는지 `decisions`, `work-log`, `specs`, commit 중 더 가까운 위치와 비교한다.
 4. 너무 약하거나 다른 위치가 맞으면 파일을 만들지 말고 이유를 짧게 말한다.
-5. 충분하면 `docs/implementation-notes/YYYY-MM-DD-짧은-주제.md`를 만든다.
+5. 충분하면 README 기준대로 `docs/implementation-notes/YYYY-MM-DD-짧은-주제/`(폴더형 `index.md`, 배경 재료가 있으면 `raw.md`)를 만든다.
 6. 필요한 경우에만 `docs/work-log.md`에 "구현 노트가 생겼다"는 링크를 아주 짧게 남긴다.
 
 ## 작성 기준
@@ -47,16 +47,4 @@ description: TripProof에서 현재 대화/작업 세션에 docs/implementation-
 - 현재 작업 queue나 승인 gate처럼 읽히지 않게 한다.
 - 아직 없는 product proof, eval run, before/after를 완료된 것처럼 쓰지 않는다.
 
-권장 형식:
-
-```md
-# YYYY-MM-DD - 제목
-
-## 왜 남기나
-
-## 관찰
-
-## 다시 볼 경계
-
-## 어디에는 남기지 않았나
-```
+권장 파일 형식과 템플릿(`index.md`/`raw.md`)은 `docs/implementation-notes/README.md`를 따른다.

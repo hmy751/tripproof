@@ -11,9 +11,9 @@ import re
 import sys
 from uuid import uuid4
 
-os.environ.setdefault("TRIPPROOF_RETRIEVAL_BACKEND", "memory")
 os.environ.setdefault("TRIPPROOF_EMBEDDING_AUTO_GENERATE", "0")
-os.environ.setdefault("TRIPPROOF_FACT_PROPOSER_BACKEND", "missing")
+os.environ.setdefault("TRIPPROOF_SUPABASE_URL", "http://localhost:54321")
+os.environ.setdefault("TRIPPROOF_SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APPS_PATH = REPO_ROOT / "apps"
@@ -35,11 +35,12 @@ from server.app import (
 )  # noqa: E402
 from server.extraction.models import EvidenceRef, EvidenceState  # noqa: E402
 from server.observations.export import LocalArtifactObservationExporter  # noqa: E402
+from server.testing import InMemoryRetrievalRepository  # noqa: E402
 from server.schemas.answers import (
     ChatAnswerItemResponse,
     ChatAnswerResponse,
 )  # noqa: E402
-from server.schemas.facts import EvidenceRefResponse  # noqa: E402
+from server.schemas.evidence import EvidenceRefResponse  # noqa: E402
 from html_report import DEFAULT_REPORT_FILE_NAME, write_html_report  # noqa: E402
 
 DEFAULT_MATERIAL_TEXT = "Hotel address is Hakata. Check-in starts at 15:00."
@@ -90,7 +91,7 @@ def run_smoke_eval(
     client = TestClient(
         create_app(
             embedding_auto_generate=False,
-            retrieval_backend="memory",
+            retrieval_repository=InMemoryRetrievalRepository(),
             library_chat_answer_composer=StaticEvidenceAnswerComposer(),
             observation_exporter=exporter,
         )
