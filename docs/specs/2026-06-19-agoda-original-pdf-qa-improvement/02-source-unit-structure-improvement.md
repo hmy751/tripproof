@@ -2,28 +2,32 @@
 
 작성일: 2026-06-19
 
-상태: implemented v1, follow-up needed. 원문 PDF baseline에서 확인한 실패를 줄이기 위한 첫 product 개선 slice다.
+상태: V1(`9b09b59`) 구현 완료. 그 위의 row/cell-first 재구조화와 field-group 묶기는 아직 코드 없는 follow-up이다. 원문 PDF baseline에서 확인한 실패를 줄이기 위한 첫 product 개선 slice다.
 
 이 문서의 중심은 runner나 report 필드를 늘리는 것이 아니다. 원문 PDF가 retrieval과 answer evidence로 쓰일 수 있는 source unit으로 더 잘 들어오게 만드는 것이다.
 
 ## 사용자 장면
 
-개발자가 원문 Agoda PDF와 8개 질문셋을 돌린다. baseline report에서 필요한 정보가 큰 page-like 덩어리에 묻히거나, 질문에 필요한 조건 문맥이 candidate로 잘 올라오지 않는 것을 확인한다.
+개발자가 원문 Agoda PDF와 8개 질문셋을 돌린다. baseline report에서 필요한 정보가 큰 page-like 덩어리에 묻히거나, 질문에 필요한 조건 문맥이 candidate로 잘 올라오지 않는 것을 확인한다(시작 baseline 관찰의 권위 서술은 `01-original-pdf-observation-baseline.md`에 둔다).
 
 그 다음 source unit 생성 방식을 개선하고, 같은 원문 PDF와 같은 질문셋, 같은 production-like runtime 조건으로 다시 실행한다. before/after report에서 source unit kind, locator, retrieval candidate, answer/evidence가 어떻게 달라졌는지 확인한다.
 
-Before 기준 artifact:
+이 slice의 측정은 한 번이 아니라 이어진 timeline이다. 세 run은 같은 입력·같은 8문항을 같은 production-like runtime으로 돌렸고, 역할이 다르다.
 
-- `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/`
-- `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/report.html`
-- `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/run.json`
+| 시점 | run | 역할 |
+| --- | --- | --- |
+| Before (2026-06-19) | `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/` | layout 개선 전 시작점. source unit 구조 문제를 드러낸 근거 |
+| After v1 (2026-06-19) | `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/` | layout 기반 source unit 구조화의 직접 효과 측정 |
+| Current (2026-06-23) | `eval/runs/question-dataset/agoda-original-pdf-baseline-postreconcile-20260623-production/` | reconciliation 이후 같은 조건 재측정. 현재 기준 baseline |
 
-After v1 기준 artifact:
+before/after report 위치:
 
-- commit: `9b09b59 feat(materials): PDF 레이아웃 기반 source unit 구조화`
-- `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/`
-- `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/report.html`
-- `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/run.json`
+- Before report: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/report.html`
+- Before run JSON: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/run.json`
+- After v1 report: `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/report.html`
+- After v1 run JSON: `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/run.json`
+
+After v1 구현 commit: `9b09b59 feat(materials): PDF 레이아웃 기반 source unit 구조화`
 
 ## Product 흐름
 
@@ -38,7 +42,7 @@ After v1 기준 artifact:
 
 이번 slice는 `source unit 생성`을 개선한다. eval runner, report, `run.json`은 개선 효과를 보기 위한 소비자다.
 
-## V1 구현 결과
+## V1 구현 결과 (done)
 
 `9b09b59`에서 다음을 구현했다.
 
@@ -48,19 +52,27 @@ After v1 기준 artifact:
 - SourceUnit `metadata` JSON에 `extraction_backend`, `structural_kind`, `kind`, `bbox`, `line_count`, `page`, `fallback_used`를 저장한다.
 - observation/report의 retrieval candidate와 composer context에 source unit metadata를 표시한다. product response body는 바꾸지 않는다.
 
-production-like after eval 관찰:
+세 run의 runtime config는 같다: `retrieval_backend=supabase`, `embedding_provider=ollama`(`embedding_model=nomic-embed-text-v2-moe`, `embedding_dimensions=768`, `embedding_auto_generate=true`), `answer_composer=ollama`(`answer_model=gemma3:4b`), `retrieval_top_k=3`, `retrieval_similarity_threshold=0.0`, `mode=production`. 같은 config라야 시점 간 차이를 구현·substrate 변화로 읽을 수 있다.
 
-- runtime: Supabase retrieval, Ollama embedding, Ollama answer composer
-- `source_unit_count`: baseline `2` -> after v1 `40`
-- unique retrieval candidate source units: baseline `2` -> after v1 `9`
-- rule pass: baseline `0/8` -> after v1 `0/8`
-- evidence state match: baseline `2/8` -> after v1 `4/8`
+source unit 구조화의 효과를 timeline으로 보면 다음과 같다.
 
-이 결과는 큰 page-like source unit 두 개에 모든 질문이 기대던 문제를 줄였다는 신호다. 다만 answer correctness가 통과됐다는 뜻은 아니다.
+| 지표 | Before (06-19) | After v1 (06-19) | Current (06-23) |
+| --- | --- | --- | --- |
+| `source_unit_count` | 2 | 40 | 40 |
+| unique retrieval candidate source units | 2 | 9 | 9 |
+| rule pass | 0/8 | 0/8 | 0/8 |
+| evidence state match | 2/8 | 4/8 | 3/8 |
 
-자세한 after-run 해석, PDF screenshot/bbox 비교, 평가 기준 정리는 `docs/work-log.md`의 `2026-06-19 - Agoda 원문 PDF source unit v1 구현 후 관찰` 항목을 본다.
+- source unit count는 layout v1에서 `2 -> 40`으로 늘었다. 이 layout chunking은 결정적이라, reconciliation 이후 current에서도 `40`으로 그대로 유지된다.
+- evidence state match는 큰 page-like source unit 두 개에 모든 질문이 기대던 문제를 줄였다는 신호다(`2/8 -> 4/8`). 다만 answer correctness가 통과됐다는 뜻은 아니다(rule pass는 세 시점 모두 `0/8`).
+- current(06-23) state match는 `3/8`(`checkin_action`, `missing_checkin_start_time`, `room_and_party`)으로, after v1의 `4/8`보다 한 항목 적다(이번에는 `cancellation_policy`가 미일치).
+- 이 `4/8 -> 3/8` 차이는 구조화 후퇴가 아니다. after v1과 current의 retrieval candidate는 8문항 모두 질문별로 동일했다(같은 source unit index·순위, 같은 `score`/`lexical_score`/`vector_score`, unique candidate `9`로 동일). `cancellation_policy`(`AGODA-P0-06`)도 retrieval 입력은 같고, 같은 context를 받은 `gemma3:4b` answer composer 출력만 `supported -> missing`으로 갈렸다. 즉 관찰상 retrieval substrate(Supabase 단일·`lexical_ranking`)는 이 차이를 만들지 않았고, 달라진 것은 단일 run answer 출력뿐이다. `lexical_ranking`/Supabase 단일은 06-19와 06-23 사이의 코드 구조 변화이긴 하나 관찰된 retrieval 출력에는 영향이 없었다. 단일 run answer 비결정성으로 보는 것은 아직 가설이며, 검증 경로는 아래 `다음 세션 진입점`에 둔다.
 
-## PDF extractor 선정
+조건 문맥 항목의 실패가 current에서도 유지되므로, 이 slice 뒤의 작업(`03`~`05`)은 여전히 유효하다.
+
+자세한 after-run 해석, PDF screenshot/bbox 비교, 평가 기준 정리는 `docs/work-log.md`의 `2026-06-19 - Agoda 원문 PDF source unit v1 구현 후 관찰` 항목을 본다. reconciliation 이후 재측정 기록은 같은 work-log의 `2026-06-23 - reconciliation 이후 Agoda 원문 PDF baseline 재측정` 항목을 본다. (work-log 06-23 항목이 substrate를 차이 원인으로 적고 있다면, 위 관찰에 맞춰 `retrieval 출력 불변, composer 출력만 차이`로 함께 정정한다.)
+
+## PDF extractor 선정 (follow-up 판단 포함)
 
 이번 slice의 기본 PDF extractor는 `pdfplumber`로 지정한다. 목표는 Agoda 전용 문구 parser를 만드는 것이 아니라, PDF의 물리 구조를 먼저 관찰 가능한 record로 바꾸고 그 위에서 source unit을 나누는 것이다.
 
@@ -79,15 +91,15 @@ production-like after eval 관찰:
 - table extraction 결과를 그대로 정답 구조로 믿지 않는다. source unit 생성은 항상 page, bbox, raw text, 인접 line/row context를 함께 보존해야 한다.
 - `pdfplumber`가 제공하는 것은 layout 관찰값이지 의미 판정이 아니다. `kind`나 semantic hint는 구조 단위가 만들어진 뒤 붙이는 annotation이어야 한다.
 
-구현 방향:
+구현 방향(아직 코드 없는 follow-up):
 
-- `PdfLayoutExtractor` 경계를 두고 기본 구현을 `PdfPlumberLayoutExtractor`로 둔다.
+- V1은 `pdf.py`의 module-level 함수 경로(`_parse_pdf_with_pdfplumber`)와 `chunking.py`의 `build_source_units(layout_pages=...)`로 구현했다. 다음 단계에서 `PdfLayoutExtractor` 경계를 두고 기본 구현을 `PdfPlumberLayoutExtractor`로 분리하는 방향(추출 backend 추상화)을 검토한다. 이는 V1 구현 사실이 아니라 열린 방향이다.
 - extractor 출력은 page, bbox, text, line/word order, font/spacing, table-like row 단서를 가진 layout record여야 한다.
 - source unit boundary는 page, bbox, y-gap, x alignment, font/spacing 변화, row/list/table-like 반복 같은 물리 단서를 우선 사용한다.
 - 체크인, 취소, 도시세, 특별 요청 같은 도메인 단어는 source unit을 직접 만드는 hard boundary가 아니라, 이미 생성된 구조 단위의 recall/annotation을 보조하는 약한 신호로만 쓴다.
 - layout record가 충분하지 않을 때만 기존 text chunking fallback을 사용하고, 그 경우 report에서 fallback 경로임을 확인할 수 있어야 한다.
 
-## 개선 기준
+## 개선 기준 (follow-up)
 
 원문 PDF는 page-length 덩어리 몇 개로만 남으면 안 된다. 아래처럼 여행 예약 문서에서 반복되는 의미 단위가 source unit으로 드러나야 한다.
 
@@ -99,23 +111,16 @@ production-like after eval 관찰:
 
 source unit은 최소한 사람이 report에서 위치와 유형을 추적할 수 있어야 한다.
 
-- `locator`: page, block, row 등 원문 위치를 다시 찾을 수 있는 정보
-- `kind`: label-value, policy, warning, fee, request note 같은 정보 유형
-- `char_length`: 너무 큰 덩어리인지 확인하기 위한 길이 단서
+- 저장해야 하는 것 — `locator`: page, block, row 등 원문 위치를 다시 찾을 수 있는 정보 / `kind`: label-value, policy, warning, fee, request note 같은 정보 유형.
+- report에서 보이면 되는 것 — `char_length`: 너무 큰 덩어리인지 확인하기 위한 길이 단서. 이미 observation/report에서 `len(source_unit.text)`로 파생되므로 metadata에 따로 저장할 필요는 없다.
 
 정확한 field name과 kind 목록은 구현 시 현재 자료 모델에 맞춰 정한다. 이 문서는 값 목록을 고정하는 것이 아니라, source unit이 질문 가능한 의미 단위가 되어야 한다는 제품 기준을 고정한다.
 
-현재 before baseline의 직접 관찰은 다음과 같다.
-
-- 원문 PDF는 `source_unit_count=2`로만 생성됐다.
-- 두 source unit이 전 질문의 retrieval candidate로 반복해서 올라온다.
-- 필요한 단서가 candidate context 안에 있어도 answer composer가 일부만 뽑거나 evidence state를 오판한다.
-
-따라서 이 slice의 첫 성공 신호는 답변 문구 개선이 아니라, 질문별 required cue가 더 좁은 source unit과 locator로 추적되는 것이다.
+before baseline의 직접 관찰(권위 서술은 `01`)이 말하는 것은 두 page-length 덩어리로는 질문별 required cue를 분리해 추적할 수 없다는 점이다. 따라서 이 slice의 첫 성공 신호는 답변 문구 개선이 아니라, 질문별 required cue가 더 좁은 source unit과 locator로 추적되는 것이다.
 
 V1에서 확인된 직접 관찰은 다음과 같다.
 
-- SourceUnit은 40개로 늘었고, `key_value_row`, `paragraph`, `heading_paragraph`와 `label_value`, `policy`, `fee`, `request_note` metadata가 report에 표시된다.
+- SourceUnit은 40개로 늘었고, 이 run에서 관측된 structural kind는 `key_value_row`, `paragraph`, `heading_paragraph`, semantic kind는 `label_value`, `policy`, `fee`, `request_note`, `general`이 report에 표시된다. 코드가 생성할 수 있는 kind는 이보다 넓다(structural에 `list_item`, `text_chunk`, semantic에 `warning`도 있으나 이 run에서는 관측되지 않았다).
 - 하지만 실제 PDF screenshot과 bbox overlay를 비교하면, 현재 구현은 아직 cell/row-first가 아니라 text-line-first segmentation에 가깝다.
 - 상단 예약 정보, `Arrival/Departure`, `Remarks`, 도시세/특별 요청 영역에서 라벨, 값, 한국어 보조 라벨, 조건 문맥이 여러 source unit으로 갈라진다.
 - PDF 내부에는 rect/edge/table 단서가 남아 있으므로 다음 개선은 단순 keyword/line heuristic이 아니라 `rect/table/cell region -> row/field group -> source unit -> semantic annotation` 순서로 들어가야 한다.
@@ -144,7 +149,8 @@ V1에서 확인된 직접 관찰은 다음과 같다.
 2. source unit 생성 경로를 개선한다.
 3. 같은 원문 PDF와 같은 `questions.json`, 같은 runtime 조건으로 다시 실행한다.
 4. before/after report에서 source unit count, kind 분포, candidate locator, answer/evidence 변화를 비교한다.
-5. product response body에 observation/debug/eval field가 추가되지 않았는지 확인한다.
+5. 시점 간 수치를 비교할 때는 세 run의 runtime config(backend/embedding/top_k/threshold/composer)가 같은지 먼저 확인하고, 차이가 있으면 그 차이를 전제로만 해석한다.
+6. product response body에 observation/debug/eval field가 추가되지 않았는지 확인한다.
 
 ## 이번 slice에서 섞지 않는 범위
 
@@ -156,7 +162,17 @@ V1에서 확인된 직접 관찰은 다음과 같다.
 
 ## 다음 세션 진입점
 
+(A) 02 V1 follow-up — 여전히 source unit 구조화 범위:
+
 1. V1 source unit이 line 단위로 갈라지는 문제를 먼저 다룬다. `pdfplumber`의 rect/edge/table extraction 결과를 source unit boundary의 1차 신호로 쓰는 방향을 검토한다.
 2. 특히 `Arrival/Departure`, `Property/Address`, `Room Type/Rooms/Adults/Children`, `Remarks + special request boundary`가 한 질문에서 함께 retrieval될 수 있는 field group을 만든다.
 3. source unit boundary에는 도메인 keyword를 쓰지 않는다. keyword는 생성된 block의 `kind` annotation 또는 recall 보조 신호로만 둔다.
+
+(B) eval 해석과 가설 검증:
+
 4. eval 해석에서는 `rule pass`, `state_matched`, `required_evidence_cues`, `must_not_claim`, report-only metric label을 분리해서 본다. 현재 자동 pass는 semantic judge가 아니라 literal cue coverage 중심이다.
+5. current(06-23)에서 `cancellation_policy`가 다시 미일치로 돌아간 것은 retrieval 입력이 같은 채 composer 출력만 갈린 사례다. 이것이 단일 run answer 비결정성의 범위인지 가르려면, 같은 config로 같은 8문항을 여러 번 돌려 state match의 흔들림 폭을 먼저 확인한다.
+
+(C) 03~05로 넘기는 것 — 이 slice에서 구현하지 않음:
+
+6. 질문 분해(`03`), 하위 요청별 retrieval(`04`), 상태 검증/답변 조립(`05`)은 각 문서가 담당한다. 아직 draft(미구현)이며 여기서 확정 명령으로 승격하지 않는다.

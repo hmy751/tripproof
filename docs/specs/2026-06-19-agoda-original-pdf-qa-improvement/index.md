@@ -14,9 +14,10 @@
 
 기준 artifact:
 
-- 최신 production-like baseline: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/`
-- 기준 report: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/report.html`
-- 기준 run 원장: `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/run.json`
+- 현재 production-like baseline(현재 before 기준): `eval/runs/question-dataset/agoda-original-pdf-baseline-postreconcile-20260623-production/` (2026-06-23, reconciliation(merge `4a51ebe`) 이후 같은 조건 재측정. 상세는 `docs/work-log.md` 2026-06-23 항목)
+- 시작 baseline(layout 개선 전, 2026-06-19): `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/`
+- layout v1 after(2026-06-19): `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/`
+- 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline"과 `02`의 "V1 구현 결과" 표를 본다.
 
 ## 읽는 순서
 
@@ -37,7 +38,7 @@
 
 Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. sample text fixture를 임시 PDF로 만들어 product API를 호출하는 실행은 runner smoke나 report 렌더링 확인에는 쓸 수 있지만, Agoda 원문 PDF 개선의 근거가 될 수 없다.
 
-2026-06-19 production-like baseline은 `supabase` retrieval, Ollama embedding, Ollama answer composer로 실행했다. API/observation 연결은 정상으로 확인됐지만 8개 질문의 rule check는 모두 실패했다. 이 묶음의 다음 작업은 이 baseline artifact를 before 기준으로 삼는다.
+2026-06-19 production-like baseline은 `supabase` retrieval, Ollama embedding, Ollama answer composer로 실행했다. API/observation 연결은 정상으로 확인됐지만 8개 질문의 rule check는 모두 실패했다. 이후 layout v1(`02`)을 적용하고, main refactor와 통합(merge `4a51ebe`)한 뒤 같은 조건으로 다시 측정한 2026-06-23 run을 현재 before 기준으로 삼는다. 세 시점의 역할과 수치는 `01`의 "측정 timeline과 현재 baseline"을 본다.
 
 ## 중심 흐름
 
