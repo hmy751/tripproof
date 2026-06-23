@@ -14,9 +14,10 @@
 
 기준 artifact:
 
-- 현재 production-like baseline(현재 before 기준): `eval/runs/question-dataset/agoda-original-pdf-baseline-postreconcile-20260623-production/` (2026-06-23, reconciliation(merge `4a51ebe`) 이후 같은 조건 재측정. 상세는 `docs/work-log.md` 2026-06-23 항목)
-- 시작 baseline(layout 개선 전, 2026-06-19): `eval/runs/question-dataset/agoda-original-pdf-baseline-20260619-production/`
-- layout v1 after(2026-06-19): `eval/runs/question-dataset/agoda-original-pdf-source-unit-structure-after-20260619-layout-v1-production/`
+- Eval run 묶음: `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/`
+- 현재 production-like baseline(현재 before 기준): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/06-20260623T092247Z-postreconcile-current-baseline-production/` (2026-06-23, reconciliation(merge `4a51ebe`) 이후 같은 조건 재측정. 상세는 `docs/work-log.md` 2026-06-23 항목)
+- 시작 baseline(layout 개선 전, 2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/01-20260619T083605Z-before-baseline-production/`
+- layout v1 after(2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/05-20260619T123416Z-layout-v1-after-production/`
 - 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline"과 `02`의 "V1 구현 결과" 표를 본다.
 
 ## 읽는 순서
