@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from statistics import median
 
 from server.materials.layout import (
+    BBox,
     PageLayout,
     PdfLine,
+    PdfTableCell,
+    PdfTableRow,
     bbox_for_lines,
     bbox_to_metadata,
 )
@@ -25,11 +28,22 @@ class StructuralBlock:
     page: int
     block_index: int
     structural_kind: str
-    lines: tuple[PdfLine, ...]
+    lines: tuple[PdfLine, ...] = ()
+    text_override: str | None = None
+    bbox: BBox | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
 
     @property
     def text(self) -> str:
+        if self.text_override is not None:
+            return self.text_override.strip()
         return "\n".join(line.text for line in self.lines if line.text).strip()
+
+    @property
+    def line_count(self) -> int:
+        if self.lines:
+            return len(self.lines)
+        return len([line for line in self.text.splitlines() if line.strip()])
 
 
 def chunk_text(
@@ -144,7 +158,7 @@ def _build_layout_source_units(
             if len(block_text) <= chunk_size
             else chunk_text(block_text, chunk_size=chunk_size, overlap=overlap)
         )
-        block_bbox = bbox_to_metadata(bbox_for_lines(block.lines))
+        block_bbox = bbox_to_metadata(_block_bbox(block))
         for split_index, chunk in enumerate(chunks, start=1):
             unit_index = len(units) + 1
             unit_text = chunk.text.strip()
@@ -155,6 +169,18 @@ def _build_layout_source_units(
             locator = _locator(
                 file_name=file_name, page=block.page, unit_index=unit_index
             )
+            metadata = {
+                "page": block.page,
+                "block_index": block.block_index,
+                "split_index": split_index,
+                "extraction_backend": "pdfplumber",
+                "structural_kind": block.structural_kind,
+                "kind": _semantic_kind(unit_text, block.structural_kind),
+                "bbox": block_bbox,
+                "line_count": block.line_count,
+                "fallback_used": False,
+            }
+            metadata.update(block.metadata)
             units.append(
                 SourceUnit(
                     id=f"su_{material_id}_{block.page}_{unit_index}",
@@ -167,17 +193,7 @@ def _build_layout_source_units(
                     search_text=_normalize_search_text(unit_text),
                     start=start,
                     end=end,
-                    metadata={
-                        "page": block.page,
-                        "block_index": block.block_index,
-                        "split_index": split_index,
-                        "extraction_backend": "pdfplumber",
-                        "structural_kind": block.structural_kind,
-                        "kind": _semantic_kind(unit_text, block.structural_kind),
-                        "bbox": block_bbox,
-                        "line_count": len(block.lines),
-                        "fallback_used": False,
-                    },
+                    metadata=metadata,
                 )
             )
             cursor = end + 2
@@ -194,6 +210,12 @@ def _structural_blocks(layout_pages: tuple[PageLayout, ...]) -> list[StructuralB
 
 
 def _page_structural_blocks(layout: PageLayout) -> list[StructuralBlock]:
+    line_blocks = _page_line_structural_blocks(layout)
+    field_blocks = _page_field_group_blocks(layout=layout, line_blocks=line_blocks)
+    return _renumber_blocks(field_blocks + line_blocks)
+
+
+def _page_line_structural_blocks(layout: PageLayout) -> list[StructuralBlock]:
     lines = tuple(line for line in layout.lines if line.text.strip())
     if not lines:
         return []
@@ -239,7 +261,189 @@ def _page_structural_blocks(layout: PageLayout) -> list[StructuralBlock]:
 
         index += 1
 
-    return _renumber_blocks(_merge_small_paragraphs(blocks))
+    return _merge_small_paragraphs(blocks)
+
+
+def _page_field_group_blocks(
+    *,
+    layout: PageLayout,
+    line_blocks: list[StructuralBlock],
+) -> list[StructuralBlock]:
+    if not layout.table_rows:
+        return []
+    table_blocks = _table_field_group_blocks(layout)
+    covered_bboxes = [
+        block.bbox
+        for block in table_blocks
+        if block.bbox is not None and block.structural_kind == "table_row_group"
+    ]
+    section_blocks = _small_section_field_group_blocks(
+        line_blocks=line_blocks,
+        covered_bboxes=covered_bboxes,
+    )
+    return _deduplicate_field_blocks(table_blocks + section_blocks)
+
+
+def _table_field_group_blocks(layout: PageLayout) -> list[StructuralBlock]:
+    blocks: list[StructuralBlock] = []
+    for row in layout.table_rows:
+        if _is_significant_table_row(row=row, layout=layout):
+            blocks.append(_table_row_block(row))
+        for cell in row.cells:
+            if _is_significant_table_cell(cell=cell, layout=layout):
+                blocks.append(_table_cell_block(cell))
+    return blocks
+
+
+def _table_row_block(row: PdfTableRow) -> StructuralBlock:
+    return StructuralBlock(
+        page=row.page,
+        block_index=0,
+        structural_kind="table_row_group",
+        text_override=row.text,
+        bbox=row.bbox,
+        metadata={
+            "layout_source": "pdfplumber_table_row",
+            "table_index": row.table_index,
+            "row_index": row.row_index,
+            "cell_count": len(row.cells),
+        },
+    )
+
+
+def _table_cell_block(cell: PdfTableCell) -> StructuralBlock:
+    return StructuralBlock(
+        page=cell.page,
+        block_index=0,
+        structural_kind="field_group",
+        text_override=cell.text,
+        bbox=cell.bbox,
+        metadata={
+            "layout_source": "pdfplumber_table_cell",
+            "table_index": cell.table_index,
+            "row_index": cell.row_index,
+            "column_index": cell.column_index,
+            "cell_count": 1,
+        },
+    )
+
+
+def _is_significant_table_row(*, row: PdfTableRow, layout: PageLayout) -> bool:
+    text = _normalize_search_text(row.text)
+    if len(row.cells) < 3 or len(text) < 36 or row.line_count < 3:
+        return False
+    if _bbox_height(row.bbox) > layout.height * 0.16:
+        return False
+    return True
+
+
+def _is_significant_table_cell(*, cell: PdfTableCell, layout: PageLayout) -> bool:
+    text = _normalize_search_text(cell.text)
+    width = _bbox_width(cell.bbox)
+    height = _bbox_height(cell.bbox)
+    if len(text) < 32 or width < 72 or height < 16:
+        return False
+    if cell.line_count < 3 and not _has_label_separator(cell.text):
+        return False
+    if height > layout.height * 0.35:
+        return False
+    if width > layout.width * 0.96 and height > layout.height * 0.12:
+        return False
+    if cell.line_count > max(4, int(height / 5.5) + 2):
+        return False
+    return True
+
+
+def _small_section_field_group_blocks(
+    *,
+    line_blocks: list[StructuralBlock],
+    covered_bboxes: list[BBox],
+) -> list[StructuralBlock]:
+    groups: list[StructuralBlock] = []
+    current: list[StructuralBlock] = []
+
+    def flush_current() -> None:
+        nonlocal current
+        group = _small_section_group_block(current)
+        if group is not None:
+            groups.append(group)
+        current = []
+
+    for block in line_blocks:
+        if _covered_by_any_bbox(_block_bbox(block), covered_bboxes):
+            flush_current()
+            continue
+        if not _is_small_section_candidate(block):
+            flush_current()
+            continue
+        if current and not _can_extend_small_section(current, block):
+            flush_current()
+        current.append(block)
+
+    flush_current()
+    return groups
+
+
+def _small_section_group_block(
+    blocks: list[StructuralBlock],
+) -> StructuralBlock | None:
+    if len(blocks) < 3:
+        return None
+    bbox = _union_bbox([_block_bbox(block) for block in blocks])
+    if _bbox_height(bbox) > 140:
+        return None
+    text = "\n".join(block.text for block in blocks if block.text).strip()
+    if len(_normalize_search_text(text)) < 40:
+        return None
+    return StructuralBlock(
+        page=blocks[0].page,
+        block_index=0,
+        structural_kind="field_group",
+        text_override=text,
+        bbox=bbox,
+        metadata={
+            "layout_source": "line_region",
+            "group_block_count": len(blocks),
+        },
+    )
+
+
+def _is_small_section_candidate(block: StructuralBlock) -> bool:
+    return (
+        block.structural_kind in {"key_value_row", "paragraph", "heading_paragraph"}
+        and block.line_count <= 2
+        and 4 <= len(_normalize_search_text(block.text)) <= 120
+    )
+
+
+def _can_extend_small_section(
+    current: list[StructuralBlock],
+    candidate: StructuralBlock,
+) -> bool:
+    previous = current[-1]
+    if previous.page != candidate.page:
+        return False
+    if _vertical_gap_between_blocks(previous, candidate) > 32:
+        return False
+    candidate_bbox = _block_bbox(candidate)
+    span_bbox = _union_bbox(
+        [_block_bbox(block) for block in current] + [candidate_bbox]
+    )
+    if _bbox_height(span_bbox) > 140:
+        return False
+    return _blocks_share_visual_column(previous, candidate)
+
+
+def _deduplicate_field_blocks(blocks: list[StructuralBlock]) -> list[StructuralBlock]:
+    deduplicated: list[StructuralBlock] = []
+    seen: set[str] = set()
+    for block in blocks:
+        normalized = _normalize_search_text(block.text).casefold()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduplicated.append(block)
+    return deduplicated
 
 
 def _block(page: int, structural_kind: str, lines: list[PdfLine]) -> StructuralBlock:
@@ -374,6 +578,9 @@ def _renumber_blocks(blocks: list[StructuralBlock]) -> list[StructuralBlock]:
             block_index=index,
             structural_kind=block.structural_kind,
             lines=block.lines,
+            text_override=block.text_override,
+            bbox=block.bbox,
+            metadata=block.metadata,
         )
         for index, block in enumerate(blocks, start=1)
     ]
@@ -381,7 +588,7 @@ def _renumber_blocks(blocks: list[StructuralBlock]) -> list[StructuralBlock]:
 
 def _is_key_value_line(line: PdfLine) -> bool:
     text = line.text.strip()
-    if ":" in text or "：" in text:
+    if _has_label_separator(text):
         separator_index = min(
             [index for index in (text.find(":"), text.find("：")) if index >= 0]
         )
@@ -466,6 +673,76 @@ def _shares_column_starts(line: PdfLine, other: PdfLine | None) -> bool:
     return matches >= 2
 
 
+def _has_label_separator(text: str) -> bool:
+    return ":" in text or "：" in text
+
+
+def _block_bbox(block: StructuralBlock) -> BBox:
+    if block.bbox is not None:
+        return block.bbox
+    return bbox_for_lines(block.lines)
+
+
+def _union_bbox(bboxes: list[BBox]) -> BBox:
+    return (
+        min(bbox[0] for bbox in bboxes),
+        min(bbox[1] for bbox in bboxes),
+        max(bbox[2] for bbox in bboxes),
+        max(bbox[3] for bbox in bboxes),
+    )
+
+
+def _bbox_width(bbox: BBox) -> float:
+    return max(0.0, bbox[2] - bbox[0])
+
+
+def _bbox_height(bbox: BBox) -> float:
+    return max(0.0, bbox[3] - bbox[1])
+
+
+def _bbox_area(bbox: BBox) -> float:
+    return _bbox_width(bbox) * _bbox_height(bbox)
+
+
+def _bbox_overlap_area(first: BBox, second: BBox) -> float:
+    x_overlap = max(0.0, min(first[2], second[2]) - max(first[0], second[0]))
+    y_overlap = max(0.0, min(first[3], second[3]) - max(first[1], second[1]))
+    return x_overlap * y_overlap
+
+
+def _covered_by_any_bbox(bbox: BBox, candidates: list[BBox]) -> bool:
+    area = _bbox_area(bbox)
+    if area <= 0:
+        return False
+    return any(
+        _bbox_overlap_area(bbox, candidate) / area >= 0.72 for candidate in candidates
+    )
+
+
+def _vertical_gap_between_blocks(
+    previous: StructuralBlock,
+    candidate: StructuralBlock,
+) -> float:
+    previous_bbox = _block_bbox(previous)
+    candidate_bbox = _block_bbox(candidate)
+    return max(0.0, candidate_bbox[1] - previous_bbox[3])
+
+
+def _blocks_share_visual_column(
+    first: StructuralBlock,
+    second: StructuralBlock,
+) -> bool:
+    first_bbox = _block_bbox(first)
+    second_bbox = _block_bbox(second)
+    x_overlap = max(
+        0.0, min(first_bbox[2], second_bbox[2]) - max(first_bbox[0], second_bbox[0])
+    )
+    narrower_width = max(1.0, min(_bbox_width(first_bbox), _bbox_width(second_bbox)))
+    return (
+        x_overlap / narrower_width >= 0.6 or abs(first_bbox[0] - second_bbox[0]) <= 10
+    )
+
+
 def _vertical_gap(previous_line: PdfLine, next_line: PdfLine) -> float:
     return max(0.0, next_line.top - previous_line.bottom)
 
@@ -495,14 +772,16 @@ def _semantic_kind(text: str, structural_kind: str) -> str:
         return "warning"
     if _contains_any(
         normalized,
-        ("세금", "도시세", "요금", "비용", "fee", "tax", "payment", "charge"),
-    ):
-        return "fee"
-    if _contains_any(
-        normalized,
         ("요청", "remarks", "request", "preference"),
     ):
         return "request_note"
+    if _contains_any(
+        normalized,
+        ("세금", "도시세", "요금", "비용", "fee", "tax", "payment", "charge"),
+    ):
+        return "fee"
+    if structural_kind in {"field_group", "table_row_group"}:
+        return "label_value"
     return "general"
 
 

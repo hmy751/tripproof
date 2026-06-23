@@ -1029,6 +1029,12 @@ def _source_unit_metadata_rows(block: dict[str, Any]) -> list[tuple[str, object]
         "structural_kind",
         "bbox",
         "line_count",
+        "layout_source",
+        "table_index",
+        "row_index",
+        "column_index",
+        "cell_count",
+        "group_block_count",
         "extraction_backend",
         "fallback_used",
     ):

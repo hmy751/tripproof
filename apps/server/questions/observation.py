@@ -483,6 +483,12 @@ def source_unit_metadata_detail(
         "structural_kind",
         "bbox",
         "line_count",
+        "layout_source",
+        "table_index",
+        "row_index",
+        "column_index",
+        "cell_count",
+        "group_block_count",
         "extraction_backend",
         "fallback_used",
     )

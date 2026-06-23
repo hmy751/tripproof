@@ -7,7 +7,13 @@ from typing import Any
 import pdfplumber
 from pypdf import PdfReader
 
-from server.materials.layout import PageLayout, PdfWord, build_lines_from_words
+from server.materials.layout import (
+    PageLayout,
+    PdfTableCell,
+    PdfTableRow,
+    PdfWord,
+    build_lines_from_words,
+)
 
 
 class PdfParseError(ValueError):
@@ -20,6 +26,12 @@ class ParsedPdf:
     text: str
     preview: str
     layout_pages: tuple[PageLayout, ...] = ()
+
+
+_TABLE_SETTINGS = {
+    "vertical_strategy": "lines",
+    "horizontal_strategy": "lines",
+}
 
 
 def parse_pdf(raw: bytes) -> ParsedPdf:
@@ -127,7 +139,93 @@ def _page_layout_from_pdfplumber_page(
         width=float(page.width),
         height=float(page.height),
         lines=build_lines_from_words(page=page_number, words=words),
+        table_rows=_table_rows_from_pdfplumber_page(
+            page=page,
+            page_number=page_number,
+        ),
     )
+
+
+def _table_rows_from_pdfplumber_page(
+    *,
+    page: Any,
+    page_number: int,
+) -> tuple[PdfTableRow, ...]:
+    try:
+        tables = page.find_tables(table_settings=_TABLE_SETTINGS)
+    except Exception:
+        return ()
+
+    rows: list[PdfTableRow] = []
+    for table_index, table in enumerate(tables, start=1):
+        try:
+            extracted_rows = table.extract()
+        except Exception:
+            extracted_rows = []
+        for row_index, row in enumerate(table.rows, start=1):
+            extracted_row = (
+                extracted_rows[row_index - 1]
+                if row_index - 1 < len(extracted_rows)
+                else []
+            )
+            cells = _table_cells_from_pdfplumber_row(
+                page_number=page_number,
+                table_index=table_index,
+                row_index=row_index,
+                row=row,
+                extracted_row=extracted_row,
+            )
+            if not cells:
+                continue
+            rows.append(
+                PdfTableRow(
+                    page=page_number,
+                    table_index=table_index,
+                    row_index=row_index,
+                    cells=tuple(cells),
+                    x0=min(cell.x0 for cell in cells),
+                    top=min(cell.top for cell in cells),
+                    x1=max(cell.x1 for cell in cells),
+                    bottom=max(cell.bottom for cell in cells),
+                )
+            )
+    return tuple(rows)
+
+
+def _table_cells_from_pdfplumber_row(
+    *,
+    page_number: int,
+    table_index: int,
+    row_index: int,
+    row: Any,
+    extracted_row: list[str | None],
+) -> list[PdfTableCell]:
+    cells: list[PdfTableCell] = []
+    for column_index, bbox in enumerate(row.cells, start=1):
+        if bbox is None:
+            continue
+        text = _clean_table_cell_text(
+            extracted_row[column_index - 1]
+            if column_index - 1 < len(extracted_row)
+            else None
+        )
+        if not text:
+            continue
+        x0, top, x1, bottom = bbox
+        cells.append(
+            PdfTableCell(
+                page=page_number,
+                table_index=table_index,
+                row_index=row_index,
+                column_index=column_index,
+                text=text,
+                x0=float(x0),
+                top=float(top),
+                x1=float(x1),
+                bottom=float(bottom),
+            )
+        )
+    return cells
 
 
 def _text_from_layout_page(layout: PageLayout) -> str:
@@ -136,6 +234,13 @@ def _text_from_layout_page(layout: PageLayout) -> str:
 
 def _clean_text(text: str) -> str:
     lines = [" ".join(line.split()) for line in text.splitlines()]
+    return "\n".join(line for line in lines if line).strip()
+
+
+def _clean_table_cell_text(text: str | None) -> str:
+    if text is None:
+        return ""
+    lines = [" ".join(line.split()) for line in str(text).splitlines()]
     return "\n".join(line for line in lines if line).strip()
 
 

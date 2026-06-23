@@ -45,11 +45,57 @@ class PdfLine:
 
 
 @dataclass(frozen=True)
+class PdfTableCell:
+    page: int
+    table_index: int
+    row_index: int
+    column_index: int
+    text: str
+    x0: float
+    top: float
+    x1: float
+    bottom: float
+
+    @property
+    def bbox(self) -> BBox:
+        return (self.x0, self.top, self.x1, self.bottom)
+
+    @property
+    def line_count(self) -> int:
+        return len([line for line in self.text.splitlines() if line.strip()])
+
+
+@dataclass(frozen=True)
+class PdfTableRow:
+    page: int
+    table_index: int
+    row_index: int
+    cells: tuple[PdfTableCell, ...]
+    x0: float
+    top: float
+    x1: float
+    bottom: float
+
+    @property
+    def bbox(self) -> BBox:
+        return (self.x0, self.top, self.x1, self.bottom)
+
+    @property
+    def text(self) -> str:
+        return "\n".join(cell.text for cell in self.cells if cell.text).strip()
+
+    @property
+    def line_count(self) -> int:
+        return sum(cell.line_count for cell in self.cells)
+
+
+@dataclass(frozen=True)
 class PageLayout:
     page: int
     width: float
     height: float
     lines: tuple[PdfLine, ...]
+    table_rows: tuple[PdfTableRow, ...] = ()
 
 
 def build_lines_from_words(
