@@ -484,6 +484,8 @@ def source_unit_metadata_detail(
         "bbox",
         "line_count",
         "layout_source",
+        "source_text_role",
+        "source_fragment_count",
         "table_index",
         "row_index",
         "column_index",

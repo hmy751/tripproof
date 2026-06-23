@@ -1030,6 +1030,8 @@ def _source_unit_metadata_rows(block: dict[str, Any]) -> list[tuple[str, object]
         "bbox",
         "line_count",
         "layout_source",
+        "source_text_role",
+        "source_fragment_count",
         "table_index",
         "row_index",
         "column_index",

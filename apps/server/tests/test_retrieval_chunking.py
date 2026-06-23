@@ -149,6 +149,9 @@ def test_layout_source_units_add_table_row_field_group() -> None:
 
     assert units[0].metadata["structural_kind"] == "table_row_group"
     assert units[0].metadata["layout_source"] == "pdfplumber_table_row"
+    assert units[0].metadata["source_text_role"] == "layout_derived_region"
+    assert units[0].metadata["source_fragment_count"] == 4
+    assert len(units[0].metadata["source_fragments"]) == 4
     assert "Arrival" in units[0].text
     assert "체크인" in units[0].text
     assert "Departure" in units[0].text
@@ -200,33 +203,87 @@ def test_layout_source_units_add_table_cell_field_groups() -> None:
 
     assert units[0].metadata["structural_kind"] == "field_group"
     assert units[0].metadata["layout_source"] == "pdfplumber_table_cell"
+    assert units[0].metadata["source_text_role"] == "layout_derived_region"
+    assert units[0].metadata["source_fragment_count"] == 1
     assert "Number of Rooms" in units[0].text
     assert "Number of Adults" in units[0].text
     assert "Number of Children" in units[0].text
     assert "Room Type" in units[0].text
 
 
+def test_layout_source_units_keep_repeated_table_cell_text_in_distinct_regions() -> (
+    None
+):
+    repeated_text = "Policy :\nSame value applies.\nContact the desk for details."
+    layout = _page_layout(
+        [],
+        table_rows=(
+            _table_row(
+                row_index=1,
+                cells=[
+                    _cell(
+                        repeated_text,
+                        column_index=1,
+                        x0=72,
+                        top=70,
+                        x1=320,
+                        bottom=116,
+                    ),
+                ],
+            ),
+            _table_row(
+                row_index=2,
+                cells=[
+                    _cell(
+                        repeated_text,
+                        column_index=1,
+                        row_index=2,
+                        x0=72,
+                        top=150,
+                        x1=320,
+                        bottom=196,
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    units = build_source_units(
+        material_id="mat_1",
+        file_name="booking.pdf",
+        text="[page 1]\nignored text",
+        layout_pages=(layout,),
+    )
+
+    repeated_units = [
+        unit
+        for unit in units
+        if unit.metadata.get("layout_source") == "pdfplumber_table_cell"
+    ]
+    assert len(repeated_units) == 2
+    assert [unit.metadata["row_index"] for unit in repeated_units] == [1, 2]
+    assert repeated_units[0].metadata["bbox"] != repeated_units[1].metadata["bbox"]
+
+
 def test_layout_source_units_add_uncovered_small_section_field_group() -> None:
     layout = _page_layout(
         [
-            _line("Arrival : Departure :", top=72, words_x=[72, 220]),
-            _line("2025-03-09 2025-03-13", top=84, words_x=[140, 300]),
-            _line("Remarks :", top=180),
-            _line("NonSmoke,LargeBed", top=194),
-            _line("City tax may be paid on site.", top=226),
-            _line("Guest list : Example Guest", top=244),
-            _line(
-                "All special requests are subject to property availability.", top=262
-            ),
-            _line("Important Notice", top=308, size=16),
-            _line("Bring a valid photo ID at check-in.", top=332),
+            _line("Header A : Header B :", top=72, words_x=[72, 220]),
+            _line("111 222", top=84, words_x=[140, 300]),
+            _line("Section A :", top=180),
+            _line("Alpha value", top=194, words_x=[124, 172]),
+            _line("Reference ID : ABC-123", top=226),
+            _line("Beta value", top=244, words_x=[124, 172]),
+            _line("Gamma value", top=262, words_x=[124, 172]),
+            _line("Next Section", top=308, size=16),
+            _line("Outside value", top=332),
         ],
         table_rows=(
             _table_row(
                 row_index=1,
                 cells=[
                     _cell(
-                        "Arrival :\n2025-03-09\nDeparture :\n2025-03-13",
+                        "Header A :\n111\nHeader B :\n222",
                         column_index=1,
                         x0=72,
                         top=70,
@@ -249,10 +306,45 @@ def test_layout_source_units_add_uncovered_small_section_field_group() -> None:
         unit for unit in units if unit.metadata.get("layout_source") == "line_region"
     )
     assert request_group.metadata["structural_kind"] == "field_group"
-    assert request_group.metadata["kind"] == "request_note"
-    assert "Remarks" in request_group.text
-    assert "NonSmoke,LargeBed" in request_group.text
-    assert "special requests" in request_group.text
+    assert request_group.metadata["source_text_role"] == "layout_derived_region"
+    assert "Section A" in request_group.text
+    assert "Alpha value" in request_group.text
+    assert "Beta value" in request_group.text
+    assert "Gamma value" in request_group.text
+    assert "Header A" not in request_group.text
+    assert "Reference ID" not in request_group.text
+    assert "Next Section" not in request_group.text
+
+
+def test_layout_source_units_add_line_region_field_group_without_tables() -> None:
+    layout = _page_layout(
+        [
+            _line("Section A :", top=72),
+            _line("Alpha value", top=86, words_x=[124, 172]),
+            _line("Section B :", top=104),
+            _line("Beta value", top=118, words_x=[124, 172]),
+            _line("Section C :", top=136),
+            _line("Gamma value", top=150, words_x=[124, 172]),
+        ]
+    )
+
+    units = build_source_units(
+        material_id="mat_1",
+        file_name="booking.pdf",
+        text="[page 1]\nignored text",
+        layout_pages=(layout,),
+    )
+
+    line_region = next(
+        unit for unit in units if unit.metadata.get("layout_source") == "line_region"
+    )
+    assert line_region.metadata["structural_kind"] == "field_group"
+    assert line_region.metadata["source_text_role"] == "layout_derived_region"
+    assert line_region.metadata["source_fragment_count"] == 6
+    assert len(line_region.metadata["source_fragments"]) == 6
+    assert "Section A" in line_region.text
+    assert "Alpha value" in line_region.text
+    assert "Section C" in line_region.text
 
 
 def test_layout_geometry_drives_boundaries_before_semantic_annotation() -> None:

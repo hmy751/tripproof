@@ -33,6 +33,12 @@ class StructuralBlock:
     bbox: BBox | None = None
     metadata: dict[str, object] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if self.text_override is None and not self.lines:
+            raise ValueError("StructuralBlock must have lines or text_override.")
+        if self.text_override is not None and self.bbox is None:
+            raise ValueError("StructuralBlock with text_override must have a bbox.")
+
     @property
     def text(self) -> str:
         if self.text_override is not None:
@@ -269,14 +275,8 @@ def _page_field_group_blocks(
     layout: PageLayout,
     line_blocks: list[StructuralBlock],
 ) -> list[StructuralBlock]:
-    if not layout.table_rows:
-        return []
-    table_blocks = _table_field_group_blocks(layout)
-    covered_bboxes = [
-        block.bbox
-        for block in table_blocks
-        if block.bbox is not None and block.structural_kind == "table_row_group"
-    ]
+    table_blocks = _table_field_group_blocks(layout) if layout.table_rows else []
+    covered_bboxes = [block.bbox for block in table_blocks if block.bbox is not None]
     section_blocks = _small_section_field_group_blocks(
         line_blocks=line_blocks,
         covered_bboxes=covered_bboxes,
@@ -307,6 +307,9 @@ def _table_row_block(row: PdfTableRow) -> StructuralBlock:
             "table_index": row.table_index,
             "row_index": row.row_index,
             "cell_count": len(row.cells),
+            "source_text_role": "layout_derived_region",
+            "source_fragment_count": len(row.cells),
+            "source_fragments": [_cell_source_fragment(cell) for cell in row.cells],
         },
     )
 
@@ -324,6 +327,9 @@ def _table_cell_block(cell: PdfTableCell) -> StructuralBlock:
             "row_index": cell.row_index,
             "column_index": cell.column_index,
             "cell_count": 1,
+            "source_text_role": "layout_derived_region",
+            "source_fragment_count": 1,
+            "source_fragments": [_cell_source_fragment(cell)],
         },
     )
 
@@ -361,24 +367,40 @@ def _small_section_field_group_blocks(
 ) -> list[StructuralBlock]:
     groups: list[StructuralBlock] = []
     current: list[StructuralBlock] = []
+    skipped_bridge: StructuralBlock | None = None
 
     def flush_current() -> None:
-        nonlocal current
+        nonlocal current, skipped_bridge
         group = _small_section_group_block(current)
         if group is not None:
             groups.append(group)
         current = []
+        skipped_bridge = None
 
     for block in line_blocks:
         if _covered_by_any_bbox(_block_bbox(block), covered_bboxes):
             flush_current()
             continue
         if not _is_small_section_candidate(block):
+            if current and _is_complete_single_line_key_value_block(block):
+                if _can_skip_small_section_bridge(current, block):
+                    skipped_bridge = block
+                    continue
             flush_current()
             continue
-        if current and not _can_extend_small_section(current, block):
+        previous_block = skipped_bridge or current[-1] if current else None
+        if (
+            current
+            and previous_block is not None
+            and not _can_extend_small_section(
+                current=current,
+                candidate=block,
+                previous=previous_block,
+            )
+        ):
             flush_current()
         current.append(block)
+        skipped_bridge = None
 
     flush_current()
     return groups
@@ -387,7 +409,7 @@ def _small_section_field_group_blocks(
 def _small_section_group_block(
     blocks: list[StructuralBlock],
 ) -> StructuralBlock | None:
-    if len(blocks) < 3:
+    if sum(block.line_count for block in blocks) < 3:
         return None
     bbox = _union_bbox([_block_bbox(block) for block in blocks])
     if _bbox_height(bbox) > 140:
@@ -404,11 +426,16 @@ def _small_section_group_block(
         metadata={
             "layout_source": "line_region",
             "group_block_count": len(blocks),
+            "source_text_role": "layout_derived_region",
+            "source_fragment_count": sum(len(block.lines) for block in blocks),
+            "source_fragments": _line_source_fragments(blocks),
         },
     )
 
 
 def _is_small_section_candidate(block: StructuralBlock) -> bool:
+    if _is_complete_single_line_key_value_block(block):
+        return False
     return (
         block.structural_kind in {"key_value_row", "paragraph", "heading_paragraph"}
         and block.line_count <= 2
@@ -416,11 +443,40 @@ def _is_small_section_candidate(block: StructuralBlock) -> bool:
     )
 
 
+def _is_complete_single_line_key_value_block(block: StructuralBlock) -> bool:
+    if block.structural_kind != "key_value_row" or block.line_count != 1:
+        return False
+    text = block.text.strip()
+    separator_indexes = [
+        index for index in (text.find(":"), text.find("：")) if index >= 0
+    ]
+    if not separator_indexes:
+        return False
+    separator_index = min(separator_indexes)
+    return bool(text[separator_index + 1 :].strip())
+
+
+def _can_skip_small_section_bridge(
+    current: list[StructuralBlock],
+    bridge: StructuralBlock,
+) -> bool:
+    if not current:
+        return False
+    previous = current[-1]
+    if previous.page != bridge.page:
+        return False
+    if _vertical_gap_between_blocks(previous, bridge) > 32:
+        return False
+    return _blocks_share_visual_column(previous, bridge)
+
+
 def _can_extend_small_section(
+    *,
     current: list[StructuralBlock],
     candidate: StructuralBlock,
+    previous: StructuralBlock | None = None,
 ) -> bool:
-    previous = current[-1]
+    previous = previous or current[-1]
     if previous.page != candidate.page:
         return False
     if _vertical_gap_between_blocks(previous, candidate) > 32:
@@ -436,14 +492,60 @@ def _can_extend_small_section(
 
 def _deduplicate_field_blocks(blocks: list[StructuralBlock]) -> list[StructuralBlock]:
     deduplicated: list[StructuralBlock] = []
-    seen: set[str] = set()
     for block in blocks:
         normalized = _normalize_search_text(block.text).casefold()
-        if not normalized or normalized in seen:
+        if not normalized:
             continue
-        seen.add(normalized)
+        if any(
+            _is_overlapping_duplicate_field_block(block, existing)
+            for existing in deduplicated
+        ):
+            continue
         deduplicated.append(block)
     return deduplicated
+
+
+def _is_overlapping_duplicate_field_block(
+    block: StructuralBlock,
+    existing: StructuralBlock,
+) -> bool:
+    if block.page != existing.page:
+        return False
+    if (
+        _normalize_search_text(block.text).casefold()
+        != _normalize_search_text(existing.text).casefold()
+    ):
+        return False
+    block_area = _bbox_area(_block_bbox(block))
+    existing_area = _bbox_area(_block_bbox(existing))
+    if min(block_area, existing_area) <= 0:
+        return False
+    overlap = _bbox_overlap_area(_block_bbox(block), _block_bbox(existing))
+    return overlap / min(block_area, existing_area) >= 0.72
+
+
+def _cell_source_fragment(cell: PdfTableCell) -> dict[str, object]:
+    return {
+        "layout_source": "pdfplumber_table_cell",
+        "text": cell.text,
+        "bbox": bbox_to_metadata(cell.bbox),
+        "table_index": cell.table_index,
+        "row_index": cell.row_index,
+        "column_index": cell.column_index,
+    }
+
+
+def _line_source_fragments(blocks: list[StructuralBlock]) -> list[dict[str, object]]:
+    return [
+        {
+            "layout_source": "pdfplumber_line",
+            "text": line.text,
+            "bbox": bbox_to_metadata(line.bbox),
+            "line_order": line.order,
+        }
+        for block in blocks
+        for line in block.lines
+    ]
 
 
 def _block(page: int, structural_kind: str, lines: list[PdfLine]) -> StructuralBlock:
