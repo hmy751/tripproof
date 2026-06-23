@@ -23,8 +23,12 @@
 
 ## 코드 변경 원칙
 
-- 코드를 설계하거나 변경할 때는 `docs/engineering/`(`principle.md` / `architecture.md` / `testing.md` / `ai-coding.md`)을 기준으로 삼는다.
-- 제품 동작의 강제는 테스트가 맡고, 이 문서는 테스트로 잡기 어려운 설계·구조·실패 판단을 정할 때 보는 기준이다.
+- `docs/engineering/`은 TripProof의 engineering calibration reference다. 모든 코드 변경마다 전문을 읽는 승인 gate나 체크리스트가 아니다.
+- 파일을 수정하기 전 짧게 판단한다: 이 변경이 product behavior, architecture boundary, eval/product 분리, shared API, retrieval/LLM behavior, persistence, testing strategy, AI coding workflow, 삭제/마이그레이션/큰 refactor를 건드리는가?
+- 아니라면 주변 코드 패턴과 관련 테스트를 우선한다. 하나라도 해당하면 가장 관련 있는 문서만 targeted read한다.
+- product/eval/architecture boundary는 `architecture.md`, 테스트 전략·fixture·eval 해석은 `testing.md`, 구조·복잡도·abstraction 판단은 `principle.md`, AI agent·prompt·harness workflow는 `ai-coding.md`를 우선 본다.
+- cross-cutting 변경이나 되돌리기 비용이 큰 변경에서는 `docs/engineering/` 전체를 확인한다.
+- 사용자가 준 reading list는 우선 context이지, repo 기준을 배제하는 닫힌 목록이 아니다.
 
 ## 권한과 중단
 
