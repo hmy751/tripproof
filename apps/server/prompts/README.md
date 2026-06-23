@@ -10,26 +10,16 @@ prompts/
     answer/
       library_chat_answer/
         2026-06-10.md
-    retrieval/
-      source_unit_rerank/
-        2026-xx-xx.md
-    judge/
-      answer_grounding_judge/
-        2026-xx-xx.md
   runtime/
     prompt_document.py
     prompt_store.py
   renderers/
     answer/
       library_chat_answer.py
-    retrieval/
-      source_unit_rerank.py
-    judge/
-      answer_grounding_judge.py
 ```
 
 - `assets/{domain}/{prompt_name}/{version}.md`는 실제 prompt 문서다.
-- `domain`은 prompt가 붙는 제품/기술 관심사를 드러낸다. 예: `answer`, `retrieval`, `judge`, `extraction`.
+- `domain`은 prompt가 붙는 제품/기술 관심사를 드러낸다. 현재 실재하는 domain은 `answer/` 하나이고, `retrieval`·`judge`·`extraction`은 생길 때 같은 구조로 추가한다(아래 "여러 prompt 추가 기준").
 - `runtime/`은 prompt 문서를 파일로 읽고 metadata, 실행 본문, hash, repo-relative path를 만든다.
 - `runtime/`은 prompt 본문의 의미를 해석하지 않는다. `System`, `User`, rerank 기준, judge rubric, JSON output 같은 구조는 모른다.
 - `renderers/`는 특정 prompt 문서를 실제 provider 입력으로 바꾼다. 필요한 section, placeholder, 출력 계약 검증은 여기에서만 다룬다.

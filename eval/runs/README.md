@@ -8,7 +8,7 @@
 
 `question-runtime-recording/` 아래 run은 `eval/question_runtime_recording_smoke.py`가 만든 local smoke artifact다. 이 artifact는 점수나 완료 proof가 아니라, product request header와 observation export JSONL이 같은 `correlation_id`로 연결되는지 확인하기 위한 기록이다.
 
-`eval/runs/` 아래 파일은 eval을 돌릴 때 생기는 실행 결과다. runner에 따라 디버그 편의를 위해 제품 응답을 넓게 남길 수도 있고, 비교에 필요한 요약만 남길 수도 있다. 역할은 제품 behavior 관찰용 local artifact이며, 공유 문서는 파일 복사가 아니라 failure, 관련 product change, 다음 verification point를 별도로 요약해 작성한다.
+`eval/runs/` 아래 파일은 eval을 돌릴 때 생기는 실행 결과다. runner에 따라 디버그 편의를 위해 제품 응답을 넓게 남길 수도 있고, 비교에 필요한 요약만 남길 수도 있다. 역할은 제품 behavior 관찰용 local artifact다.
 
 각 run directory의 기본 읽기 순서는 `report.html` -> `run.json` -> `observations/observation-export.jsonl`이다. `report.html`은 `run.json`과 observation JSONL을 `correlation_id`로 join한 사람이 보는 화면이고, 별도 truth source가 아니다.
 
