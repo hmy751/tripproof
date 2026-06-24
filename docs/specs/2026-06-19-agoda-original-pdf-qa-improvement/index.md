@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: draft spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다.
+상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, 남은 실패는 `03`~`05`에서 이어서 다룬다.
 
 이 spec 묶음의 중심은 `측정 -> 실패 유형 이해 -> product 개선 -> 같은 원문 PDF로 재확인`이다. `run.json`과 HTML report는 이 흐름을 돕는 관찰 도구이지, 개선의 목표가 아니다.
 
@@ -18,14 +18,15 @@
 - 현재 production-like baseline(현재 before 기준): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/06-20260623T092247Z-postreconcile-current-baseline-production/` (2026-06-23, reconciliation(merge `4a51ebe`) 이후 같은 조건 재측정. 상세는 `docs/work-log.md` 2026-06-23 항목)
 - 시작 baseline(layout 개선 전, 2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/01-20260619T083605Z-before-baseline-production/`
 - layout v1 after(2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/05-20260619T123416Z-layout-v1-after-production/`
-- 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline"과 `02`의 "V1 구현 결과" 표를 본다.
+- source unit boundary final(2026-06-24): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/09-20260624T072332Z-field-groups-cleaned-after-production/` (`source-units.md` 포함)
+- 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline", `02`의 "V1 구현 결과"와 "Field-group follow-up 구현/측정 결과"를 본다.
 
 ## 읽는 순서
 
 1. `01-original-pdf-observation-baseline.md`
    원문 PDF를 product API에 넣어 현재 실패를 확인하고, 실패 유형을 source unit, retrieval, answer composer, 상태 검증 문제로 나누는 기준이다.
 2. `02-source-unit-structure-improvement.md`
-   baseline에서 확인한 문제를 바탕으로 먼저 적용할 product 개선 slice다. 원문 PDF를 더 좋은 source unit으로 쪼개 retrieval과 evidence 경로를 개선하는 데 집중한다.
+   baseline에서 확인한 문제를 바탕으로 먼저 적용한 product 개선 slice다. 원문 PDF를 더 좋은 source unit으로 쪼개 retrieval과 evidence 경로를 개선하는 데 집중했고, 2026-06-24 `09` run으로 닫았다.
 3. `03-question-decomposition.md`
    source unit이 의미 단위로 잡힌 뒤, 하나의 사용자 질문을 체크인/체크아웃, 객실/인원, 취소/노쇼 같은 하위 정보 요청으로 나누는 기준이다.
 4. `04-subrequest-retrieval.md`
@@ -39,7 +40,7 @@
 
 Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. sample text fixture를 임시 PDF로 만들어 product API를 호출하는 실행은 runner smoke나 report 렌더링 확인에는 쓸 수 있지만, Agoda 원문 PDF 개선의 근거가 될 수 없다.
 
-2026-06-19 production-like baseline은 `supabase` retrieval, Ollama embedding, Ollama answer composer로 실행했다. API/observation 연결은 정상으로 확인됐지만 8개 질문의 rule check는 모두 실패했다. 이후 layout v1(`02`)을 적용하고, main refactor와 통합(merge `4a51ebe`)한 뒤 같은 조건으로 다시 측정한 2026-06-23 run을 현재 before 기준으로 삼는다. 세 시점의 역할과 수치는 `01`의 "측정 timeline과 현재 baseline"을 본다.
+2026-06-19 production-like baseline은 `supabase` retrieval, Ollama embedding, Ollama answer composer로 실행했다. API/observation 연결은 정상으로 확인됐지만 8개 질문의 rule check는 모두 실패했다. 이후 layout v1(`02`)을 적용하고, main refactor와 통합(merge `4a51ebe`)한 뒤 같은 조건으로 다시 측정한 2026-06-23 run을 현재 before 기준으로 삼았다. `02`의 field-group cleanup 최종 확인은 2026-06-24 `09` run이다. 시점별 역할과 수치는 `01`의 "측정 timeline과 현재 baseline"과 `02`의 field-group 결과 섹션을 본다.
 
 ## 중심 흐름
 
@@ -80,7 +81,7 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 | 순서 | 문서 | 핵심 질문 | 다음 단계로 넘어가는 신호 |
 | --- | --- | --- | --- |
 | 0 | `01-original-pdf-observation-baseline.md` | 원문 PDF baseline을 믿고 읽을 수 있는가 | production-like run에서 candidate/evidence/status를 질문별로 볼 수 있다 |
-| 1 | `02-source-unit-structure-improvement.md` | 원문이 질문 가능한 source unit으로 들어오는가 | page-length 덩어리 대신 라벨-값, 정책, 비용, 요청 단위가 candidate로 보인다 |
+| 1 | `02-source-unit-structure-improvement.md` | 원문이 질문 가능한 source unit으로 들어오는가 | 완료: `09`에서 라벨-값, 정책, 비용, 요청 단위가 source unit/candidate로 보인다 |
 | 2 | `03-question-decomposition.md` | 사용자 질문의 하위 정보 요청을 놓치지 않는가 | 체크인/체크아웃, 객실/인원, 취소/노쇼가 항목별 요청으로 분리된다 |
 | 3 | `04-subrequest-retrieval.md` | 각 하위 요청이 자기 근거 후보를 받는가 | 하나의 큰 후보가 모든 질문을 대표하지 않고 subrequest별 candidate가 달라진다 |
 | 4 | `05-state-validation-answer-assembly.md` | 값과 조건 문맥이 함께 검증되는가 | 특별 요청, 취소/노쇼, 추가 비용이 근거 부족한 supported로 확정되지 않는다 |
@@ -97,7 +98,7 @@ prompt 수정은 4단계 이후에 다룬다. 입력 source unit과 retrieval ca
 
 ## 다음 slice 후보
 
-source unit 구조화 뒤에도 실패가 남으면 새 방향을 임의로 열기보다 아래 문서 순서대로 확인한다.
+source unit 구조화는 `02`에서 닫았고, 남은 실패는 새 방향을 임의로 열기보다 아래 문서 순서대로 확인한다.
 
 - `03-question-decomposition.md`: 체크인/체크아웃, 객실/인원, 취소/노쇼처럼 한 질문 안의 여러 요청을 분리한다.
 - `04-subrequest-retrieval.md`: 각 하위 요청마다 필요한 source unit 후보를 따로 찾는다.

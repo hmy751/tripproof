@@ -115,7 +115,7 @@ def _page_layout_from_pdfplumber_page(
     words = [
         PdfWord(
             page=page_number,
-            text=str(raw_word.get("text") or ""),
+            text=_normalize_pdf_text_artifacts(str(raw_word.get("text") or "")),
             x0=float(raw_word.get("x0") or 0.0),
             top=float(raw_word.get("top") or 0.0),
             x1=float(raw_word.get("x1") or 0.0),
@@ -233,15 +233,42 @@ def _text_from_layout_page(layout: PageLayout) -> str:
 
 
 def _clean_text(text: str) -> str:
-    lines = [" ".join(line.split()) for line in text.splitlines()]
+    normalized = _normalize_pdf_text_artifacts(text)
+    lines = [" ".join(line.split()) for line in normalized.splitlines()]
     return "\n".join(line for line in lines if line).strip()
 
 
 def _clean_table_cell_text(text: str | None) -> str:
     if text is None:
         return ""
-    lines = [" ".join(line.split()) for line in str(text).splitlines()]
+    normalized = _normalize_pdf_text_artifacts(str(text))
+    lines = [" ".join(line.split()) for line in normalized.splitlines()]
     return "\n".join(line for line in lines if line).strip()
+
+
+def _normalize_pdf_text_artifacts(text: str) -> str:
+    if not text:
+        return text
+
+    collapsed: list[str] = []
+    for character in text:
+        if (
+            collapsed
+            and character == collapsed[-1]
+            and _is_cjk_or_hangul_syllable(character)
+        ):
+            continue
+        collapsed.append(character)
+    return "".join(collapsed)
+
+
+def _is_cjk_or_hangul_syllable(character: str) -> bool:
+    return (
+        "\u3040" <= character <= "\u30ff"
+        or "\u3400" <= character <= "\u9fff"
+        or "\uf900" <= character <= "\ufaff"
+        or "\uac00" <= character <= "\ud7af"
+    )
 
 
 def _preview(text: str) -> str:

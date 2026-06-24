@@ -276,8 +276,14 @@ def _page_field_group_blocks(
     line_blocks: list[StructuralBlock],
 ) -> list[StructuralBlock]:
     table_blocks = _table_field_group_blocks(layout) if layout.table_rows else []
-    covered_bboxes = [block.bbox for block in table_blocks if block.bbox is not None]
+    covered_bboxes = [
+        block.bbox
+        for block in table_blocks
+        if block.bbox is not None
+        and _table_block_suppresses_line_region(block=block, layout=layout)
+    ]
     section_blocks = _small_section_field_group_blocks(
+        layout=layout,
         line_blocks=line_blocks,
         covered_bboxes=covered_bboxes,
     )
@@ -334,6 +340,21 @@ def _table_cell_block(cell: PdfTableCell) -> StructuralBlock:
     )
 
 
+def _table_block_suppresses_line_region(
+    *,
+    block: StructuralBlock,
+    layout: PageLayout,
+) -> bool:
+    if block.structural_kind == "table_row_group":
+        return True
+    if not _has_label_separator(block.text):
+        return False
+    return (
+        block.line_count <= 8
+        and _bbox_height(_block_bbox(block)) <= layout.height * 0.12
+    )
+
+
 def _is_significant_table_row(*, row: PdfTableRow, layout: PageLayout) -> bool:
     text = _normalize_search_text(row.text)
     if len(row.cells) < 3 or len(text) < 36 or row.line_count < 3:
@@ -362,6 +383,7 @@ def _is_significant_table_cell(*, cell: PdfTableCell, layout: PageLayout) -> boo
 
 def _small_section_field_group_blocks(
     *,
+    layout: PageLayout,
     line_blocks: list[StructuralBlock],
     covered_bboxes: list[BBox],
 ) -> list[StructuralBlock]:
@@ -371,7 +393,7 @@ def _small_section_field_group_blocks(
 
     def flush_current() -> None:
         nonlocal current, skipped_bridge
-        group = _small_section_group_block(current)
+        group = _small_section_group_block(layout=layout, blocks=current)
         if group is not None:
             groups.append(group)
         current = []
@@ -407,12 +429,18 @@ def _small_section_field_group_blocks(
 
 
 def _small_section_group_block(
+    *,
+    layout: PageLayout,
     blocks: list[StructuralBlock],
 ) -> StructuralBlock | None:
-    if sum(block.line_count for block in blocks) < 3:
+    if sum(block.line_count for block in blocks) < 3 and not _is_compact_field_group(
+        blocks
+    ):
         return None
     bbox = _union_bbox([_block_bbox(block) for block in blocks])
     if _bbox_height(bbox) > 140:
+        return None
+    if _is_cross_column_label_cluster(layout=layout, blocks=blocks, bbox=bbox):
         return None
     text = "\n".join(block.text for block in blocks if block.text).strip()
     if len(_normalize_search_text(text)) < 40:
@@ -433,13 +461,32 @@ def _small_section_group_block(
     )
 
 
+def _is_compact_field_group(blocks: list[StructuralBlock]) -> bool:
+    normalized_length = len(
+        _normalize_search_text("\n".join(block.text for block in blocks))
+    )
+    if len(blocks) == 1:
+        block = blocks[0]
+        if not _is_complete_single_line_key_value_block(block):
+            return False
+        line = block.lines[0]
+        separator_count = line.text.count(":") + line.text.count("：")
+        return separator_count == 1 and normalized_length >= 40
+
+    if len(blocks) == 2 and normalized_length >= 72:
+        return all(_is_complete_single_line_key_value_block(block) for block in blocks)
+
+    return False
+
+
 def _is_small_section_candidate(block: StructuralBlock) -> bool:
+    normalized_length = len(_normalize_search_text(block.text))
     if _is_complete_single_line_key_value_block(block):
-        return False
+        return 36 <= normalized_length <= 120
     return (
         block.structural_kind in {"key_value_row", "paragraph", "heading_paragraph"}
         and block.line_count <= 2
-        and 4 <= len(_normalize_search_text(block.text)) <= 120
+        and 4 <= normalized_length <= 120
     )
 
 
@@ -488,6 +535,29 @@ def _can_extend_small_section(
     if _bbox_height(span_bbox) > 140:
         return False
     return _blocks_share_visual_column(previous, candidate)
+
+
+def _is_cross_column_label_cluster(
+    *,
+    layout: PageLayout,
+    blocks: list[StructuralBlock],
+    bbox: BBox,
+) -> bool:
+    if _bbox_width(bbox) <= layout.width * 0.55:
+        return False
+
+    lines = [line for block in blocks for line in block.lines]
+    if not lines:
+        return False
+
+    multi_label_line_count = sum(
+        line.text.count(":") + line.text.count("：") >= 2 for line in lines
+    )
+    if multi_label_line_count < 2:
+        return False
+
+    gapped_line_count = sum(_large_gap_count(line) > 0 for line in lines)
+    return gapped_line_count / len(lines) >= 0.5
 
 
 def _deduplicate_field_blocks(blocks: list[StructuralBlock]) -> list[StructuralBlock]:

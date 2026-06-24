@@ -191,6 +191,20 @@ def test_layout_source_units_add_table_cell_field_groups() -> None:
                     ),
                 ],
             ),
+            _table_row(
+                row_index=2,
+                cells=[
+                    _cell(
+                        "The Millennials Fukuoka\n5-2-18 Nakasu, Fukuoka\nJapan 810-0801",
+                        column_index=1,
+                        row_index=2,
+                        x0=130,
+                        top=82,
+                        x1=360,
+                        bottom=152,
+                    ),
+                ],
+            ),
         ),
     )
 
@@ -316,6 +330,134 @@ def test_layout_source_units_add_uncovered_small_section_field_group() -> None:
     assert "Next Section" not in request_group.text
 
 
+def test_layout_source_units_do_not_add_line_region_for_table_covered_columns() -> None:
+    layout = _page_layout(
+        [
+            _line(
+                "Booking ID : 1555887916 Number of Rooms :",
+                top=72,
+                words_x=[72, 120, 135, 165, 360, 425, 450, 505],
+            ),
+            _line("1", top=84, words_x=[520]),
+            _line(
+                "예약 번호 : 객실 수 :",
+                top=96,
+                words_x=[72, 120, 150, 360, 405, 435],
+            ),
+            _line(
+                "Booking Reference No : Number of Extra Beds :",
+                top=116,
+                words_x=[72, 135, 210, 245, 360, 425, 445, 500, 555],
+            ),
+            _line("0", top=128, words_x=[520]),
+            _line(
+                "예약 참조 번호 : 간이 침대 수 :",
+                top=140,
+                words_x=[72, 115, 155, 190, 360, 405, 445, 475],
+            ),
+        ],
+        table_rows=(
+            _table_row(
+                row_index=1,
+                cells=[
+                    _cell(
+                        (
+                            "Booking ID : 1555887916\n예약 번호 :\n"
+                            "Booking Reference No :\n예약 참조 번호 :"
+                        ),
+                        column_index=1,
+                        x0=70,
+                        top=68,
+                        x1=300,
+                        bottom=154,
+                    ),
+                    _cell(
+                        (
+                            "Number of Rooms :\n1\n객실 수 :\n"
+                            "Number of Extra Beds :\n0\n간이 침대 수 :"
+                        ),
+                        column_index=2,
+                        x0=350,
+                        top=68,
+                        x1=590,
+                        bottom=154,
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    units = build_source_units(
+        material_id="mat_1",
+        file_name="booking.pdf",
+        text="[page 1]\nignored text",
+        layout_pages=(layout,),
+    )
+
+    line_regions = [
+        unit for unit in units if unit.metadata.get("layout_source") == "line_region"
+    ]
+    assert all("Booking ID" not in unit.text for unit in line_regions)
+    assert all("Number of Extra Beds" not in unit.text for unit in line_regions)
+
+
+def test_layout_source_units_keep_wide_field_group_with_values() -> None:
+    layout = _page_layout(
+        [
+            _line("Property :", top=72, words_x=[72, 130]),
+            _line(
+                "The Millennials Fukuoka near Nakasu Hakata",
+                top=86,
+                words_x=[132, 188, 260, 340, 415, 475],
+            ),
+            _line("숙소명 :", top=104, words_x=[72, 120]),
+            _line("Address :", top=122, words_x=[72, 130]),
+            _line(
+                "5-2-18 Nakasu, Hakata, Fukuoka, Japan, 810-0801",
+                top=136,
+                words_x=[132, 205, 275, 350, 420, 485],
+            ),
+            _line("주소 :", top=154, words_x=[72, 118]),
+        ],
+        table_rows=(
+            _table_row(
+                row_index=1,
+                cells=[
+                    _cell(
+                        (
+                            "Booking ID : 1555887916\n예약 번호:\n"
+                            "Client : MYEONGYEON HAM\n고객명 :\n"
+                            "Property : The Millennials Fukuoka\n숙소명:\n"
+                            "Address : 5-2-18 Nakasu, Fukuoka\n주소:\n"
+                            "Property Contact Number : ++81922622009\n숙소 연락처:"
+                        ),
+                        column_index=1,
+                        x0=70,
+                        top=68,
+                        x1=590,
+                        bottom=180,
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    units = build_source_units(
+        material_id="mat_1",
+        file_name="booking.pdf",
+        text="[page 1]\nignored text",
+        layout_pages=(layout,),
+    )
+
+    line_region = next(
+        unit for unit in units if unit.metadata.get("layout_source") == "line_region"
+    )
+    assert "Property" in line_region.text
+    assert "The Millennials Fukuoka" in line_region.text
+    assert "Address" in line_region.text
+    assert "810-0801" in line_region.text
+
+
 def test_layout_source_units_add_line_region_field_group_without_tables() -> None:
     layout = _page_layout(
         [
@@ -345,6 +487,39 @@ def test_layout_source_units_add_line_region_field_group_without_tables() -> Non
     assert "Section A" in line_region.text
     assert "Alpha value" in line_region.text
     assert "Section C" in line_region.text
+
+
+def test_layout_source_units_keep_wide_sentence_line_region() -> None:
+    layout = _page_layout(
+        [
+            _line("Remarks :", top=72),
+            _line("NonSmoke,LargeBed", top=86),
+            _line("City tax notice", top=104),
+            _line(
+                "Local tax may be charged and paid directly at check in.",
+                top=118,
+            ),
+            _line("Guest list : MYEONGYEON HAM", top=146),
+            _line(
+                "Special requests are subject to property availability.",
+                top=164,
+            ),
+        ]
+    )
+
+    units = build_source_units(
+        material_id="mat_1",
+        file_name="booking.pdf",
+        text="[page 1]\nignored text",
+        layout_pages=(layout,),
+    )
+
+    line_region = next(
+        unit for unit in units if unit.metadata.get("layout_source") == "line_region"
+    )
+    assert "Remarks" in line_region.text
+    assert "NonSmoke,LargeBed" in line_region.text
+    assert "Special requests" in line_region.text
 
 
 def test_layout_geometry_drives_boundaries_before_semantic_annotation() -> None:
