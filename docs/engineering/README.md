@@ -10,6 +10,7 @@
 - 설계·추상화·실패 처리를 정할 때 → `principle.md`
 - 코드를 어디에 둘지, 의존 방향이 헷갈릴 때 → `architecture.md`
 - 무엇으로 동작을 확인할지 → `testing.md`
+- formatter와 code review의 책임이 헷갈릴 때 → `code-style.md`
 - AI에게 코드를 맡길 때 → `ai-coding.md`
 
 ## 사용 방식
