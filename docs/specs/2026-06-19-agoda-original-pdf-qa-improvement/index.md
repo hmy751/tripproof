@@ -2,9 +2,11 @@
 
 작성일: 2026-06-19
 
-상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, 남은 실패는 `03`~`05`에서 이어서 다룬다.
+상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, 남은 작업은 `03`~`05`에서 측정 전제, 안전성 vertical, 후보 coverage 순서로 다룬다.
 
 이 spec 묶음의 중심은 `측정 -> 실패 유형 이해 -> product 개선 -> 같은 원문 PDF로 재확인`이다. `run.json`과 HTML report는 이 흐름을 돕는 관찰 도구이지, 개선의 목표가 아니다.
+
+관통 기준은 근거가 받쳐주는 만큼만 확신하고, 그 정합을 재현 가능하게 관찰하는 것이다. 특히 여행 예약 정보에서는 자신 있는 오답이 모르는 답보다 더 위험하므로, supported를 늘리는 것보다 근거 부족한 supported를 줄이는 일을 우선한다.
 
 관련 문서:
 
@@ -15,9 +17,9 @@
 기준 artifact:
 
 - Eval run 묶음: `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/`
-- 현재 production-like baseline(현재 before 기준): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/06-20260623T092247Z-postreconcile-current-baseline-production/` (2026-06-23, reconciliation(merge `4a51ebe`) 이후 같은 조건 재측정. 상세는 `docs/work-log.md` 2026-06-23 항목)
 - 시작 baseline(layout 개선 전, 2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/01-20260619T083605Z-before-baseline-production/`
 - layout v1 after(2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/05-20260619T123416Z-layout-v1-after-production/`
+- reconciliation 이후 baseline(2026-06-23): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/06-20260623T092247Z-postreconcile-current-baseline-production/`
 - source unit boundary final(2026-06-24): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/09-20260624T072332Z-field-groups-cleaned-after-production/` (`source-units.md` 포함)
 - 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline", `02`의 "V1 구현 결과"와 "Field-group follow-up 구현/측정 결과"를 본다.
 
@@ -27,12 +29,12 @@
    원문 PDF를 product API에 넣어 현재 실패를 확인하고, 실패 유형을 source unit, retrieval, answer composer, 상태 검증 문제로 나누는 기준이다.
 2. `02-source-unit-structure-improvement.md`
    baseline에서 확인한 문제를 바탕으로 먼저 적용한 product 개선 slice다. 원문 PDF를 더 좋은 source unit으로 쪼개 retrieval과 evidence 경로를 개선하는 데 집중했고, 2026-06-24 `09` run으로 닫았다.
-3. `03-question-decomposition.md`
-   source unit이 의미 단위로 잡힌 뒤, 하나의 사용자 질문을 체크인/체크아웃, 객실/인원, 취소/노쇼 같은 하위 정보 요청으로 나누는 기준이다.
-4. `04-subrequest-retrieval.md`
-   하위 요청별로 필요한 source unit 후보를 따로 찾고, 후보 coverage와 missing 원인을 읽을 수 있게 만드는 기준이다.
-5. `05-state-validation-answer-assembly.md`
-   값과 조건 문맥을 함께 검증하고, LLM을 넓은 문서 탐색자가 아니라 찾아온 근거를 설명하는 조립자로 제한하는 기준이다.
+3. `03-measurement-reproducibility-preflight.md`
+   이후 before/after를 단일 run 인상으로 판단하지 않도록 seed, repeat, commit hash, runtime 기록을 정리하는 측정 전제다.
+4. `04-question-decomposition-sufficiency-vertical.md`
+   하나의 사용자 질문을 하위 evidence requirement로 나누고, 값만 있는 evidence가 supported로 올라가지 못하게 하는 첫 product safety vertical이다.
+5. `05-subrequest-retrieval-coverage.md`
+   `04`의 sufficiency gate가 필요한 후보를 더 잘 받도록 subrequest별 retrieval coverage와 missing 원인 관찰을 개선하는 기준이다.
 
 ## 왜 지금
 
@@ -40,7 +42,7 @@
 
 Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. sample text fixture를 임시 PDF로 만들어 product API를 호출하는 실행은 runner smoke나 report 렌더링 확인에는 쓸 수 있지만, Agoda 원문 PDF 개선의 근거가 될 수 없다.
 
-2026-06-19 production-like baseline은 `supabase` retrieval, Ollama embedding, Ollama answer composer로 실행했다. API/observation 연결은 정상으로 확인됐지만 8개 질문의 rule check는 모두 실패했다. 이후 layout v1(`02`)을 적용하고, main refactor와 통합(merge `4a51ebe`)한 뒤 같은 조건으로 다시 측정한 2026-06-23 run을 현재 before 기준으로 삼았다. `02`의 field-group cleanup 최종 확인은 2026-06-24 `09` run이다. 시점별 역할과 수치는 `01`의 "측정 timeline과 현재 baseline"과 `02`의 field-group 결과 섹션을 본다.
+`02`의 final run인 `09`에서는 source unit 후보가 크게 개선됐지만, 남은 실패가 모두 retrieval 부재로 설명되지는 않는다. 예를 들어 특별 요청 질문은 조건 문맥을 담은 후보가 이미 retrieval 결과에 있는데도 value-only 후보만 근거로 supported가 만들어졌다. 따라서 다음 순서는 후보를 더 많이 찾는 일보다, 먼저 측정을 믿을 수 있게 만들고 값과 조건 문맥의 sufficiency를 product 계약으로 세우는 일이다.
 
 ## 중심 흐름
 
@@ -48,9 +50,10 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 원문 Agoda PDF 실행
 -> report/observation으로 실패 유형 분류
 -> 첫 product 개선: source unit 구조화
--> 질문을 하위 정보 요청으로 분해
--> 하위 요청별 retrieval candidate 확보
--> 상태 검증과 답변 조립 경계 정리
+-> 측정 재현성 preflight
+-> 질문을 하위 evidence requirement로 분해
+-> 값과 조건 문맥 sufficiency 검증
+-> 부족한 후보 coverage 개선
 -> 같은 원문 PDF 질문셋으로 before/after 확인
 ```
 
@@ -71,22 +74,23 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 1. 원문 PDF run과 sample fixture smoke run의 목적이 문서와 report에서 섞이지 않는다.
 2. 원문 PDF baseline에서 8개 질문의 실패를 source unit, retrieval, answer composer, 상태 검증 중 어디에 가까운지 읽을 수 있다.
 3. 첫 product 개선은 source unit 구조화에 집중하고, 같은 원문 PDF 질문셋으로 before/after를 비교한다.
-4. source unit 구조화 뒤에도 남는 실패는 질문 분해, 하위 요청별 retrieval, 상태 검증/답변 조립 중 어디에서 생기는지 이어서 분류할 수 있다.
-5. 개선 결과는 `run.json` 필드 증가가 아니라 retrieval candidate와 answer/evidence 경로 변화로 확인한다.
+4. `02` 이후 before/after는 실행 조건, 코드 버전, 반복 실행 여부를 함께 보고 해석한다.
+5. source unit 구조화 뒤에도 남는 실패는 measurement noise, decomposition/sufficiency, retrieval coverage 중 어디에서 생기는지 이어서 분류할 수 있다.
+6. 개선 결과는 `run.json` 필드 증가가 아니라 answer/evidence path 변화와 근거 부족한 supported 감소로 확인한다.
 
 ## Slice 순서
 
-이 묶음의 product 개선은 아래 순서를 기본으로 삼는다. 각 단계는 같은 원문 PDF 질문셋으로 다시 실행해 before/after evidence path를 읽은 뒤 다음 단계로 넘어간다.
+이 묶음의 다음 작업은 아래 순서를 기본으로 삼는다. 문서 번호가 구현 순서이며, 각 단계는 같은 원문 PDF 질문셋으로 다시 실행해 before/after evidence path를 읽은 뒤 다음 단계로 넘어간다.
 
 | 순서 | 문서 | 핵심 질문 | 다음 단계로 넘어가는 신호 |
 | --- | --- | --- | --- |
 | 0 | `01-original-pdf-observation-baseline.md` | 원문 PDF baseline을 믿고 읽을 수 있는가 | production-like run에서 candidate/evidence/status를 질문별로 볼 수 있다 |
 | 1 | `02-source-unit-structure-improvement.md` | 원문이 질문 가능한 source unit으로 들어오는가 | 완료: `09`에서 라벨-값, 정책, 비용, 요청 단위가 source unit/candidate로 보인다 |
-| 2 | `03-question-decomposition.md` | 사용자 질문의 하위 정보 요청을 놓치지 않는가 | 체크인/체크아웃, 객실/인원, 취소/노쇼가 항목별 요청으로 분리된다 |
-| 3 | `04-subrequest-retrieval.md` | 각 하위 요청이 자기 근거 후보를 받는가 | 하나의 큰 후보가 모든 질문을 대표하지 않고 subrequest별 candidate가 달라진다 |
-| 4 | `05-state-validation-answer-assembly.md` | 값과 조건 문맥이 함께 검증되는가 | 특별 요청, 취소/노쇼, 추가 비용이 근거 부족한 supported로 확정되지 않는다 |
+| 2 | `03-measurement-reproducibility-preflight.md` | 이후 before/after를 noise와 구분할 수 있는가 | run artifact가 commit/runtime/repeat/seed 조건을 드러내고 단일 run을 과신하지 않는다 |
+| 3 | `04-question-decomposition-sufficiency-vertical.md` | 가진 근거 이상으로 supported를 만들지 않는가 | 특별 요청, 취소/노쇼, 객실/인원 질문이 하위 evidence requirement와 sufficiency 결과로 읽힌다 |
+| 4 | `05-subrequest-retrieval-coverage.md` | sufficiency가 필요한 후보를 더 잘 받는가 | subrequest별 후보 경로와 missing 원인이 보이고 answer/evidence path가 바뀐다 |
 
-prompt 수정은 4단계 이후에 다룬다. 입력 source unit과 retrieval candidate가 넓고 흐릿한 상태에서 prompt만 고치는 것은 이 묶음의 기본 해법이 아니다.
+prompt 수정은 `04`의 product contract가 잡힌 뒤에 다룬다. 입력 source unit과 retrieval candidate가 넓고 흐릿한 상태에서 prompt만 고치는 것은 이 묶음의 기본 해법이 아니다.
 
 ## 이번 묶음에서 섞지 않는 범위
 
@@ -98,14 +102,14 @@ prompt 수정은 4단계 이후에 다룬다. 입력 source unit과 retrieval ca
 
 ## 다음 slice 후보
 
-source unit 구조화는 `02`에서 닫았고, 남은 실패는 새 방향을 임의로 열기보다 아래 문서 순서대로 확인한다.
+source unit 구조화는 `02`에서 닫았고, 다음 작업은 아래 순서로 진행한다.
 
-- `03-question-decomposition.md`: 체크인/체크아웃, 객실/인원, 취소/노쇼처럼 한 질문 안의 여러 요청을 분리한다.
-- `04-subrequest-retrieval.md`: 각 하위 요청마다 필요한 source unit 후보를 따로 찾는다.
-- `05-state-validation-answer-assembly.md`: 값과 조건 문맥을 함께 보지 못하면 supported를 막고, LLM은 찾아온 근거를 사용자에게 읽기 좋게 설명하는 역할로 둔다.
+- `03-measurement-reproducibility-preflight.md`: repeat, seed, commit hash, runtime 기록으로 이후 before/after 해석을 안정화한다.
+- `04-question-decomposition-sufficiency-vertical.md`: compound question을 하위 evidence requirement로 나누고, value-only evidence가 supported로 확정되지 않게 한다.
+- `05-subrequest-retrieval-coverage.md`: `04`가 요구하는 후보를 subrequest별로 더 잘 공급하고 missing 원인을 읽을 수 있게 한다.
 
 ## 남은 판단
 
 - 원문 PDF 파일을 repo fixture로 보존할지, 로컬 입력 path만 지원할지는 별도 판단이다.
-- source unit `kind`의 정확한 값 목록은 구현 시 현재 자료 모델과 retrieval needs에 맞춰 정한다.
+- source unit `kind`와 subrequest field name의 정확한 값 목록은 구현 시 현재 자료 모델과 retrieval needs에 맞춰 정한다.
 - source cue / answer cue의 정확한 JSON field name은 runner와 질문셋 수정 시 정한다.
