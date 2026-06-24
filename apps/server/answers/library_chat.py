@@ -4,6 +4,7 @@ import re
 from typing import Protocol
 
 from server.core.config import (
+    OLLAMA_ANSWER_SEED,
     OLLAMA_ANSWER_MODEL,
     OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
@@ -42,10 +43,14 @@ class OllamaLibraryChatAnswerComposer:
         client: OllamaChatJsonClient,
         prompt: LibraryChatAnswerPrompt | None = None,
         model: str | None = None,
+        seed: int | None = None,
+        temperature: float | None = 0.0,
     ) -> None:
         self._client = client
         self._prompt = prompt or load_library_chat_answer_prompt()
         self._model = model
+        self._seed = seed
+        self._temperature = temperature
 
     @property
     def prompt(self) -> LibraryChatAnswerPrompt:
@@ -69,23 +74,31 @@ class OllamaLibraryChatAnswerComposer:
 
         return _answer_from_payload(question=question, payload=payload, context=context)
 
-    def runtime_answer_model_snapshot(self) -> dict[str, str | None]:
+    def runtime_answer_model_snapshot(self) -> dict[str, object]:
         return {
             "backend": "ollama",
             "model": self._model,
+            "seed": self._seed,
+            "temperature": self._temperature,
         }
 
 
-def create_library_chat_answer_composer_from_config() -> LibraryChatAnswerComposer:
+def create_library_chat_answer_composer_from_config(
+    *, answer_seed: int | None = None
+) -> LibraryChatAnswerComposer:
+    seed = OLLAMA_ANSWER_SEED if answer_seed is None else answer_seed
     return OllamaLibraryChatAnswerComposer(
         client=OllamaChatJsonClient(
             OllamaChatJsonConfig(
                 base_url=OLLAMA_BASE_URL,
                 model=OLLAMA_ANSWER_MODEL,
                 timeout_seconds=OLLAMA_ANSWER_TIMEOUT_SECONDS,
+                seed=seed,
             )
         ),
         model=OLLAMA_ANSWER_MODEL,
+        seed=seed,
+        temperature=0.0,
     )
 
 

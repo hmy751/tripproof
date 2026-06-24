@@ -43,6 +43,8 @@ class PromptRuntimeConfigSnapshot:
 class AnswerModelRuntimeConfigSnapshot:
     backend: str
     model: str | None
+    seed: int | None = None
+    temperature: float | None = None
 
 
 @dataclass(frozen=True)
@@ -133,9 +135,25 @@ def answer_model_runtime_config_snapshot_from_composer(
     return AnswerModelRuntimeConfigSnapshot(
         backend=backend,
         model=_string_snapshot_value(snapshot, "model"),
+        seed=_int_snapshot_value(snapshot, "seed"),
+        temperature=_float_snapshot_value(snapshot, "temperature"),
     )
 
 
 def _string_snapshot_value(snapshot: dict[object, object], key: str) -> str | None:
     value = snapshot.get(key)
     return value if isinstance(value, str) else None
+
+
+def _int_snapshot_value(snapshot: dict[object, object], key: str) -> int | None:
+    value = snapshot.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _float_snapshot_value(snapshot: dict[object, object], key: str) -> float | None:
+    value = snapshot.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None

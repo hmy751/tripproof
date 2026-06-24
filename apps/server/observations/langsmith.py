@@ -321,6 +321,10 @@ def _flat_runtime_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
         metadata, "tripproof.answer_model_backend", answer_model.get("backend")
     )
     _set_if_present(metadata, "tripproof.answer_model", answer_model.get("model"))
+    _set_if_present(metadata, "tripproof.answer_model_seed", answer_model.get("seed"))
+    _set_if_present(
+        metadata, "tripproof.answer_model_temperature", answer_model.get("temperature")
+    )
     return metadata
 
 

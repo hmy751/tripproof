@@ -4,10 +4,12 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import hashlib
 from io import BytesIO
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Any, Literal
 from uuid import uuid4
@@ -75,21 +77,43 @@ RuntimeMode = Literal["production", "deterministic"]
 
 def main() -> int:
     args = _parse_args()
-    artifact, artifact_path = run_question_dataset(
-        output_dir=args.output_dir,
-        questions_file=args.questions_file,
-        material_text_file=args.material_text_file,
-        material_pdf_file=args.material_pdf_file,
-        run_id=args.run_id,
-        correlation_prefix=args.correlation_prefix,
-        question_limit=args.question_limit,
-        runtime_mode=args.runtime_mode,
-        answer_composer_backend=args.answer_composer_backend,
-    )
+    if args.repeat < 1:
+        raise ValueError("--repeat must be at least 1")
+
+    if args.repeat == 1:
+        artifact, artifact_path = run_question_dataset(
+            output_dir=args.output_dir,
+            questions_file=args.questions_file,
+            material_text_file=args.material_text_file,
+            material_pdf_file=args.material_pdf_file,
+            run_id=args.run_id,
+            correlation_prefix=args.correlation_prefix,
+            question_limit=args.question_limit,
+            runtime_mode=args.runtime_mode,
+            answer_composer_backend=args.answer_composer_backend,
+            answer_seed=args.answer_seed,
+        )
+        output = {**artifact, "artifact_path": str(artifact_path)}
+    else:
+        bundle, artifact_path = run_question_dataset_repeat(
+            output_dir=args.output_dir,
+            questions_file=args.questions_file,
+            material_text_file=args.material_text_file,
+            material_pdf_file=args.material_pdf_file,
+            run_id=args.run_id,
+            correlation_prefix=args.correlation_prefix,
+            question_limit=args.question_limit,
+            runtime_mode=args.runtime_mode,
+            answer_composer_backend=args.answer_composer_backend,
+            answer_seed=args.answer_seed,
+            repeat_count=args.repeat,
+        )
+        output = {**bundle, "artifact_path": str(artifact_path)}
+
     if args.json:
         print(
             json.dumps(
-                {**artifact, "artifact_path": str(artifact_path)},
+                output,
                 ensure_ascii=False,
                 indent=2,
                 sort_keys=True,
@@ -98,6 +122,104 @@ def main() -> int:
     else:
         print(f"wrote {artifact_path}")
     return 0
+
+
+def run_question_dataset_repeat(
+    *,
+    output_dir: Path,
+    questions_file: Path,
+    material_text_file: Path | None,
+    material_pdf_file: Path | None = None,
+    run_id: str | None = None,
+    correlation_prefix: str | None = None,
+    question_limit: int | None = None,
+    runtime_mode: RuntimeMode = RUNTIME_MODE_PRODUCTION,
+    answer_composer_backend: str | None = None,
+    answer_seed: int | None = None,
+    repeat_count: int,
+) -> tuple[dict[str, Any], Path]:
+    if repeat_count < 1:
+        raise ValueError("repeat_count must be at least 1")
+
+    group_id = _run_id(run_id)
+    group_dir = output_dir / group_id
+    group_dir.mkdir(parents=True, exist_ok=True)
+    code_version = _code_version_artifact()
+    runs: list[dict[str, Any]] = []
+    for repeat_index in range(1, repeat_count + 1):
+        repeat_suffix = f"r{repeat_index:02d}"
+        repeat_run_id = _with_suffix(group_id, suffix=f"-{repeat_suffix}", limit=128)
+        repeat_correlation_prefix = _repeat_correlation_prefix(
+            correlation_prefix=correlation_prefix,
+            run_group_id=group_id,
+            repeat_suffix=repeat_suffix,
+        )
+        artifact, artifact_path = run_question_dataset(
+            output_dir=output_dir,
+            questions_file=questions_file,
+            material_text_file=material_text_file,
+            material_pdf_file=material_pdf_file,
+            run_id=repeat_run_id,
+            correlation_prefix=repeat_correlation_prefix,
+            question_limit=question_limit,
+            runtime_mode=runtime_mode,
+            answer_composer_backend=answer_composer_backend,
+            answer_seed=answer_seed,
+            repeat_group_id=group_id,
+            repeat_index=repeat_index,
+            repeat_count=repeat_count,
+            code_version=code_version,
+        )
+        runs.append(
+            {
+                "run_id": artifact["run_id"],
+                "repeat_index": repeat_index,
+                "artifact_path": _repo_relative(artifact_path),
+                "html_report_path": _repo_relative(
+                    artifact_path.parent / artifact["html_report"]["path"]
+                ),
+                "rule_pass_count": sum(
+                    1
+                    for question in artifact["question_results"]
+                    if question.get("rule_check", {}).get("passed") is True
+                ),
+                "question_count": len(artifact["question_results"]),
+            }
+        )
+
+    bundle = {
+        "schema_version": "tripproof.eval_run.question_dataset_repeat.v1",
+        "kind": "question_dataset_repeat",
+        "run_group_id": group_id,
+        "created_at": datetime.now(UTC)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+        "repeat": {
+            "count": repeat_count,
+            "run_ids": [run["run_id"] for run in runs],
+        },
+        "code_version": code_version,
+        "run_config": _run_config_artifact(
+            questions_file=questions_file,
+            material_text_file=material_text_file,
+            material_pdf_file=material_pdf_file,
+            question_limit=question_limit,
+            runtime_mode=runtime_mode,
+            answer_composer_backend=answer_composer_backend,
+            answer_seed=answer_seed,
+        ),
+        "runs": runs,
+        "interpretation_note": (
+            "Repeat runs expose the current noise floor. A single rule pass count is "
+            "not a product improvement proof."
+        ),
+    }
+    artifact_path = group_dir / "repeat.json"
+    artifact_path.write_text(
+        json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return bundle, artifact_path
 
 
 def run_question_dataset(
@@ -111,6 +233,11 @@ def run_question_dataset(
     question_limit: int | None = None,
     runtime_mode: RuntimeMode = RUNTIME_MODE_PRODUCTION,
     answer_composer_backend: str | None = None,
+    answer_seed: int | None = None,
+    repeat_group_id: str | None = None,
+    repeat_index: int = 1,
+    repeat_count: int = 1,
+    code_version: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], Path]:
     active_run_id = _run_id(run_id)
     active_correlation_prefix = correlation_prefix or f"eval_{uuid4().hex[:8]}"
@@ -131,6 +258,7 @@ def run_question_dataset(
     app = _create_dataset_app(
         runtime_mode=runtime_mode,
         answer_composer_backend=answer_composer_backend,
+        answer_seed=answer_seed,
         observation_exporter=exporter,
     )
     client = TestClient(app)
@@ -200,6 +328,21 @@ def run_question_dataset(
         observation_export_path=Path("observations") / exporter.path.name,
         observation_rows=observation_rows,
         runtime=_runtime_artifact(app=app, runtime_mode=runtime_mode),
+        run_config=_run_config_artifact(
+            questions_file=questions_file,
+            material_text_file=material_text_file,
+            material_pdf_file=material_pdf_file,
+            question_limit=question_limit,
+            runtime_mode=runtime_mode,
+            answer_composer_backend=answer_composer_backend,
+            answer_seed=answer_seed,
+        ),
+        repeat={
+            "group_id": repeat_group_id or active_run_id,
+            "index": repeat_index,
+            "count": repeat_count,
+        },
+        code_version=code_version or _code_version_artifact(),
         product_trace_safe=product_trace_safe,
     )
     artifact_path.write_text(
@@ -221,6 +364,9 @@ def _artifact(
     observation_export_path: Path,
     observation_rows: list[dict[str, Any]],
     runtime: dict[str, Any],
+    run_config: dict[str, Any],
+    repeat: dict[str, Any],
+    code_version: dict[str, Any],
     product_trace_safe: bool,
 ) -> dict[str, Any]:
     upload_request_id = upload_response.headers.get(REQUEST_ID_HEADER, "")
@@ -292,6 +438,9 @@ def _artifact(
             "type": "fastapi_test_client",
             "endpoints": ["POST /api/materials", "POST /api/questions"],
         },
+        "code_version": code_version,
+        "run_config": run_config,
+        "repeat": repeat,
         "runtime": runtime,
         "requests": {
             "material_upload": {
@@ -321,6 +470,7 @@ def _create_dataset_app(
     *,
     runtime_mode: RuntimeMode,
     answer_composer_backend: str | None,
+    answer_seed: int | None,
     observation_exporter: LocalArtifactObservationExporter,
 ):
     if runtime_mode == RUNTIME_MODE_DETERMINISTIC:
@@ -335,6 +485,14 @@ def _create_dataset_app(
             if answer_composer_backend == "ollama"
             else MissingLibraryChatAnswerComposer()
         )
+        if composer is None and answer_seed is not None:
+            from server.answers.library_chat import (
+                create_library_chat_answer_composer_from_config,
+            )
+
+            composer = create_library_chat_answer_composer_from_config(
+                answer_seed=answer_seed
+            )
         return create_app(
             store=store,
             library_chat_answer_composer=composer,
@@ -349,6 +507,14 @@ def _create_dataset_app(
         if answer_composer_backend in ("missing", "disabled")
         else None
     )
+    if composer is None and answer_seed is not None:
+        from server.answers.library_chat import (
+            create_library_chat_answer_composer_from_config,
+        )
+
+        composer = create_library_chat_answer_composer_from_config(
+            answer_seed=answer_seed
+        )
     return create_app(
         library_chat_answer_composer=composer,
         observation_exporter=observation_exporter,
@@ -362,6 +528,8 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
     )
     answer_composer = answer_model.backend if answer_model is not None else "unknown"
     answer_model_name = answer_model.model if answer_model is not None else None
+    answer_seed = answer_model.seed if answer_model is not None else None
+    answer_temperature = answer_model.temperature if answer_model is not None else None
     return {
         "mode": runtime_mode,
         "production_like": runtime_mode == RUNTIME_MODE_PRODUCTION,
@@ -374,6 +542,9 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
         "embedding_dimensions": settings.embedding_profile.dimensions,
         "answer_composer": answer_composer,
         "answer_model": answer_model_name,
+        "answer_seed": answer_seed,
+        "answer_seed_specified": answer_seed is not None,
+        "answer_temperature": answer_temperature,
     }
 
 
@@ -655,6 +826,105 @@ def _with_suffix(value: str, *, suffix: str, limit: int) -> str:
     return f"{value[: limit - len(suffix)]}{suffix}"
 
 
+def _repeat_correlation_prefix(
+    *, correlation_prefix: str | None, run_group_id: str, repeat_suffix: str
+) -> str:
+    base = correlation_prefix or f"eval_{run_group_id}"
+    return _with_suffix(base, suffix=f"_{repeat_suffix}", limit=80)
+
+
+def _code_version_artifact() -> dict[str, Any]:
+    commit_hash = _git_output("rev-parse", "--verify", "HEAD")
+    branch = _git_output("rev-parse", "--abbrev-ref", "HEAD")
+    status = _git_status_porcelain()
+    tracked_diff = _git_output_allow_empty("diff", "HEAD", "--")
+    untracked = _git_output_allow_empty("ls-files", "--others", "--exclude-standard")
+    return {
+        "vcs": "git",
+        "commit_hash": commit_hash,
+        "branch": branch,
+        "dirty": bool(status),
+        "tracked_diff_hash": _sha256_or_none(tracked_diff),
+        "untracked_file_count": len(untracked.splitlines()) if untracked else 0,
+        "status_available": status is not None,
+    }
+
+
+def _git_output(*args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    output = result.stdout.strip()
+    return output or None
+
+
+def _git_output_allow_empty(*args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout
+
+
+def _git_status_porcelain() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout.strip()
+
+
+def _sha256_or_none(value: str | None) -> str | None:
+    if not value:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _run_config_artifact(
+    *,
+    questions_file: Path,
+    material_text_file: Path | None,
+    material_pdf_file: Path | None,
+    question_limit: int | None,
+    runtime_mode: RuntimeMode,
+    answer_composer_backend: str | None,
+    answer_seed: int | None,
+) -> dict[str, Any]:
+    return {
+        "questions_file": _repo_relative(questions_file),
+        "material_text_file": (
+            _repo_relative(material_text_file) if material_text_file else None
+        ),
+        "material_pdf_file": (
+            _repo_relative(material_pdf_file) if material_pdf_file else None
+        ),
+        "question_limit": question_limit,
+        "runtime_mode": runtime_mode,
+        "answer_composer_backend_override": answer_composer_backend,
+        "answer_seed": answer_seed,
+        "answer_seed_specified": answer_seed is not None,
+    }
+
+
 def _repo_relative(path: Path) -> str:
     try:
         return str(path.resolve().relative_to(REPO_ROOT))
@@ -731,6 +1001,21 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         choices=("missing", "disabled", "ollama"),
         help=("Optional answer composer backend override. Omit for production config."),
+    )
+    parser.add_argument(
+        "--answer-seed",
+        type=int,
+        default=None,
+        help=(
+            "Optional Ollama answer seed for runs that use the Ollama answer "
+            "composer. Recorded in run artifacts."
+        ),
+    )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Run the same dataset N times and write a repeat bundle artifact.",
     )
     parser.add_argument(
         "--json",

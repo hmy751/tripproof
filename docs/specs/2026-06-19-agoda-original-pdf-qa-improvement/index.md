@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, 남은 작업은 `03`~`05`에서 측정 전제, 안전성 vertical, 후보 coverage 순서로 다룬다.
+상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` 안전성 vertical과 `05` 후보 coverage 순서로 다룬다.
 
 이 spec 묶음의 중심은 `측정 -> 실패 유형 이해 -> product 개선 -> 같은 원문 PDF로 재확인`이다. `run.json`과 HTML report는 이 흐름을 돕는 관찰 도구이지, 개선의 목표가 아니다.
 
@@ -21,6 +21,7 @@
 - layout v1 after(2026-06-19): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/05-20260619T123416Z-layout-v1-after-production/`
 - reconciliation 이후 baseline(2026-06-23): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/06-20260623T092247Z-postreconcile-current-baseline-production/`
 - source unit boundary final(2026-06-24): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/09-20260624T072332Z-field-groups-cleaned-after-production/` (`source-units.md` 포함)
+- measurement preflight repeat(2026-06-24): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/12-20260624T122630Z-measurement-preflight-repeat-seeded/repeat.json`
 - 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline", `02`의 "V1 구현 결과"와 "Field-group follow-up 구현/측정 결과"를 본다.
 
 ## 읽는 순서
@@ -30,7 +31,7 @@
 2. `02-source-unit-structure-improvement.md`
    baseline에서 확인한 문제를 바탕으로 먼저 적용한 product 개선 slice다. 원문 PDF를 더 좋은 source unit으로 쪼개 retrieval과 evidence 경로를 개선하는 데 집중했고, 2026-06-24 `09` run으로 닫았다.
 3. `03-measurement-reproducibility-preflight.md`
-   이후 before/after를 단일 run 인상으로 판단하지 않도록 seed, repeat, commit hash, runtime 기록을 정리하는 측정 전제다.
+   이후 before/after를 단일 run 인상으로 판단하지 않도록 seed, repeat, commit hash, runtime 기록을 정리한 측정 전제다.
 4. `04-question-decomposition-sufficiency-vertical.md`
    하나의 사용자 질문을 하위 evidence requirement로 나누고, 값만 있는 evidence가 supported로 올라가지 못하게 하는 첫 product safety vertical이다.
 5. `05-subrequest-retrieval-coverage.md`
@@ -86,7 +87,7 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 | --- | --- | --- | --- |
 | 0 | `01-original-pdf-observation-baseline.md` | 원문 PDF baseline을 믿고 읽을 수 있는가 | production-like run에서 candidate/evidence/status를 질문별로 볼 수 있다 |
 | 1 | `02-source-unit-structure-improvement.md` | 원문이 질문 가능한 source unit으로 들어오는가 | 완료: `09`에서 라벨-값, 정책, 비용, 요청 단위가 source unit/candidate로 보인다 |
-| 2 | `03-measurement-reproducibility-preflight.md` | 이후 before/after를 noise와 구분할 수 있는가 | run artifact가 commit/runtime/repeat/seed 조건을 드러내고 단일 run을 과신하지 않는다 |
+| 2 | `03-measurement-reproducibility-preflight.md` | 이후 before/after를 noise와 구분할 수 있는가 | 완료: run artifact가 commit/runtime/repeat/seed 조건을 드러내고 단일 run을 과신하지 않는다 |
 | 3 | `04-question-decomposition-sufficiency-vertical.md` | 가진 근거 이상으로 supported를 만들지 않는가 | 특별 요청, 취소/노쇼, 객실/인원 질문이 하위 evidence requirement와 sufficiency 결과로 읽힌다 |
 | 4 | `05-subrequest-retrieval-coverage.md` | sufficiency가 필요한 후보를 더 잘 받는가 | subrequest별 후보 경로와 missing 원인이 보이고 answer/evidence path가 바뀐다 |
 
@@ -102,9 +103,8 @@ prompt 수정은 `04`의 product contract가 잡힌 뒤에 다룬다. 입력 sou
 
 ## 다음 slice 후보
 
-source unit 구조화는 `02`에서 닫았고, 다음 작업은 아래 순서로 진행한다.
+source unit 구조화와 측정 preflight는 `02`~`03`에서 닫았고, 다음 product 작업은 아래 순서로 진행한다.
 
-- `03-measurement-reproducibility-preflight.md`: repeat, seed, commit hash, runtime 기록으로 이후 before/after 해석을 안정화한다.
 - `04-question-decomposition-sufficiency-vertical.md`: compound question을 하위 evidence requirement로 나누고, value-only evidence가 supported로 확정되지 않게 한다.
 - `05-subrequest-retrieval-coverage.md`: `04`가 요구하는 후보를 subrequest별로 더 잘 공급하고 missing 원인을 읽을 수 있게 한다.
 

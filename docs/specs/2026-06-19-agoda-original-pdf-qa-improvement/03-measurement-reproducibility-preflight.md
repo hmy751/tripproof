@@ -2,7 +2,7 @@
 
 작성일: 2026-06-24
 
-상태: draft sub-spec. `02` source unit 구조화 이후, `04` product safety vertical에 들어가기 전에 before/after를 단일 run 인상으로 판단하지 않기 위한 측정 전제다.
+상태: implemented preflight. `02` source unit 구조화 이후, `04` product safety vertical에 들어가기 전에 before/after를 단일 run 인상으로 판단하지 않기 위한 측정 전제다.
 
 이 문서는 product behavior 개선 slice가 아니다. 답변 품질을 올리는 것이 아니라, 이후 개선이 실제 동작 변화인지 LLM/runtime noise인지 구분할 수 있게 하는 최소 실행 조건을 다룬다.
 
@@ -57,6 +57,23 @@
 2. commit/runtime/repeat/seed 조건이 `run.json` 또는 run 묶음에서 확인되는지 본다.
 3. 같은 조건의 반복 실행에서 P0-06, P1-01처럼 상태가 흔들릴 수 있는 질문을 우선 확인한다.
 4. product response body에 observation/debug/eval field가 추가되지 않았는지 확인한다.
+
+## 구현/측정 결과
+
+구현 결과:
+
+- `eval/run_question_dataset.py`가 단일 run artifact에 `code_version`, `run_config`, `repeat` 정보를 기록한다. dirty worktree에서는 raw diff 대신 tracked diff hash만 남긴다.
+- `--repeat N` 실행은 각 반복을 독립 run folder로 남기고, 상위 `repeat.json`에서 run 묶음을 확인하게 한다.
+- `--answer-seed`와 `TRIPPROOF_OLLAMA_ANSWER_SEED`를 통해 Ollama answer composer seed를 지정할 수 있고, 지정 여부는 run artifact runtime에 기록된다.
+- product response body에는 request/correlation/debug/eval field를 추가하지 않았다.
+
+preflight 확인 run:
+
+- Repeat bundle: `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/12-20260624T122630Z-measurement-preflight-repeat-seeded/repeat.json`
+- 조건: original PDF, production runtime, `gemma3:4b`, temperature `0.0`, seed `20260624`, repeat `3`
+- 결과: 세 반복 모두 rule pass는 `1/8`이었다. 다만 seed를 지정했어도 P0-06/P0-07은 반복별 상태가 흔들렸고, P1-01도 value-only `supported`와 `missing` 사이에서 달라졌다. 따라서 seed는 실행 조건 기록을 위한 옵션이지 결정성 보장으로 해석하지 않는다.
+
+이 결과는 답변 품질 개선 proof가 아니다. `04` 이후 before/after에서는 같은 run 묶음 구조로 answer/evidence path 변화를 비교한다.
 
 ## 이번 slice에서 섞지 않는 범위
 

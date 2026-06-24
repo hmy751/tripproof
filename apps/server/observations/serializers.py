@@ -121,6 +121,8 @@ def runtime_config_snapshot_to_payload(
         answer_model = {
             "backend": snapshot.answer_model.backend,
             "model": snapshot.answer_model.model,
+            "seed": snapshot.answer_model.seed,
+            "temperature": snapshot.answer_model.temperature,
         }
 
     return {

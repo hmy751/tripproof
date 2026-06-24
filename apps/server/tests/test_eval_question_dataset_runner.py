@@ -51,10 +51,24 @@ def test_question_dataset_runner_writes_joined_html_report(tmp_path) -> None:
         "source_path": "fixtures/accommodation-checkin/agoda-booking-confirmation-sample.txt",
         "uploaded_file_name": "agoda-booking-confirmation-sample.pdf",
     }
+    assert artifact["code_version"]["vcs"] == "git"
+    assert artifact["code_version"]["commit_hash"]
+    assert artifact["code_version"]["status_available"] is True
+    assert artifact["run_config"]["questions_file"] == (
+        "eval/datasets/agoda-booking-confirmation/questions.json"
+    )
+    assert artifact["run_config"]["runtime_mode"] == "deterministic"
+    assert artifact["run_config"]["answer_seed_specified"] is False
+    assert artifact["repeat"] == {
+        "group_id": "dataset-test",
+        "index": 1,
+        "count": 1,
+    }
     assert artifact["runtime"]["mode"] == "deterministic"
     assert artifact["runtime"]["production_like"] is False
     assert artifact["runtime"]["embedding_provider"] == "eval_fake_vector"
     assert artifact["runtime"]["answer_composer"] == "missing"
+    assert artifact["runtime"]["answer_seed_specified"] is False
     assert artifact["question_results"][0]["id"] == "AGODA-P0-01"
     assert artifact["question_results"][0]["status_code"] == 200
     assert artifact["question_results"][0]["correlation_id"] == (
@@ -262,6 +276,79 @@ def test_question_dataset_runner_makes_correlation_ids_unique_on_collisions(
     assert len(correlation_ids) == len(set(correlation_ids))
     assert artifact["checks"]["generated_question_correlation_ids_unique"] is True
     assert artifact["checks"]["all_question_exports_correlation_matched_inputs"] is True
+
+
+def test_question_dataset_runner_repeat_writes_run_bundle(tmp_path) -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    script = repo_root / "eval" / "run_question_dataset.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--output-dir",
+            str(tmp_path),
+            "--run-id",
+            "repeat-test",
+            "--correlation-prefix",
+            "repeat_eval",
+            "--question-limit",
+            "1",
+            "--runtime-mode",
+            "deterministic",
+            "--repeat",
+            "2",
+            "--json",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    output = json.loads(result.stdout)
+    bundle_path = Path(output["artifact_path"])
+    assert bundle_path == tmp_path / "repeat-test" / "repeat.json"
+    assert bundle_path.exists()
+
+    bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    assert bundle["schema_version"] == "tripproof.eval_run.question_dataset_repeat.v1"
+    assert bundle["kind"] == "question_dataset_repeat"
+    assert bundle["run_group_id"] == "repeat-test"
+    assert bundle["repeat"]["count"] == 2
+    assert bundle["repeat"]["run_ids"] == ["repeat-test-r01", "repeat-test-r02"]
+    assert bundle["code_version"]["commit_hash"]
+    assert bundle["run_config"]["runtime_mode"] == "deterministic"
+    assert (
+        "single rule pass count is not a product improvement proof"
+        in bundle["interpretation_note"]
+    )
+
+    run_paths = [tmp_path / run["artifact_path"] for run in bundle["runs"]]
+    assert run_paths == [
+        tmp_path / "repeat-test-r01" / "run.json",
+        tmp_path / "repeat-test-r02" / "run.json",
+    ]
+    first_run = json.loads(run_paths[0].read_text(encoding="utf-8"))
+    second_run = json.loads(run_paths[1].read_text(encoding="utf-8"))
+
+    assert first_run["repeat"] == {
+        "group_id": "repeat-test",
+        "index": 1,
+        "count": 2,
+    }
+    assert second_run["repeat"] == {
+        "group_id": "repeat-test",
+        "index": 2,
+        "count": 2,
+    }
+    assert first_run["question_results"][0]["correlation_id"] == (
+        "repeat_eval_r01_AGODA-P0-01"
+    )
+    assert second_run["question_results"][0]["correlation_id"] == (
+        "repeat_eval_r02_AGODA-P0-01"
+    )
+    assert first_run["code_version"] == bundle["code_version"]
+    assert second_run["code_version"] == bundle["code_version"]
 
 
 def _pdf_with_text(text: str) -> bytes:
