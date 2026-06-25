@@ -12,6 +12,7 @@
 - 무엇으로 동작을 확인할지 → `testing.md`
 - formatter와 code review의 책임이 헷갈릴 때 → `code-style.md`
 - AI에게 코드를 맡길 때 → `ai-coding.md`
+- LLM을 제품 동작에 넣어 설계할 때 → `llm-design.md`
 
 ## 사용 방식
 
