@@ -30,12 +30,12 @@ LLM에게 맡길 일:
 ## 입력: 무엇을 보고 종합할지 겨냥한다
 
 - LLM의 출력을 좁히는 대신 **입력을 깎아** 종합을 겨냥한다. 검색으로 후보를 먼저 뽑아 주는 것이 이 자리다(RAG).
-- 후보에 의미 구분(이건 정책·조건·요청)이 붙어 있으면 그 표시를 **프롬프트까지 실어** 보낸다. retrieval까지 살아온 metadata를 프롬프트 직렬화에서 떨구면, 좋은 재료를 모아 놓고 안 보여 주는 것이다.
+- 후보에 의미 구분(이건 정책·조건·요청)이 붙어 있으면 그 표시를 **프롬프트까지 실어** 보낸다 — 모아 놓고 직렬화에서 떨구면 없는 것과 같다.
 - 배치·순서도 신호다 — 조건·예외 근거가 긴 맥락 중간에 묻히면 모델이 실질적으로 못 본다(lost in the middle).
 - 출력 스키마도 입력 설계다. `body`부터 받으면 유창한 문장이 판단 중심이 되니, claim·지지 근거·조건·부족한 것을 먼저 받고 답변문은 그 관계의 표현으로 둔다(answer-first 대신 relation-first).
 - 후보가 없으면 넓은 문서 전체를 LLM에 넘겨 답을 기대하지 않는다. 그건 겨냥을 포기하고 떠넘기는 것이다.
 
-예: 답변 합성에서 source unit의 `kind`(policy·request_note 등)가 retrieval까지 보존되는데 프롬프트엔 `text`만 직렬화되면, LLM은 조건 문장과 값 문장을 구분할 단서를 못 받는다.
+예: 답변 합성 프롬프트를 만드는 `_format_source_blocks`(library_chat.py)는 `source_unit_id·locator·text`만 직렬화하고 source unit의 `metadata`를 통째로 버린다. 같은 `kind`(policy·request_note 등)는 retrieval을 거쳐 관측 record까지 살아오는데(observation.py) LLM 입력에서만 떨어진다 — 분류가 죽는 게 아니라 프롬프트 직렬화 한 곳에서만 죽어, 모델은 조건 문장과 값 문장을 구분할 단서를 못 받는다.
 
 ## 출력: 정당화를 생성과 분리해 검증한다
 
@@ -45,7 +45,7 @@ LLM에게 맡길 일:
 - 별도 검증을 둬도 그 검증기가 약하면 confident-wrong을 못 거른다. 검증기 자체도 eval 대상이다 — 입력·근거·판정을 직접 읽어 사람 판단과 보정한다. 분리가 곧 신뢰는 아니다.
 - 검증기·근거선택기는 후보 제시 순서·길이·자기 답 선호에 판정이 흔들린다(position bias). 같은 입력을 순서만 바꿔 돌려 일치할 때만 믿고, 검증·certification 호출은 temperature 0(또는 코드 entailment)으로 결정성을 우선한다.
 
-예: 답이 "확정된 조건입니다"인데 근거로 댄 건 "NonSmoke,LargeBed"뿐이면, 그 문구는 원문에 있어도 "확정"을 뒷받침하지 않는다. snippet 존재만 본 코드는 이걸 supported로 통과시킨다.
+예: 답이 "확정된 조건입니다"인데 근거로 댄 건 "NonSmoke,LargeBed"뿐이면, 그 문구는 원문에 있어도 "확정"을 뒷받침하지 않는다. grounding(`_ground_snippet`, evidence.py)은 snippet이 원문에 있는지만 보고 entailment는 안 봐서 코드는 이걸 supported로 통과시킨다. 그나마 있는 강등 게이트(`_supported_value_matches_question`)도 시간 질문에만 답 모양을 보고 나머지는 통과시킨다 — 주석이 "MISSING은 실제 grounding 실패와 구분되지 않는다"고 자인한다.
 
 설계 패턴: 답을 만든 모델과 별개 검사(코드 entailment, 별도 스크리닝 모델, 외부 정답)가 LLM 바깥에서 상태를 판정한다. 이 제품에선 한 번의 강등 게이트를 기본으로 두고, 반복 평가-수정 루프(evaluator-optimizer)는 그 반복이 측정 가능한 가치를 줄 때만 더한다.
 
@@ -58,6 +58,7 @@ needs_review는 실패나 빈 근거가 아니라 정상 상태다. 불확실성
 - 질문이 모호하다 → 되묻기(clarification)
 - 근거가 주장을 받치지 못한다 → missing 또는 답변 재작성
 - 위험이 큰 확정이다 → 사람 검토 보류
+- 같은 항목에 자료가 다른 값을 말한다 → conflict로 양쪽 후보 보존(상태 정의는 `product-model.md`)
 
 전부 missing으로 낮추면 좋은 후보까지 사라지고, 전부 supported로 올리면 자신있는 오답이 생긴다.
 
@@ -65,10 +66,12 @@ needs_review는 실패나 빈 근거가 아니라 정상 상태다. 불확실성
 
 - 무엇이 틀렸는지 **측정이 없으면 포인트를 못 잡는다.** 고치기 전에 실패 trace를 직접 보고 유형을 분류한다(error analysis). 데이터를 보는 마찰을 없앤다.
 - 채점이 보상하는 것이 곧 모델·시스템이 통과 전략으로 배우는 것이다. "모름 인정"을 벌하고 "자신있는 찍기"를 보상하면 confident-wrong이 남는다. 검증·스코어보드가 **근거 부족한 supported(자신있는 오답)를 모르는 답과 구분**해 드러내게 한다.
-- 실패 원인을 엉뚱한 컴포넌트에 귀속하지 않는다. retrieval / 맥락 구성 / LLM 해석 / certification(상태 게이트) / 표시 변환 중 어디서 났는지 가른다 — known-good 입력을 직접 넣어 보면 생성 측인지 검색 측인지 갈리고, 이 제품의 실제 버그는 certification 층(코드가 존재만 검사한 자리)이다.
+- 실패 원인을 엉뚱한 컴포넌트에 귀속하지 않는다. retrieval / 맥락 구성 / LLM 해석 / certification(상태 게이트) / 표시 변환 중 어디서 났는지 가른다. 이 축은 관측 trace와 맞물려 있다 — `SourceRetrievalTrace`와 observation step tree(`source_retrieval`·`context_assembly`·`composer_call`)가 검색 측과 생성 측을 갈라 준다. 다만 5축 중 certification·표시 변환은 아직 step으로 안 찍혀서, 정작 이 제품의 실제 버그가 난 certification 층(코드가 존재만 검사한 자리)이 trace에서 가장 안 보인다.
 
 - "근거가 틀렸다"며 검색만 계속 고치는데 그 변경이 도움이 되는지 말할 측정이 없으면, 증상을 쫓는 중이다.
 - 형식·단위 테스트 통과를 제품 동작 통과로 말하지 않는다(`testing.md`). citation 일치율 같은 generic 지표 하나로 품질을 말하면, 그 지표가 못 보는 실패가 그대로 통과한다.
+
+예: 지금 이 제품의 질문셋을 측정하면 깨끗이 통과하는 건 날짜 같은 field lookup뿐이고, 종합이 필요한 질문은 confident-wrong("확정"이 아닌 걸 "확정"으로)이거나 miss다 — 취소·추가비용 질문은 같은 입력에도 run마다 supported↔missing으로 뒤집힌다. 그래서 위 관통 기준의 양날 중 좋은쪽(종합·연결이 값이 된 자리)은 이 제품에선 아직 grounded되지 않았다 — 능력·원리로만 있다.
 
 ## 자신있다고 맞는 게 아니다
 
