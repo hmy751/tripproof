@@ -2,7 +2,7 @@
 
 작성일: 2026-06-24
 
-상태: implemented preflight. `02` source unit 구조화 이후, `04` product safety vertical에 들어가기 전에 before/after를 단일 run 인상으로 판단하지 않기 위한 측정 전제다.
+상태: implemented preflight. `02` source unit 구조화 이후, `04` answer candidate certification에 들어가기 전에 before/after를 단일 run 인상으로 판단하지 않기 위한 측정 전제다.
 
 이 문서는 product behavior 개선 slice가 아니다. 답변 품질을 올리는 것이 아니라, 이후 개선이 실제 동작 변화인지 LLM/runtime noise인지 구분할 수 있게 하는 최소 실행 조건을 다룬다.
 
@@ -73,11 +73,11 @@ preflight 확인 run:
 - 조건: original PDF, production runtime, `gemma3:4b`, temperature `0.0`, seed `20260624`, repeat `3`
 - 결과: 세 반복 모두 rule pass는 `1/8`이었다. 다만 seed를 지정했어도 P0-06/P0-07은 반복별 상태가 흔들렸고, P1-01도 value-only `supported`와 `missing` 사이에서 달라졌다. 따라서 seed는 실행 조건 기록을 위한 옵션이지 결정성 보장으로 해석하지 않는다.
 
-이 결과는 답변 품질 개선 proof가 아니다. `04` 이후 before/after에서는 같은 run 묶음 구조로 answer/evidence path 변화를 비교한다.
+이 결과는 답변 품질 개선 proof가 아니다. `04` 이후 before/after에서는 같은 run 묶음 구조로 answer candidate, final state, evidence path 변화를 비교한다.
 
 ## 이번 slice에서 섞지 않는 범위
 
-- question decomposition, sufficiency gate, answer assembly 개선을 넣지 않는다.
+- answer candidate certification, question decomposition, answer assembly 개선을 넣지 않는다.
 - semantic judge나 새로운 점수 threshold를 도입하지 않는다.
 - release gate를 확정하지 않는다.
 - 원본 PDF bytes나 raw provider payload를 `run.json` 또는 shared docs에 그대로 보존하지 않는다.
