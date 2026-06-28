@@ -106,3 +106,11 @@
 - 이 재조정은 docs 권위 표현과 그 CLAUDE.md 참조에 한정한다. spec/roadmap 문서는 이미 자리 잡은 부분이라 그대로 뒀다 — spec-driven 모델을 다시 여는 변경이 아니다.
 - CLAUDE.md 참조는 "얇은 포인터 한 줄"(이 결정에서 "이번 결정 밖"으로 두었던 항목)에서 "코드 변경 원칙" 절로 확정했다. 4개 문서를 묶어 가리키는 절 + 강한 동사("기준으로 삼는다")로, 운영 규칙 본문을 CLAUDE.md로 옮기지 않는다는 `2026-06-03` 경계는 유지하며, 위치는 commit·검증보다 위(프로젝트 기준 다음)에 둔다.
 - (2026-06-28) 이 재조정 때 도입부 "통과 관문 아님"만 뺐고, 같은 결의 hedge가 `engineering/README.md`("gate나 체크리스트가 아니라 lens")와 `CLAUDE.md` "코드 변경 원칙"("승인 gate나 체크리스트가 아니다")에 남아 있었다. 둘을 제거하고 자기서술을 "기준"으로 통일했다(비-gate 성질은 강제 분담으로만 표현). anti-gate 문구는 spec-driven 루프용 `docs/specs/README.md`에만 의도적으로 남긴다.
+
+## 활성화와 LLM 배치 (후속, 2026-06-29)
+
+docs/engineering이 "있다"와 "결정 순간에 읽힌다"는 다른 문제였다. CLAUDE.md가 prose로 가리키기만 하면 모델(특히 Codex)이 그 문서를 능동으로 열어야만 닿는다 — 안 열면 없는 것과 같다.
+
+- **활성화**: `CLAUDE.md` "코드 변경 원칙"을 라우터로 만들었다 — 경계→문서 매핑 + `@docs/engineering/README.md` import + 자주 어기는 anchor 1줄(llm-design의 "code는 의미 role을 발명하지 않는다")을 본문에. `@import`는 Claude만 런치 시 강제 로드하고 Codex는 `@`를 해석하지 않아 본문 라우터를 직접 읽는다 — 이 **비대칭은 의도된 것**이다(`AGENTS.md`=`CLAUDE.md` symlink라 한 본문을 두 도구가 공유하고, Codex엔 @import·prose 자동로드가 공식적으로 없다). 본문 anchor는 두 도구 공통 채널이라, 자주 어기는 한 줄은 전문을 안 열어도 늘 맥락에 있다.
+- **확인**: Codex에서 certification 설계를 물었을 때 라우터를 따라 llm-design을 능동으로 끌어와 적용했다. 라우터를 손볼 때 `@import`를 "왜 있지"로 지우지 말 것 — Claude 활성화가 거기 걸려 있다.
+- **LLM 배치 감각**: "파이프라인 어디에 LLM을 두나"의 외부 배치 감각은 별도 canon 문서가 아니라 `llm-design.md` 본문 절("어디에·얼마나 LLM을 둘까")로 흡수했다(어휘로 빌리되 정의째 들이지 않는 이 결정의 방향과 같다). 한때 `llm-placement-map.md`를 따로 만들었으나 canon archive가 repo 결에 안 맞아 지웠다. repo 코드를 든 구체 예시는 빼고 일반론으로 둔다 — 현재 코드가 아직 "좋은 예"로 확정된 상태가 아니라서.
