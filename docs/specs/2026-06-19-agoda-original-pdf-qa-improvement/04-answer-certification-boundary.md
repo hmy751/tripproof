@@ -11,7 +11,19 @@
 
 - `docs/decisions/2026-06-25-llm-answer-self-certification-reframe/`
 - `docs/implementation-notes/2026-06-29-certification-keyword-gate-mirror-trap/`
+- `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`
 - `docs/engineering/llm-design.md`
+
+## 구현 범위 재조정 (2026-06-29)
+
+첫 구현을 같은 원문 PDF로 측정한 결과, 코드가 "조건이 이 값에 걸리는가"를 source unit `kind`와 같은-page 근접으로 추정한 두 강등 규칙(`conditional_source_kind`, `value_only_with_condition`)이 실제 1~2장 문서에서 과잉 강등을 일으켰다 — 날짜 등 조건과 무관한 깨끗한 값까지 전부 `needs_review`로 떨어졌다. 근거와 repro: `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`.
+
+그래서 04가 **코드로 강제**하는 범위를 좁힌다.
+
+- 강제(코드): candidate ↔ final 타입/단계 분리, 코드가 final state 소유, grounding(근거가 원문에 실재), value-grounding(답한 값이 근거에 실재 — "확정"을 값으로 들고 오면 여기서 걸림), final body는 certified state 뒤에서 생성, 응답 body에 debug/eval 누수 없음.
+- 재귀속(의미 층): "값을 지배하는 조건/caveat가 있는가"의 판단. 이 의미 분류는 LLM/relation extractor가 역할로 내고(`docs/engineering/llm-design.md`), 그 후보 공급·coverage 관찰은 `05`가 받친다. 코드는 그 역할 구조를 **읽어** 상태를 정하되, `kind`·page 근접으로 조건을 **추정**하지 않는다.
+
+아래 단계 계약과 AC의 조건 기반 부분(특히 value-only가 조건/caveat와 함께일 때의 강등)은 이 의미 층이 역할 신호를 제공할 때 성립하는 목표다. 코드만으로 구조 신호 없이 그 판단을 흉내 내지 않는다.
 
 ## 사용자 장면
 
@@ -106,6 +118,8 @@ Certification이 받지 않거나 사용하지 않아야 하는 것:
 
 특히 value-only evidence는 그 값의 존재만 증명한다. 값이 사용자의 행동 판단까지 정당화한다는 뜻은 아니다. 요청 값과 조건/caveat가 함께 보이면, final state는 "확정"이 아니라 조건부 또는 검토 필요로 내려가야 한다.
 
+단, "조건/caveat가 이 값에 걸린다"의 판정은 의미 판단이다(위 `구현 범위 재조정`). 코드는 이를 `kind`·page 근접으로 추정하지 않는다 — 실제 문서에서는 한 page에 정책·비용·요청·주의가 다 모여 있어 그 근접 추정이 무관한 값까지 강등시킨다. 이 판단은 LLM/relation extractor가 만든 역할 구성을 코드가 읽는 형태로만 성립한다. 코드가 단독으로 강제하는 것은 grounding과 value-grounding이고, 그것이 없으면 `supported`가 될 수 없다.
+
 ### Final body rendering
 
 최종 문장은 certification 결과를 풀어 쓰는 마지막 단계다.
@@ -160,6 +174,8 @@ Decomposition은 candidate를 더 잘 만들기 위한 수단이지, final state
 
 ## Acceptance Criteria
 
+> 구현 범위 재조정(위) 이후의 강제 주체: AC 1·2·5·7과 AC3의 value-grounding 부분("확정"을 값으로 들고 오면 차단)은 04 코드가 직접 강제한다. AC3의 조건 부분·AC4·AC6(값을 지배하는 조건/caveat가 함께일 때의 강등)은 의미 층(LLM/relation extractor + `05` coverage)이 역할 신호를 제공할 때 성립하는 목표이며, 코드가 `kind`·page 근접으로 흉내 내지 않는다.
+
 1. LLM answer candidate schema에는 사용자-facing final body와 final `evidence_state`가 없다.
 2. code certification은 question text나 draft body를 입력으로 받지 않고, source unit/evidence set 구조로 final state를 정한다.
 3. P1-01 특별 요청 질문에서 `NonSmoke,LargeBed` value-only evidence만으로 `supported`가 되지 않는다.
@@ -186,3 +202,4 @@ Decomposition은 candidate를 더 잘 만들기 위한 수단이지, final state
 - release gate나 점수 threshold를 확정하지 않는다.
 - 원문 PDF 외 다른 업체별 fixture 일반화 평가를 이 slice의 필수 완료 기준으로 삼지 않는다.
 - prompt 문장 품질만으로 개선 성공을 선언하지 않는다.
+- code가 source unit `kind`나 page 근접으로 "조건이 값에 걸린다"를 추정하는 구조 프록시는 04 코드 범위 밖이다(의미 층으로 재귀속). 근거: `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`.
