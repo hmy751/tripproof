@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: 완료. V1(`9b09b59`), field-group follow-up(`9f33970`, `e29480f`), 2026-06-24의 glyph/line-region cleanup까지 반영한 뒤 최종 production-like 재측정을 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했다. 이 문서는 02 source unit boundary slice의 기준 기록으로 닫고, 남은 QA 실패는 `03`~`06`에서 측정 재현성, answer candidate certification, question decomposition, subrequest retrieval coverage 문제로 이어서 다룬다.
+상태: 완료. V1(`9b09b59`), field-group follow-up(`9f33970`, `e29480f`), 2026-06-24의 glyph/line-region cleanup까지 반영한 뒤 최종 production-like 재측정을 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했다. 이 문서는 02 source unit boundary slice의 기준 기록으로 닫고, 남은 QA 실패는 `03`~`05`에서 측정 재현성, question decomposition/sufficiency vertical, subrequest retrieval coverage 문제로 이어서 다룬다.
 
 이 문서의 중심은 runner나 report 필드를 늘리는 것이 아니다. 원문 PDF가 retrieval과 answer evidence로 쓰일 수 있는 source unit으로 더 잘 들어오게 만드는 것이다.
 
@@ -71,7 +71,7 @@ source unit 구조화의 효과를 timeline으로 보면 다음과 같다.
 - current(06-23) state match는 `3/8`(`checkin_action`, `missing_checkin_start_time`, `room_and_party`)으로, after v1의 `4/8`보다 한 항목 적다(이번에는 `cancellation_policy`가 미일치).
 - 이 `4/8 -> 3/8` 차이는 구조화 후퇴가 아니다. after v1과 current의 retrieval candidate는 8문항 모두 질문별로 동일했다(같은 source unit index·순위, 같은 `score`/`lexical_score`/`vector_score`, unique candidate `9`로 동일). `cancellation_policy`(`AGODA-P0-06`)도 retrieval 입력은 같고, 같은 context를 받은 `gemma3:4b` answer composer 출력만 `supported -> missing`으로 갈렸다. 즉 관찰상 retrieval substrate(Supabase 단일·`lexical_ranking`)는 이 차이를 만들지 않았고, 달라진 것은 단일 run answer 출력뿐이다. `lexical_ranking`/Supabase 단일은 06-19와 06-23 사이의 코드 구조 변화이긴 하나 관찰된 retrieval 출력에는 영향이 없었다. 단일 run answer 비결정성으로 보는 것은 아직 가설이며, 02의 완료 여부와 별도로 다룬다.
 
-조건 문맥 항목의 실패가 current에서도 유지되므로, 이 slice 뒤의 작업(`03`~`06`)은 여전히 유효하다.
+조건 문맥 항목의 실패가 current에서도 유지되므로, 이 slice 뒤의 작업(`03`~`05`)은 여전히 유효하다.
 
 자세한 after-run 해석, PDF screenshot/bbox 비교, 평가 기준은 `docs/work-log.md`의 `2026-06-19 - Agoda 원문 PDF source unit v1 구현 후 관찰` 항목에 기록되어 있다. reconciliation 이후 재측정 기록은 같은 work-log의 `2026-06-23 - reconciliation 이후 Agoda 원문 PDF baseline 재측정` 항목에 기록되어 있다. 관련 work-log의 2026-06-23 재측정 기록도 이 문서의 관찰과 같은 기준으로 해석한다: retrieval 출력은 동일했고, 차이는 composer 출력에서 발생했다.
 
@@ -206,7 +206,8 @@ V1과 field-group final에서 확인된 직접 관찰은 다음과 같다.
 ## 이번 slice에서 섞지 않는 범위
 
 - 측정 재현성 preflight를 이 slice에 넣지 않는다. 이후 `03-measurement-reproducibility-preflight.md`에서 다룬다.
-- answer candidate certification, question decomposition, subrequest retrieval coverage를 이 slice에 넣지 않는다. 이후 `04-answer-candidate-certification.md`, `05-question-decomposition-requirements.md`, `06-subrequest-retrieval-coverage.md`에서 다룬다.
+- question decomposition과 evidence sufficiency vertical을 이 slice에 넣지 않는다. 이후 `04-question-decomposition-sufficiency-vertical.md`에서 다룬다.
+- 하위 요청별 retrieval coverage 개편을 이 slice에 넣지 않는다. 이후 `05-subrequest-retrieval-coverage.md`에서 다룬다.
 - source unit 구조화가 되기 전에 prompt 수정만으로 점수를 올리려 하지 않는다.
 - eval 점수 threshold나 release gate를 확정하지 않는다.
 
@@ -224,7 +225,7 @@ V1과 field-group final에서 확인된 직접 관찰은 다음과 같다.
 5. eval 해석에서는 `rule pass`, `state_matched`, `required_evidence_cues`, `must_not_claim`, report-only metric label을 분리해서 본다. 현재 자동 pass는 semantic judge가 아니라 literal cue coverage 중심이다.
 6. current(06-23)에서 `cancellation_policy`가 다시 미일치로 돌아간 것은 retrieval 입력이 같은 채 composer 출력만 갈린 사례다. 이것이 단일 run answer 비결정성의 범위인지 가르려면, 같은 config로 같은 8문항을 여러 번 돌려 state match의 흔들림 폭을 확인한다. 다만 이 문제는 source unit boundary 완료 여부와 섞지 않는다.
 
-(C) 03~06으로 넘기는 것 — 다음 작업:
+(C) 03~05로 넘기는 것 — 다음 작업:
 
-7. 측정 재현성(`03`), answer candidate certification(`04`), 질문 분해(`05`), 하위 요청별 retrieval(`06`)은 각 문서가 담당한다.
+7. 질문 분해(`03`), 하위 요청별 retrieval(`04`), 상태 검증/답변 조립(`05`)은 각 문서가 담당한다.
 8. 02를 다시 여는 경우는 새 PDF backend, OCR, extractor abstraction처럼 source unit extraction 자체의 범위를 새로 정의할 때다. 현재 Agoda 원문 PDF QA 개선 흐름에서는 02를 완료로 본다.

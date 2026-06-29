@@ -1,7 +1,7 @@
 # 엔지니어링 문서
 
-이 폴더는 TripProof의 engineering taste와 trade-off를 맞추기 위한 calibration reference다.
-각 문서는 모든 코드 변경마다 통과해야 하는 gate나 체크리스트가 아니라, 설계 판단이 흔들릴 때 꺼내 보는 lens다.
+이 폴더는 TripProof의 engineering 판단 기준이다. 관련 경계를 건드리는 변경에서는 해당 문서의 원칙을 기준으로 삼아 결정한다.
+적용 방식은 판단의 몫이고, 맥락상 벗어나야 하면 무엇을 왜 벗어났는지 짧게 남긴다.
 
 제품 동작의 강제는 테스트와 실제 product behavior 확인이 맡는다. 이 문서들은 테스트로 잘 잡히지 않는 구조적 위험과 경계 판단을 돕는다.
 

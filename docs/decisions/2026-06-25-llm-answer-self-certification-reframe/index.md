@@ -78,3 +78,12 @@ LLM 답변 후보를 final `ChatAnswerItem`으로 바로 projection하지 않고
 - entailment 검증을 코드로 할지 별도 모델로 할지 — 미정.
 - conflict 상태의 dispatch/prompt 라우팅 — 미구현([material-conflict-workflow-reference](../../roadmap/material-conflict-workflow-reference.md)).
 - LLM lens 문서 자체의 신설 근거 — [2026-06-22 엔지니어링 판단 기준 문서 신설](../2026-06-22-engineering-principle-docs/index.md)이 소유한다.
+
+## 후속 관찰 (2026-06-29): 구현 시도에서 드러난 거울상 함정
+
+이 결정의 방향(생성과 검증 분리, 코드가 final state를 소유)을 따라 certification을 한 번 구현해 본 검증에서, 두 가지가 함께 드러났다.
+
+- 방향은 설계 진술에 반영됐다 — 구현 주체가 `docs/engineering`의 architecture·llm-design 기준을 끌어와 "LLM은 후보, 코드가 state 소유, 기준은 답변 문구가 아니라 kind/metadata"를 정확히 진술했고, candidate ↔ final 분리 구조도 그대로 섰다.
+- 그러나 그 원칙을 운영하는 한 칸에서 반대편 함정에 빠졌다 — 최종 state 게이트가 source unit kind/evidence set(구조)이 아니라 **질문 텍스트의 단어 매칭**으로 "이 질문이 조건 근거를 요구하나"를 분류했다. 위 '기각 또는 보류'가 막은 "답변 단어 매칭"은 피했지만 같은 lexical brittleness가 질문 단어로 자리만 옮겨, paraphrase에서 confident-wrong이 재현됐다.
+
+그 구현 코드는 채택하지 않았다(검증용). 다음 구현이 다시 볼 경계와 repro는 [docs/implementation-notes/2026-06-29-certification-keyword-gate-mirror-trap](../../implementation-notes/2026-06-29-certification-keyword-gate-mirror-trap/index.md)에, 일반 원칙(코드 계약의 판정 기준은 단어가 아니라 구조)은 [llm-design.md](../../engineering/llm-design.md)에 둔다. 핵심: 판단 기준이 설계 진술에 반영되는 것과 그 원칙이 구현 코드까지 강제되는 것은 다른 일이다.
