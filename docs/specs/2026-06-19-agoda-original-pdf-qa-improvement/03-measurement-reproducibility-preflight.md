@@ -77,7 +77,7 @@ preflight 확인 run:
 
 ## 이번 slice에서 섞지 않는 범위
 
-- question decomposition, sufficiency gate, answer assembly 개선을 넣지 않는다.
+- answer certification boundary, retrieval coverage, answer assembly 개선을 넣지 않는다.
 - semantic judge나 새로운 점수 threshold를 도입하지 않는다.
 - release gate를 확정하지 않는다.
 - 원본 PDF bytes나 raw provider payload를 `run.json` 또는 shared docs에 그대로 보존하지 않는다.

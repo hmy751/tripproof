@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: 완료. V1(`9b09b59`), field-group follow-up(`9f33970`, `e29480f`), 2026-06-24의 glyph/line-region cleanup까지 반영한 뒤 최종 production-like 재측정을 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했다. 이 문서는 02 source unit boundary slice의 기준 기록으로 닫고, 남은 QA 실패는 `03`~`05`에서 측정 재현성, question decomposition/sufficiency vertical, subrequest retrieval coverage 문제로 이어서 다룬다.
+상태: 완료. V1(`9b09b59`), field-group follow-up(`9f33970`, `e29480f`), 2026-06-24의 glyph/line-region cleanup까지 반영한 뒤 최종 production-like 재측정을 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했다. 이 문서는 02 source unit boundary slice의 기준 기록으로 닫고, 남은 QA 실패는 `03`~`05`에서 측정 재현성, answer certification boundary, subrequest retrieval coverage 문제로 이어서 다룬다.
 
 이 문서의 중심은 runner나 report 필드를 늘리는 것이 아니다. 원문 PDF가 retrieval과 answer evidence로 쓰일 수 있는 source unit으로 더 잘 들어오게 만드는 것이다.
 
@@ -206,7 +206,7 @@ V1과 field-group final에서 확인된 직접 관찰은 다음과 같다.
 ## 이번 slice에서 섞지 않는 범위
 
 - 측정 재현성 preflight를 이 slice에 넣지 않는다. 이후 `03-measurement-reproducibility-preflight.md`에서 다룬다.
-- question decomposition과 evidence sufficiency vertical을 이 slice에 넣지 않는다. 이후 `04-question-decomposition-sufficiency-vertical.md`에서 다룬다.
+- answer certification boundary를 이 slice에 넣지 않는다. 이후 `04-answer-certification-boundary.md`에서 다룬다.
 - 하위 요청별 retrieval coverage 개편을 이 slice에 넣지 않는다. 이후 `05-subrequest-retrieval-coverage.md`에서 다룬다.
 - source unit 구조화가 되기 전에 prompt 수정만으로 점수를 올리려 하지 않는다.
 - eval 점수 threshold나 release gate를 확정하지 않는다.
@@ -227,5 +227,5 @@ V1과 field-group final에서 확인된 직접 관찰은 다음과 같다.
 
 (C) 03~05로 넘기는 것 — 다음 작업:
 
-7. 질문 분해(`03`), 하위 요청별 retrieval(`04`), 상태 검증/답변 조립(`05`)은 각 문서가 담당한다.
+7. 측정 재현성(`03`), answer certification boundary(`04`), 하위 요청별 retrieval coverage(`05`)는 각 문서가 담당한다.
 8. 02를 다시 여는 경우는 새 PDF backend, OCR, extractor abstraction처럼 source unit extraction 자체의 범위를 새로 정의할 때다. 현재 Agoda 원문 PDF QA 개선 흐름에서는 02를 완료로 본다.

@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` 안전성 vertical과 `05` 후보 coverage 순서로 다룬다.
+상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` answer certification boundary와 `05` 후보 coverage 순서로 다룬다.
 
 이 spec 묶음의 중심은 `측정 -> 실패 유형 이해 -> product 개선 -> 같은 원문 PDF로 재확인`이다. `run.json`과 HTML report는 이 흐름을 돕는 관찰 도구이지, 개선의 목표가 아니다.
 
@@ -10,8 +10,11 @@
 
 관련 문서:
 
-- `docs/roadmap/agoda-booking-confirmation-eval-improvement.md`
+- `docs/roadmap/agoda-booking-confirmation-eval-improvement.md` (초기 개선 지도. 04 이후 현재 slice 순서는 이 spec을 우선한다.)
 - `docs/specs/2026-06-19-observation-eval-operating-model/index.md`
+- `docs/decisions/2026-06-25-llm-answer-self-certification-reframe/`
+- `docs/implementation-notes/2026-06-29-certification-keyword-gate-mirror-trap/`
+- `docs/engineering/llm-design.md`
 - `eval/datasets/agoda-booking-confirmation/questions.json`
 
 기준 artifact:
@@ -32,18 +35,18 @@
    baseline에서 확인한 문제를 바탕으로 먼저 적용한 product 개선 slice다. 원문 PDF를 더 좋은 source unit으로 쪼개 retrieval과 evidence 경로를 개선하는 데 집중했고, 2026-06-24 `09` run으로 닫았다.
 3. `03-measurement-reproducibility-preflight.md`
    이후 before/after를 단일 run 인상으로 판단하지 않도록 seed, repeat, commit hash, runtime 기록을 정리한 측정 전제다.
-4. `04-question-decomposition-sufficiency-vertical.md`
-   하나의 사용자 질문을 하위 evidence requirement로 나누고, 값만 있는 evidence가 supported로 올라가지 못하게 하는 첫 product safety vertical이다.
+4. `04-answer-certification-boundary.md`
+   LLM 답변 후보와 final answer 사이에 code-owned certification boundary를 두고, 값만 있는 evidence나 LLM 자기선언이 supported로 올라가지 못하게 하는 첫 product safety vertical이다.
 5. `05-subrequest-retrieval-coverage.md`
-   `04`의 sufficiency gate가 필요한 후보를 더 잘 받도록 subrequest별 retrieval coverage와 missing 원인 관찰을 개선하는 기준이다.
+   `04`의 certification이 후보 부족 또는 조건 evidence 부족으로 낮춘 항목을 더 잘 받도록 subrequest별 retrieval coverage와 missing 원인 관찰을 개선하는 기준이다.
 
 ## 왜 지금
 
-현재 observation/report 흐름은 질문 실행 뒤 `run.json`, local observation JSONL, `report.html`을 함께 확인하게 해준다. 이제 필요한 것은 관찰 도구를 더 키우는 일이 아니라, 그 관찰을 통해 확인된 실패를 product 동작 개선으로 연결하는 일이다.
+현재 observation/report 흐름은 질문 실행 뒤 `run.json`, observation JSONL, `report.html`을 함께 확인하게 해준다. 이제 필요한 것은 관찰 도구를 더 키우는 일이 아니라, 그 관찰을 통해 확인된 실패를 product 동작 개선으로 연결하는 일이다.
 
 Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. sample text fixture를 임시 PDF로 만들어 product API를 호출하는 실행은 runner smoke나 report 렌더링 확인에는 쓸 수 있지만, Agoda 원문 PDF 개선의 근거가 될 수 없다.
 
-`02`의 final run인 `09`에서는 source unit 후보가 크게 개선됐지만, 남은 실패가 모두 retrieval 부재로 설명되지는 않는다. 예를 들어 특별 요청 질문은 조건 문맥을 담은 후보가 이미 retrieval 결과에 있는데도 value-only 후보만 근거로 supported가 만들어졌다. 따라서 다음 순서는 후보를 더 많이 찾는 일보다, 먼저 측정을 믿을 수 있게 만들고 값과 조건 문맥의 sufficiency를 product 계약으로 세우는 일이다.
+`02`의 final run인 `09`에서는 source unit 후보가 크게 개선됐지만, 남은 실패가 모두 retrieval 부재로 설명되지는 않는다. 예를 들어 특별 요청 질문은 조건 문맥을 담은 후보가 이미 retrieval 결과에 있는데도 value-only 후보만 근거로 supported가 만들어졌다. 따라서 다음 순서는 후보를 더 많이 찾는 일이 아니라, LLM 답변 후보가 자기 답을 자기 인증하지 못하게 하고 code-owned certification이 구조적 evidence set으로 final state를 정하게 만드는 일이다.
 
 ## 중심 흐름
 
@@ -52,11 +55,29 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 -> report/observation으로 실패 유형 분류
 -> 첫 product 개선: source unit 구조화
 -> 측정 재현성 preflight
--> 질문을 하위 evidence requirement로 분해
--> 값과 조건 문맥 sufficiency 검증
--> 부족한 후보 coverage 개선
+-> LLM answer candidate와 final answer 분리
+-> code certification이 구조적 evidence set으로 final state 결정
+-> final state에서 사용자-facing body 생성
+-> certification이 드러낸 부족한 후보 coverage 개선
 -> 같은 원문 PDF 질문셋으로 before/after 확인
 ```
+
+## 단계 경계
+
+04 이후의 product 흐름은 아래 경계를 기준으로 다시 잡는다. 각 단계는 자기가 받은 것만 가지고 일하고, 다음 단계의 책임을 앞당겨 맡지 않는다.
+
+| 단계 | 하는 일 | 만들지 않는 것 |
+| --- | --- | --- |
+| 검색 | source unit 후보를 찾고 locator/kind/provenance를 보존한다 | final state, 사용자-facing 답변 문장 |
+| LLM 후보 | 값/claim 후보, evidence ref, 헷갈리는 점을 만든다 | final `supported`/`needs_review`, final body |
+| code certification | source unit kind/metadata와 evidence set 구조로 final state를 정한다 | 질문/답변 단어를 읽은 의미 추측 |
+| final body | certified state와 facts를 사용자 문장으로 푼다 | state 승격, 새 값 생성 |
+
+이 경계가 막아야 하는 버그는 세 가지다.
+
+- LLM이 자기 답을 자기가 인증하는 버그
+- 코드가 질문이나 답변 키워드로 의미를 분류하는 버그
+- final body가 state와 반대로 확정처럼 말하는 버그
 
 ## 공유 규칙
 
@@ -67,6 +88,10 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 - 업체명이나 특정 질문 문구에 맞춘 예외처리로 답을 만들지 않는다.
 - lexical rule은 후보 recall이나 구조 감지 보조로 쓸 수 있지만, 답변을 직접 만드는 하드코딩으로 쓰지 않는다.
 - supported 상태는 evidence snippet과 source reference 없이는 성립하지 않는다.
+- LLM output은 certification 전까지 후보이며, final answer/state가 아니다.
+- code certification은 질문이나 답변의 free text keyword가 아니라 source unit kind/metadata와 evidence set 구조를 본다.
+- 구조 신호가 없거나 애매하면 위험한 쪽인 supported가 아니라 needs_review 또는 missing으로 간다.
+- final body는 certified state 뒤에서만 만들고 state를 승격하지 않는다.
 - 값만 있고 조건 문맥이 부족한 정보는 supported로 단정하지 않는다.
 - product response body에는 observation/debug/eval field를 추가하지 않는다.
 
@@ -76,7 +101,7 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 2. 원문 PDF baseline에서 8개 질문의 실패를 source unit, retrieval, answer composer, 상태 검증 중 어디에 가까운지 읽을 수 있다.
 3. 첫 product 개선은 source unit 구조화에 집중하고, 같은 원문 PDF 질문셋으로 before/after를 비교한다.
 4. `02` 이후 before/after는 실행 조건, 코드 버전, 반복 실행 여부를 함께 보고 해석한다.
-5. source unit 구조화 뒤에도 남는 실패는 measurement noise, decomposition/sufficiency, retrieval coverage 중 어디에서 생기는지 이어서 분류할 수 있다.
+5. source unit 구조화 뒤에도 남는 실패는 measurement noise, answer certification boundary, retrieval coverage 중 어디에서 생기는지 이어서 분류할 수 있다.
 6. 개선 결과는 `run.json` 필드 증가가 아니라 answer/evidence path 변화와 근거 부족한 supported 감소로 확인한다.
 
 ## Slice 순서
@@ -88,8 +113,8 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 | 0 | `01-original-pdf-observation-baseline.md` | 원문 PDF baseline을 믿고 읽을 수 있는가 | production-like run에서 candidate/evidence/status를 질문별로 볼 수 있다 |
 | 1 | `02-source-unit-structure-improvement.md` | 원문이 질문 가능한 source unit으로 들어오는가 | 완료: `09`에서 라벨-값, 정책, 비용, 요청 단위가 source unit/candidate로 보인다 |
 | 2 | `03-measurement-reproducibility-preflight.md` | 이후 before/after를 noise와 구분할 수 있는가 | 완료: run artifact가 commit/runtime/repeat/seed 조건을 드러내고 단일 run을 과신하지 않는다 |
-| 3 | `04-question-decomposition-sufficiency-vertical.md` | 가진 근거 이상으로 supported를 만들지 않는가 | 특별 요청, 취소/노쇼, 객실/인원 질문이 하위 evidence requirement와 sufficiency 결과로 읽힌다 |
-| 4 | `05-subrequest-retrieval-coverage.md` | sufficiency가 필요한 후보를 더 잘 받는가 | subrequest별 후보 경로와 missing 원인이 보이고 answer/evidence path가 바뀐다 |
+| 3 | `04-answer-certification-boundary.md` | LLM 후보가 자기 답을 자기 인증하지 못하는가 | 특별 요청, 취소/노쇼, 객실/인원 질문에서 candidate, certification result, final body가 분리되어 읽힌다 |
+| 4 | `05-subrequest-retrieval-coverage.md` | certification이 필요한 후보를 더 잘 받는가 | subrequest별 후보 경로와 missing 원인이 보이고 answer/evidence path가 바뀐다 |
 
 prompt 수정은 `04`의 product contract가 잡힌 뒤에 다룬다. 입력 source unit과 retrieval candidate가 넓고 흐릿한 상태에서 prompt만 고치는 것은 이 묶음의 기본 해법이 아니다.
 
@@ -105,11 +130,11 @@ prompt 수정은 `04`의 product contract가 잡힌 뒤에 다룬다. 입력 sou
 
 source unit 구조화와 측정 preflight는 `02`~`03`에서 닫았고, 다음 product 작업은 아래 순서로 진행한다.
 
-- `04-question-decomposition-sufficiency-vertical.md`: compound question을 하위 evidence requirement로 나누고, value-only evidence가 supported로 확정되지 않게 한다.
-- `05-subrequest-retrieval-coverage.md`: `04`가 요구하는 후보를 subrequest별로 더 잘 공급하고 missing 원인을 읽을 수 있게 한다.
+- `04-answer-certification-boundary.md`: LLM answer candidate와 final answer를 분리하고, code certification이 source unit/evidence set 구조로 final state를 정하게 한다.
+- `05-subrequest-retrieval-coverage.md`: `04`가 드러낸 후보 부족과 조건 evidence 부족을 subrequest별로 더 잘 공급하고 missing 원인을 읽을 수 있게 한다.
 
 ## 남은 판단
 
-- 원문 PDF 파일을 repo fixture로 보존할지, 로컬 입력 path만 지원할지는 별도 판단이다.
-- source unit `kind`와 subrequest field name의 정확한 값 목록은 구현 시 현재 자료 모델과 retrieval needs에 맞춰 정한다.
+- 원문 PDF 파일을 repo fixture로 보존할지, repo에 보존하지 않는 외부 입력 경로만 지원할지는 별도 판단이다.
+- source unit `kind`, evidence role, answer candidate field name의 정확한 값 목록은 구현 시 현재 자료 모델과 retrieval needs에 맞춰 정한다.
 - source cue / answer cue의 정확한 JSON field name은 runner와 질문셋 수정 시 정한다.
