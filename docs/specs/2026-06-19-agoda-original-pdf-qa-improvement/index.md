@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` answer certification boundary(구현됨), `05` 후보 coverage, `06` 근거 관계 추출(의미 층) 순서로 다룬다. `04`는 코드가 grounding/value-grounding 같은 mechanical check만 강제하는 범위로 좁혔고, "조건이 값을 좌우하는가"의 의미 판단은 `06` 의미 층으로 재귀속했다(근거: `04`의 `구현 범위 재조정`, `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`).
+상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` answer certification boundary(구현됨), `05` 후보 coverage, `06` 근거 관계 추출(의미 층) 순서로 다룬다. `04`는 코드가 grounding/value-grounding 같은 mechanical check만 강제하는 범위로 좁혔고, "조건이 값을 좌우하는가"의 의미 판단은 `06` 의미 층으로 재귀속했다(근거: `04`의 `구현 범위 재조정`, `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`). `06`은 v1(분리 호출)을 시도했으나(`574dee4`) gemma3:4b가 무관한 조건을 과잉 부착해, per-unit·순서불변 변형(`118a916`)을 되돌리고(`8040665`) 더 강한 모델/접근을 기다린다(eval run 16~19 출처·수치: `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`).
 
 이 spec 묶음의 중심은 `측정 -> 실패 유형 이해 -> product 개선 -> 같은 원문 PDF로 재확인`이다. `run.json`과 HTML report는 이 흐름을 돕는 관찰 도구이지, 개선의 목표가 아니다.
 
@@ -15,6 +15,7 @@
 - `docs/decisions/2026-06-25-llm-answer-self-certification-reframe/`
 - `docs/implementation-notes/2026-06-29-certification-keyword-gate-mirror-trap/`
 - `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`
+- `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`
 - `docs/engineering/llm-design.md`
 - `eval/datasets/agoda-booking-confirmation/questions.json`
 
