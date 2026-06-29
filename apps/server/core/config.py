@@ -50,6 +50,11 @@ OLLAMA_ANSWER_TIMEOUT_SECONDS = float(
 _OLLAMA_ANSWER_SEED_RAW = os.getenv("TRIPPROOF_OLLAMA_ANSWER_SEED", "").strip()
 OLLAMA_ANSWER_SEED = int(_OLLAMA_ANSWER_SEED_RAW) if _OLLAMA_ANSWER_SEED_RAW else None
 
+# caveat relation pass 모드:
+#   "pairwise"        — source unit마다 "이 답을 제한하나"를 per-unit으로 판정(1회 호출)
+#   "order_invariant" — 후보 순서를 뒤집어 2회 돌려, 두 순서 모두에서 나온 caveat만 인정
+CAVEAT_EXTRACTOR_MODE = os.getenv("TRIPPROOF_CAVEAT_EXTRACTOR_MODE", "pairwise").strip()
+
 RAG_TOP_K = int(os.getenv("TRIPPROOF_RAG_TOP_K", "3"))
 RAG_SIMILARITY_THRESHOLD = float(os.getenv("TRIPPROOF_RAG_SIMILARITY_THRESHOLD", "0.0"))
 

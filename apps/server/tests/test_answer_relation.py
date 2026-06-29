@@ -94,18 +94,34 @@ def _p1_01_style_payload() -> dict:
     }
 
 
-# ── extractor: payload의 caveat을 파싱한다 ───────────────────────
+class _SequenceJsonClient:
+    """호출마다 다음 payload를 돌려준다 — order_invariant의 2회 호출을 구분해 테스트."""
+
+    def __init__(self, payloads: list[object]) -> None:
+        self._payloads = payloads
+        self._calls = 0
+
+    def generate_json(self, *, system: str, user: str) -> object:
+        payload = self._payloads[min(self._calls, len(self._payloads) - 1)]
+        self._calls += 1
+        return payload
+
+
+def _caveats_payload(*entries: tuple[str, str]) -> dict:
+    return {
+        "caveats": [
+            {"source_unit_id": sid, "snippet": snip, "text": _CONDITION}
+            for sid, snip in entries
+        ]
+    }
+
+
+# ── extractor: per-unit caveats 목록을 파싱한다(가) ───────────────────────────
 def test_extractor_parses_caveat() -> None:
     unit = _unit(unit_id="su_condition", text=_CONDITION)
     extractor = OllamaCaveatExtractor(
         client=_FakeJsonClient(
-            {
-                "caveat": {
-                    "source_unit_id": "su_condition",
-                    "snippet": "subject to availability",
-                    "text": _CONDITION,
-                }
-            }
+            _caveats_payload(("su_condition", "subject to availability"))
         )
     )
     candidate = answer_candidate_from_payload(
@@ -123,7 +139,52 @@ def test_extractor_parses_caveat() -> None:
 
 def test_extractor_returns_none_when_no_condition() -> None:
     unit = _unit(unit_id="su_condition", text=_CONDITION)
-    extractor = OllamaCaveatExtractor(client=_FakeJsonClient({"caveat": None}))
+    extractor = OllamaCaveatExtractor(client=_FakeJsonClient({"caveats": []}))
+    candidate = answer_candidate_from_payload(
+        index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
+    )
+    assert candidate is not None
+
+    assert (
+        extractor.extract(question="질문", candidate=candidate, context=_context(unit))
+        is None
+    )
+
+
+# ── (라-2) order_invariant: 두 순서 모두에서 나온 caveat만 인정 ────────────────
+def test_order_invariant_keeps_caveat_stable_across_orders() -> None:
+    unit = _unit(unit_id="su_condition", text=_CONDITION)
+    # forward·reverse 두 호출 모두 같은 unit을 caveat으로 → 인정.
+    client = _SequenceJsonClient(
+        [
+            _caveats_payload(("su_condition", "subject to availability")),
+            _caveats_payload(("su_condition", "subject to availability")),
+        ]
+    )
+    extractor = OllamaCaveatExtractor(client=client, order_invariant=True)
+    candidate = answer_candidate_from_payload(
+        index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
+    )
+    assert candidate is not None
+
+    caveat = extractor.extract(
+        question="질문", candidate=candidate, context=_context(unit)
+    )
+
+    assert caveat is not None
+    assert caveat.source_unit_id == "su_condition"
+
+
+def test_order_invariant_drops_caveat_unstable_across_orders() -> None:
+    unit = _unit(unit_id="su_condition", text=_CONDITION)
+    # forward는 caveat을 냈지만 reverse(순서 뒤집기)에선 안 냄 → noise로 보고 버린다.
+    client = _SequenceJsonClient(
+        [
+            _caveats_payload(("su_condition", "subject to availability")),
+            {"caveats": []},
+        ]
+    )
+    extractor = OllamaCaveatExtractor(client=client, order_invariant=True)
     candidate = answer_candidate_from_payload(
         index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
     )
