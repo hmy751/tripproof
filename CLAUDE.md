@@ -58,6 +58,15 @@
 - 자료 QA, LLM, retrieval, eval 질문셋을 다룰 때는 단순 형식/단위 테스트 통과를 product behavior 통과로 말하지 않는다. 실제 자료 입력과 질문 실행 결과를 별도로 확인한다.
 - `docs/decisions/`, `docs/implementation-notes/`, `docs/work-log.md`처럼 대화 세션, 판단 과정, AI/subagent 검토 흔적이 들어갈 수 있는 문서를 새로 쓰거나 크게 고친 뒤에는 `public-doc-wording-reviewer`를 report-only로 실행한다. 이 agent는 승인 gate가 아니라 private source 누수와 공개 문서 독립성을 점검하는 마지막 확인이다. 실행하지 않으면 이유를 짧게 남긴다.
 
+## Branch 규칙
+
+- branch 이름은 `<kind>/<kebab-case-subject>`를 쓴다.
+- `kind`는 작업 성격을 나타낸다: `feat`, `fix`, `refactor`, `spec`, `eval`, `docs`, `chore`.
+- subject는 모듈명보다 product slice, 관찰된 실패 유형, architecture boundary를 우선한다. 예: `feat/agoda-pdf-source-units`, `fix/certification-keyword-gate`, `refactor/server-use-cases`, `spec/agoda-original-pdf-qa-improvement`, `eval/question-runtime-recording`.
+- AI 도구명, 작업자명, 개인 실행 환경 이름은 branch prefix로 쓰지 않는다.
+- `feature`는 `feat`와 중복되므로 새 branch에서는 쓰지 않는다. repo 운영·브릿지·스크립트 정리는 보통 `chore`, product contract 문서는 `spec`, 일반 판단 문서는 `docs`를 쓴다.
+- 백업·임시 통합 branch는 공유 컨벤션으로 올리지 않고, 필요할 때만 목적과 날짜가 드러나게 만든다.
+
 ## Commit 규칙
 
 - commit message는 Conventional Commits 형식을 쓴다: `type(scope): 한국어 요약`.
