@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Protocol
 
 from server.core.config import (
@@ -9,13 +8,10 @@ from server.core.config import (
     OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
 )
-from server.extraction.models import EvidenceState
-from server.answers.library_chat_grounding import ground_evidence_ref
-from server.answers.library_chat_payload import (
-    NormalizedAnswerItemPayload,
-    normalize_answer_item_payload,
-)
+from server.answers.candidate import AnswerCandidate, answer_candidate_from_payload
+from server.answers.certification import certify
 from server.answers.models import ChatAnswer, ChatAnswerItem
+from server.extraction.models import Certification, EvidenceState
 from server.llm.ollama import (
     OllamaChatJsonClient,
     OllamaChatJsonConfig,
@@ -25,7 +21,7 @@ from server.prompts.renderers.answer.library_chat_answer import (
     LibraryChatAnswerPrompt,
     load_library_chat_answer_prompt,
 )
-from server.retrieval.models import AnswerContext, SourceUnit
+from server.retrieval.models import AnswerContext
 
 LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 
@@ -117,7 +113,7 @@ def _format_source_blocks(
     return prompt.user_message(question=question, source_blocks=source_blocks)
 
 
-# ── Payload → answer mapping ────────────────────────────────────────────────
+# ── Payload → candidate → certification → final item ────────────────────────
 def _answer_from_payload(
     *, question: str, payload: object, context: AnswerContext
 ) -> ChatAnswer:
@@ -132,16 +128,18 @@ def _answer_from_payload(
             reason="답변 생성기가 answer item을 반환하지 않았습니다."
         )
 
-    items = [
-        item
-        for index, raw_item in enumerate(raw_items, start=1)
-        if (
-            item := _item_from_payload(
-                index=index, question=question, payload=raw_item, context=context
-            )
+    items: list[ChatAnswerItem] = []
+    for index, raw_item in enumerate(raw_items, start=1):
+        candidate = answer_candidate_from_payload(
+            index=index, question=question, payload=raw_item
         )
-        is not None
-    ]
+        if candidate is None:
+            continue
+        certification = certify(candidate=candidate, context=context)
+        items.append(
+            _item_from_certification(candidate=candidate, certification=certification)
+        )
+
     if not items:
         return _missing_answer(
             reason="답변 생성기가 검증 가능한 answer item을 반환하지 않았습니다."
@@ -150,121 +148,84 @@ def _answer_from_payload(
     return ChatAnswer(summary=_summary_for_items(items), items=items)
 
 
-def _item_from_payload(
-    *,
-    index: int,
-    question: str,
-    payload: object,
-    context: AnswerContext,
-) -> ChatAnswerItem | None:
-    item_payload = normalize_answer_item_payload(question=question, payload=payload)
-    if item_payload is None:
-        return None
-
-    if item_payload.evidence_state == EvidenceState.SUPPORTED:
-        return _supported_item_from_payload(
-            index=index,
-            question=question,
-            payload=item_payload,
-            context=context,
+def _item_from_certification(
+    *, candidate: AnswerCandidate, certification: Certification
+) -> ChatAnswerItem:
+    item_id = candidate.item_id()
+    if certification.state == EvidenceState.SUPPORTED:
+        return ChatAnswerItem(
+            id=item_id,
+            label=candidate.label,
+            body=_supported_body(candidate),
+            evidence_state=EvidenceState.SUPPORTED,
+            value=candidate.value,
+            evidence=list(certification.evidence),
+            certification=certification,
         )
 
-    if item_payload.evidence_state == EvidenceState.NEEDS_REVIEW:
-        return _needs_review_item_from_payload(
-            index=index,
-            payload=item_payload,
+    if certification.state == EvidenceState.NEEDS_REVIEW:
+        return ChatAnswerItem(
+            id=item_id,
+            label=candidate.label,
+            body=_needs_review_body(candidate),
+            evidence_state=EvidenceState.NEEDS_REVIEW,
+            value=candidate.value,
+            evidence=list(certification.evidence),
+            certification=certification,
         )
 
-    return _missing_item_from_payload(
-        index=index,
-        payload=item_payload,
-    )
-
-
-def _supported_item_from_payload(
-    *,
-    index: int,
-    question: str,
-    payload: NormalizedAnswerItemPayload,
-    context: AnswerContext,
-) -> ChatAnswerItem:
-    if (
-        not payload.body
-        or payload.source_unit_id is None
-        or payload.evidence_snippet is None
-    ):
-        return _ungrounded_item(index=index, label=payload.label)
-    # 시간 질문인데 답 모양이 시각이 아니면 SUPPORTED라도 ungrounded로 강등하는 정직성
-    # 게이트. 결과 MISSING은 실제 grounding 실패와 구분되지 않는다(시간 외 질문은 통과).
-    if not _supported_value_matches_question(
-        question=question, value=payload.value, body=payload.body
-    ):
-        return _ungrounded_item(index=index, label=payload.label)
-
-    source_unit = _source_unit_by_id(
-        context=context, source_unit_id=payload.source_unit_id
-    )
-    if source_unit is None:
-        return _ungrounded_item(index=index, label=payload.label)
-
-    evidence_ref = ground_evidence_ref(
-        source_unit=source_unit,
-        evidence_snippet=payload.evidence_snippet,
-        value=payload.value,
-    )
-    if evidence_ref is None:
-        return _ungrounded_item(index=index, label=payload.label)
-
     return ChatAnswerItem(
-        id=payload.item_id(index=index),
-        label=payload.label,
-        body=payload.body,
-        evidence_state=EvidenceState.SUPPORTED,
-        value=payload.value,
-        evidence=[evidence_ref],
-    )
-
-
-def _needs_review_item_from_payload(
-    *,
-    index: int,
-    payload: NormalizedAnswerItemPayload,
-) -> ChatAnswerItem:
-    return ChatAnswerItem(
-        id=payload.item_id(index=index),
-        label=payload.label,
-        body=payload.body or f"{payload.label}은 원문 확인이 필요합니다.",
-        evidence_state=EvidenceState.NEEDS_REVIEW,
-        value=payload.value,
-        evidence=[],
-    )
-
-
-def _missing_item_from_payload(
-    *,
-    index: int,
-    payload: NormalizedAnswerItemPayload,
-) -> ChatAnswerItem:
-    return ChatAnswerItem(
-        id=payload.item_id(index=index),
-        label=payload.label,
-        body=payload.body
-        or f"현재 등록된 자료에서 {payload.label}을 확인하지 못했습니다.",
+        id=item_id,
+        label=candidate.label,
+        body=_missing_body(candidate=candidate, certification=certification),
         evidence_state=EvidenceState.MISSING,
         value=None,
         evidence=[],
+        certification=certification,
     )
+
+
+# ── Final body rendering (certified state 뒤에서만 생성) ─────────────────────
+# body는 certification 결과를 풀어 쓰는 마지막 단계다. state를 승격하거나 새 값을
+# 만들 수 없고, certified state를 거슬러 "확정"처럼 말할 수 없다(AC5). needs_review/
+# missing body는 LLM draft를 쓰지 않고 코드 template으로 만들어 overclaim을 막는다.
+def _supported_body(candidate: AnswerCandidate) -> str:
+    if candidate.draft_body:
+        return candidate.draft_body
+    if candidate.value:
+        return f"{candidate.label}: {candidate.value}"
+    return f"{candidate.label}은 자료에서 확인되었습니다."
+
+
+def _needs_review_body(candidate: AnswerCandidate) -> str:
+    if candidate.value:
+        return (
+            f"{candidate.label}은 자료에서 확인되지만 보장 여부는 "
+            f"원문 확인이 필요합니다: {candidate.value}"
+        )
+    return f"{candidate.label}은 원문 확인이 필요합니다."
+
+
+def _missing_body(*, candidate: AnswerCandidate, certification: Certification) -> str:
+    if certification.reason == "candidate_missing":
+        return f"현재 등록된 자료에서 {candidate.label}을 확인하지 못했습니다."
+    return f"현재 등록된 자료에서 {candidate.label}의 근거를 확인하지 못했습니다."
 
 
 def _summary_for_items(items: list[ChatAnswerItem]) -> str:
     supported_count = sum(
         item.evidence_state == EvidenceState.SUPPORTED for item in items
     )
+    needs_review_count = sum(
+        item.evidence_state == EvidenceState.NEEDS_REVIEW for item in items
+    )
     missing_count = sum(item.evidence_state == EvidenceState.MISSING for item in items)
-    if supported_count and missing_count:
-        return "자료에서 확인한 내용과 확인되지 않은 항목입니다."
+    if supported_count and (needs_review_count or missing_count):
+        return "자료에서 확인한 내용과 추가 확인이 필요한 항목입니다."
     if supported_count:
         return "자료에서 확인한 답변입니다."
+    if needs_review_count:
+        return "자료에 있으나 확정 여부는 원문 확인이 필요한 항목입니다."
     return "현재 등록된 자료만으로는 답을 확인하지 못했습니다."
 
 
@@ -281,63 +242,4 @@ def _missing_answer(*, reason: str) -> ChatAnswer:
                 evidence=[],
             )
         ],
-    )
-
-
-def _ungrounded_item(*, index: int, label: str) -> ChatAnswerItem:
-    return ChatAnswerItem(
-        id=f"answer_{index}",
-        label=label,
-        body=f"현재 등록된 자료에서 {label}의 근거를 확인하지 못했습니다.",
-        evidence_state=EvidenceState.MISSING,
-        value=None,
-        evidence=[],
-    )
-
-
-def _source_unit_by_id(
-    *, context: AnswerContext, source_unit_id: str
-) -> SourceUnit | None:
-    for candidate in context.candidates:
-        if candidate.source_unit.id == source_unit_id:
-            return candidate.source_unit
-    return None
-
-
-# ── Answer-shape validation (time questions) ────────────────────────────────
-def _supported_value_matches_question(
-    *, question: str, value: str | None, body: str
-) -> bool:
-    if not _question_asks_time(question):
-        return True
-    answer_text = value or body
-    return _looks_like_time_answer(answer_text)
-
-
-def _question_asks_time(question: str) -> bool:
-    normalized = question.lower()
-    return any(
-        term in normalized
-        for term in (
-            "몇 시",
-            "몇시",
-            "시간",
-            "시각",
-            "시작",
-            "부터",
-            "time",
-            "start",
-            "starts",
-            "from",
-        )
-    )
-
-
-def _looks_like_time_answer(value: str) -> bool:
-    normalized = value.lower()
-    return bool(
-        re.search(r"\b\d{1,2}:\d{2}\b", normalized)
-        or re.search(r"\b(am|pm)\b", normalized)
-        or re.search(r"(오전|오후)\s*\d{1,2}\s*시", normalized)
-        or re.search(r"\d{1,2}\s*시", normalized)
     )

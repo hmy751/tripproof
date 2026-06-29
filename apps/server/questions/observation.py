@@ -12,6 +12,7 @@ from server.observations.steps import (
     merge_safe_facts,
 )
 from server.answers.models import ChatAnswer, ChatAnswerItem
+from server.extraction.models import Certification
 from server.retrieval.models import AnswerContext, RetrievedSource
 from server.retrieval.search import SourceRetrievalTrace
 from server.runtime.config_snapshot import (
@@ -504,6 +505,10 @@ def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFac
         "body": item.body,
         "value": item.value,
         "evidence_state": item.evidence_state.value,
+        # product 경로는 항상 domain ChatAnswerItem(certification 보유)을 넘긴다.
+        # eval 쪽 정적 test double은 response model을 duck-typing으로 흘려보내므로
+        # certification이 없을 수 있다 — 그 경우 관측에 None으로 남긴다.
+        "certification": _certification_detail(getattr(item, "certification", None)),
         "evidence": [
             {
                 "material_id": evidence.material_id,
@@ -513,6 +518,21 @@ def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFac
             }
             for evidence in item.evidence
         ],
+    }
+
+
+def _certification_detail(
+    certification: Certification | None,
+) -> dict[str, QuestionObservationFactValue] | None:
+    # candidate -> certification 전이를 report에서 before/after로 보기 위한 관측용
+    # 기록이다. proposed_state는 LLM 후보가 제안한 상태, state는 코드가 확정한 상태,
+    # reason은 강등/통과 근거다.
+    if certification is None:
+        return None
+    return {
+        "proposed_state": certification.proposed_state.value,
+        "state": certification.state.value,
+        "reason": certification.reason,
     }
 
 

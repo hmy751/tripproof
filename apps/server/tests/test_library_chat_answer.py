@@ -219,34 +219,38 @@ def test_library_chat_composer_downgrades_ungrounded_supported_answer() -> None:
     assert answer.items[0].evidence == []
 
 
-def test_library_chat_composer_downgrades_date_answer_when_question_asks_time() -> None:
+def test_library_chat_certification_does_not_read_question_keywords() -> None:
+    # 04 계약: certification은 질문 free text를 보지 않는다(AC2). 이전의
+    # 질문-키워드 시간 게이트(_supported_value_matches_question)는 "질문에 '몇 시'가
+    # 있으면 강등"이라는 단어 매칭이라 mirror-trap과 같은 부류였고 04에서 제거됐다.
+    # 따라서 grounded value를 든 단일 clean unit은 질문 표현과 무관하게 supported로
+    # 남는다. 답 모양이 질문 의도와 맞는지(date vs time)는 certification 층의
+    # 단어 게이트가 아니라 LLM 후보/entailment(보류)의 책임으로 옮긴다.
     unit = _source_unit("Arrival : 체크인 : 2025년 3월 09일")
-    composer = OllamaLibraryChatAnswerComposer(
-        client=_FakeJsonClient(
+    payload = {
+        "items": [
             {
-                "items": [
-                    {
-                        "id": "answer",
-                        "label": "체크인 시작 시각",
-                        "body": "체크인 시작 시각은 2025년 3월 09일입니다.",
-                        "value": "2025년 3월 09일",
-                        "evidence_state": "supported",
-                        "source_unit_id": unit.id,
-                        "evidence_snippet": "Arrival : 체크인 : 2025년 3월 09일",
-                    }
-                ]
+                "id": "answer",
+                "label": "체크인 날짜",
+                "body": "체크인 날짜는 2025년 3월 09일입니다.",
+                "value": "2025년 3월 09일",
+                "evidence_state": "supported",
+                "source_unit_id": unit.id,
+                "evidence_snippet": "Arrival : 체크인 : 2025년 3월 09일",
             }
-        )
-    )
+        ]
+    }
 
-    answer = composer.compose(
-        question="체크인 시작 시각은 몇 시야?", context=_context(unit)
-    )
+    time_answer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(payload)
+    ).compose(question="체크인 시작 시각은 몇 시야?", context=_context(unit))
+    date_answer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(payload)
+    ).compose(question="체크인 날짜가 어떻게 돼?", context=_context(unit))
 
-    assert answer.summary == "현재 등록된 자료만으로는 답을 확인하지 못했습니다."
-    assert answer.items[0].evidence_state == EvidenceState.MISSING
-    assert answer.items[0].value is None
-    assert answer.items[0].evidence == []
+    assert time_answer.items[0].evidence_state == EvidenceState.SUPPORTED
+    assert date_answer.items[0].evidence_state == EvidenceState.SUPPORTED
+    assert time_answer.items[0].evidence_state == date_answer.items[0].evidence_state
 
 
 def test_library_chat_composer_repairs_numeric_value_snippet_from_pdf_extracted_text() -> (
