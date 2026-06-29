@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Protocol
 
 from server.core.config import (
@@ -11,6 +12,10 @@ from server.core.config import (
 from server.answers.candidate import AnswerCandidate, answer_candidate_from_payload
 from server.answers.certification import certify
 from server.answers.models import ChatAnswer, ChatAnswerItem
+from server.answers.relation import (
+    GoverningConditionExtractor,
+    create_governing_condition_extractor_from_config,
+)
 from server.extraction.models import Certification, EvidenceState
 from server.llm.ollama import (
     OllamaChatJsonClient,
@@ -41,12 +46,14 @@ class OllamaLibraryChatAnswerComposer:
         model: str | None = None,
         seed: int | None = None,
         temperature: float | None = 0.0,
+        relation_extractor: GoverningConditionExtractor | None = None,
     ) -> None:
         self._client = client
         self._prompt = prompt or load_library_chat_answer_prompt()
         self._model = model
         self._seed = seed
         self._temperature = temperature
+        self._relation_extractor = relation_extractor
 
     @property
     def prompt(self) -> LibraryChatAnswerPrompt:
@@ -68,7 +75,12 @@ class OllamaLibraryChatAnswerComposer:
         except OllamaClientError as exc:
             return _missing_answer(reason=f"답변 생성에 실패했습니다: {exc}")
 
-        return _answer_from_payload(question=question, payload=payload, context=context)
+        return _answer_from_payload(
+            question=question,
+            payload=payload,
+            context=context,
+            relation_extractor=self._relation_extractor,
+        )
 
     def runtime_answer_model_snapshot(self) -> dict[str, object]:
         return {
@@ -95,6 +107,9 @@ def create_library_chat_answer_composer_from_config(
         model=OLLAMA_ANSWER_MODEL,
         seed=seed,
         temperature=0.0,
+        relation_extractor=create_governing_condition_extractor_from_config(
+            answer_seed=seed
+        ),
     )
 
 
@@ -115,7 +130,11 @@ def _format_source_blocks(
 
 # ── Payload → candidate → certification → final item ────────────────────────
 def _answer_from_payload(
-    *, question: str, payload: object, context: AnswerContext
+    *,
+    question: str,
+    payload: object,
+    context: AnswerContext,
+    relation_extractor: GoverningConditionExtractor | None = None,
 ) -> ChatAnswer:
     if not isinstance(payload, dict):
         return _missing_answer(
@@ -135,6 +154,12 @@ def _answer_from_payload(
         )
         if candidate is None:
             continue
+        candidate = _enrich_with_governing_condition(
+            question=question,
+            candidate=candidate,
+            context=context,
+            relation_extractor=relation_extractor,
+        )
         certification = certify(candidate=candidate, context=context)
         items.append(
             _item_from_certification(candidate=candidate, certification=certification)
@@ -146,6 +171,35 @@ def _answer_from_payload(
         )
 
     return ChatAnswer(summary=_summary_for_items(items), items=items)
+
+
+def _enrich_with_governing_condition(
+    *,
+    question: str,
+    candidate: AnswerCandidate,
+    context: AnswerContext,
+    relation_extractor: GoverningConditionExtractor | None,
+) -> AnswerCandidate:
+    """별도 relation pass로 '값을 좌우하는 조건' 역할을 채운다(06 robust fix).
+
+    답변 호출이 supported를 제안했는데 governing_condition을 안 채운 경우에만, 답을 쓴
+    호출과 분리된 두 번째 호출로 조건만 따로 묻는다(생성/검증 분리). supported가 아니거나
+    이미 조건이 있으면 두 번째 호출을 아끼고 그대로 둔다. certify가 그 결과를 읽어
+    grounding되면 강등한다 — 코드는 의미를 분류하지 않는다.
+    """
+
+    if relation_extractor is None:
+        return candidate
+    if candidate.proposed_state != EvidenceState.SUPPORTED:
+        return candidate
+    if candidate.governing_condition is not None:
+        return candidate
+    governing = relation_extractor.extract(
+        question=question, candidate=candidate, context=context
+    )
+    if governing is None:
+        return candidate
+    return replace(candidate, governing_condition=governing)
 
 
 def _item_from_certification(

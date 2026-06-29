@@ -52,11 +52,11 @@ def normalize_answer_item_payload(
         evidence_snippet=_optional_string(
             _field(payload, "evidence_snippet", "evidenceSnippet")
         ),
-        governing_condition=_governing_condition_from_payload(payload),
+        governing_condition=governing_condition_from_payload(payload),
     )
 
 
-def _governing_condition_from_payload(
+def governing_condition_from_payload(
     payload: dict[object, object],
 ) -> GoverningCondition | None:
     """LLM이 낸 '이 값을 지배하는 조건' 역할을 정규화한다.
