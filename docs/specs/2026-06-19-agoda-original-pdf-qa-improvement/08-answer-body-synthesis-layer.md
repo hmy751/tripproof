@@ -6,7 +6,7 @@
 
 ## 왜 지금
 
-지금은 답변 LLM이 한 호출에서 body·value·evidence_state를 함께 내고, 코드 certification이 그 뒤에 state를 다시 정한다. 그래서 **body가 최종 payload와 어긋난다** — eval에서 실제로 본 증상:
+지금은 답변 LLM이 한 호출에서 body·value·evidence_state를 함께 내고, 코드 certification이 그 뒤에 state를 다시 정한다. 그래서 **body가 최종 payload와 어긋난다** — 이전 relation pass run(16·17)에서 관찰된 mismatch 유형(`docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`):
 
 - label이 답과 안 맞음(날짜 아닌 질문에 label "체크인 날짜").
 - 프롬프트 placeholder가 그대로 샘("short_snake_case_or_null"이 label로).
@@ -49,11 +49,11 @@
 
 상태별 어조는 `04`를 따른다: `supported`만 확정 어조, `needs_review`는 "확인 필요" 어조, `missing`은 없음. body 합성 LLM은 텍스트만 만들고 state 라벨을 쥐지 못한다 — state는 코드가 소유한 채 입력으로만 전달된다.
 
-## 이게 고치는 것
+## 이게 고치려는 것
 
-- body가 final state·evidence와 **일치**한다(앞의 mismatch 증상 해소).
-- LLM 초안 잔재(틀린 label, placeholder 누수)가 최종 답변에 안 샌다 — body는 확정 데이터에서 새로 합성되니까.
-- 항목들이 조각나지 않고 **하나의 종합 답변**으로 나온다.
+- body가 final state·evidence와 **일치하도록 만든다**(위 mismatch 유형 해소가 목표).
+- LLM 초안 잔재(틀린 label, placeholder 누수)가 최종 답변에 **새지 않게 한다** — body를 확정 데이터에서 새로 합성하므로.
+- 항목들을 조각내지 않고 **하나의 종합 답변으로 묶는다**.
 
 ## Acceptance Criteria
 

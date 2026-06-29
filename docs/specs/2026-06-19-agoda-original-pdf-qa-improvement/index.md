@@ -47,7 +47,7 @@
 6. `06-evidence-relation-extraction.md`
    이미 후보에 들어온 값과 caveat 사이의 역할·관계를 만드는 의미 층이다. "이 값은 이 조건에 좌우된다 / 필요한 조건 역할이 비었다"를 LLM/relation extractor가 역할로 내면, `04` 코드 certification이 그 역할 구조를 읽어 state를 정한다. P1-01(값을 좌우하는 조건이 있는데 "확정"으로 답한 실패)을 안정적으로 막는 자리다.
 7. `07-relation-vs-model-upgrade-ab.md`
-   `06`이 gemma3:4b 정밀도 천장에 막힌 뒤, 다음 수를 A/B 측정으로 정한다 — relation 층 유지+강한 모델(A) vs relation 제거+모델 단독(B). "좋은 모델이면 relation 층이 복잡도값을 하나"를 eval로 결정한다. 미구현·eval 없음.
+   `06`이 gemma3:4b 정밀도 천장에 막힌 뒤, 다음 수를 A/B 측정으로 정한다 — relation 층 유지+강한 모델(A) vs relation 제거+모델 단독(B). "좋은 모델이면 relation 층이 추가 복잡도를 정당화하나"를 eval로 결정한다. 미구현·eval 없음.
 8. `08-answer-body-synthesis-layer.md`
    사용자 답변 문장(body)을 답변 호출에서 떼어, certification으로 value·evidence·state를 확정한 뒤 맨 끝 LLM 호출이 그 확정 데이터를 종합해 답변을 만든다. body가 payload와 어긋나는 문제를 고치되, body는 확정 결과를 말로 옮길 뿐 state를 못 바꾼다(`04` 가드레일). 미구현·eval 없음.
 
@@ -130,7 +130,7 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 | 3 | `04-answer-certification-boundary.md` | LLM 후보가 자기 답을 자기 인증하지 못하는가 | 구현됨: candidate↔certification↔final body가 분리되고, 코드가 grounding/value-grounding으로 ceiling을 강제한다. 조건-좌우 판단은 `06`으로 재귀속 |
 | 4 | `05-subrequest-retrieval-coverage.md` | role별 후보를 더 잘 받고 missing 원인을 구분하는가 | role별 후보 경로와 missing 원인이 보이고, 후보가 값만/조건도 담는지 `06`에 넘길 수 있다 |
 | 5 | `06-evidence-relation-extraction.md` | 값을 좌우하는 조건이 있을 때 표현·키워드와 무관하게 안정적으로 needs_review로 가는가 | 의미 층이 값↔조건 역할을 내고 코드가 읽어, P1-01이 paraphrase에도 needs_review로 간다 |
-| 6 | `07-relation-vs-model-upgrade-ab.md` | 좋은 모델이면 relation 층이 복잡도값을 하나, 모델 단독이 나은가 | A(relation+강한 모델)·B(모델 단독)를 eval로 비교해 relation 층 유지/제거를 결정한다 |
+| 6 | `07-relation-vs-model-upgrade-ab.md` | 좋은 모델이면 relation 층이 추가 복잡도를 정당화하나, 모델 단독이 나은가 | A(relation+강한 모델)·B(모델 단독)를 eval로 비교해 relation 층 유지/제거를 결정한다 |
 | 7 | `08-answer-body-synthesis-layer.md` | 답변 문장(body)이 확정 payload와 일치하나 | body를 끝 LLM 합성으로 옮겨 state·evidence와 어긋나지 않고 초안 잔재(틀린 label·placeholder)가 안 샌다 |
 
 문서 번호는 retrieval -> 의미 -> certification의 pipeline 위치 순서다. 다만 구현 우선순위에서는 `06`이 먼저다 — `06`은 알려진 위험 실패(P1-01)를 안정적으로 막는 binding fix이고, P1-01의 조건 후보는 이미 retrieval에 들어와 있어 `05`(coverage) 완성을 기다리지 않아도 그 케이스로 구현·검증할 수 있다. `05`는 조건 후보가 실제로 빠지는 compound question을 위한 coverage 일반화다. `07`·`08`은 `06` 결과 이후의 후속 결정(`07`: relation 층 유지/제거)과 개선(`08`: body 합성 분리)이다.
@@ -152,7 +152,7 @@ source unit 구조화와 측정 preflight는 `02`~`03`에서 닫았고, `04`는 
 - `04-answer-certification-boundary.md`(구현됨): LLM answer candidate와 final answer를 분리하고, code certification이 grounding/value-grounding 같은 구조 사실로 ceiling을 강제한다. 조건-좌우 의미 판단은 `06`으로 재귀속.
 - `06-evidence-relation-extraction.md`: 이미 후보에 들어온 값과 caveat의 역할·관계를 LLM/relation extractor가 만들어, 코드가 그 역할 구조를 읽고 P1-01을 안정적으로 needs_review로 보낼 수 있게 한다.
 - `05-subrequest-retrieval-coverage.md`: 조건 후보가 실제로 빠지는 compound question에서 role별 후보를 더 잘 공급하고 missing 원인(source unit 부재 / retrieval miss / relation extraction miss)을 읽을 수 있게 한다.
-- `07-relation-vs-model-upgrade-ab.md`: `06` 정밀도 천장 이후, relation 층 유지+강한 모델(A)과 relation 제거+모델 단독(B)을 eval로 비교해 relation 층의 값어치를 결정한다.
+- `07-relation-vs-model-upgrade-ab.md`: `06` 정밀도 천장 이후, relation 층 유지+강한 모델(A)과 relation 제거+모델 단독(B)을 eval로 비교해 relation 층이 추가 복잡도를 정당화하는지 결정한다.
 - `08-answer-body-synthesis-layer.md`: 답변 문장(body)을 certification 뒤 끝 LLM 합성으로 분리해, body가 확정 state·evidence와 일치하고 초안 잔재가 안 새게 한다.
 
 ## 남은 판단
