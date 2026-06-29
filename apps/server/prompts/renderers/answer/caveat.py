@@ -6,13 +6,13 @@ import re
 from server.prompts.runtime.prompt_document import PromptDocument
 from server.prompts.runtime.prompt_store import load_prompt_document
 
-GOVERNING_CONDITION_PROMPT_DOMAIN = "answer"
-GOVERNING_CONDITION_PROMPT_NAME = "governing_condition"
-GOVERNING_CONDITION_PROMPT_VERSION = "2026-06-29"
+CAVEAT_PROMPT_DOMAIN = "answer"
+CAVEAT_PROMPT_NAME = "caveat"
+CAVEAT_PROMPT_VERSION = "2026-06-29"
 
 
 @dataclass(frozen=True)
-class GoverningConditionPrompt:
+class CaveatPrompt:
     document: PromptDocument
 
     def system_message(self) -> str:
@@ -43,13 +43,13 @@ class GoverningConditionPrompt:
         return self.document.snapshot()
 
 
-def load_governing_condition_prompt(
-    version: str = GOVERNING_CONDITION_PROMPT_VERSION,
-) -> GoverningConditionPrompt:
-    return GoverningConditionPrompt(
+def load_caveat_prompt(
+    version: str = CAVEAT_PROMPT_VERSION,
+) -> CaveatPrompt:
+    return CaveatPrompt(
         document=load_prompt_document(
-            domain=GOVERNING_CONDITION_PROMPT_DOMAIN,
-            name=GOVERNING_CONDITION_PROMPT_NAME,
+            domain=CAVEAT_PROMPT_DOMAIN,
+            name=CAVEAT_PROMPT_NAME,
             version=version,
         )
     )

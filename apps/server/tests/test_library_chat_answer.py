@@ -84,7 +84,7 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     assert composer.prompt.document.metadata["display_name_ko"] == "자료함 질문 답변"
     assert composer.prompt.document.metadata["description_ko"] == (
         "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만들고, "
-        "값을 지배하는 조건/caveat가 있으면 governing_condition으로 함께 보고한다."
+        "값을 지배하는 조건/caveat가 있으면 caveat으로 함께 보고한다."
     )
     assert (
         "# 자료함 질문 답변 프롬프트"

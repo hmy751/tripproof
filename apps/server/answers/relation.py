@@ -3,37 +3,37 @@ from __future__ import annotations
 from typing import Protocol
 
 from server.answers.candidate import AnswerCandidate
-from server.answers.library_chat_payload import governing_condition_from_payload
+from server.answers.library_chat_payload import caveat_from_payload
 from server.core.config import (
     OLLAMA_ANSWER_MODEL,
     OLLAMA_ANSWER_SEED,
     OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
 )
-from server.extraction.models import GoverningCondition
+from server.extraction.models import Caveat
 from server.llm.ollama import (
     OllamaChatJsonClient,
     OllamaChatJsonConfig,
     OllamaClientError,
 )
-from server.prompts.renderers.answer.governing_condition import (
-    GoverningConditionPrompt,
-    load_governing_condition_prompt,
+from server.prompts.renderers.answer.caveat import (
+    CaveatPrompt,
+    load_caveat_prompt,
 )
 from server.retrieval.models import AnswerContext
 
 
-class GoverningConditionExtractor(Protocol):
+class CaveatExtractor(Protocol):
     def extract(
         self, *, question: str, candidate: AnswerCandidate, context: AnswerContext
-    ) -> GoverningCondition | None:
+    ) -> Caveat | None:
         """후보 답변을 좌우하는 조건이 source unit에 있으면 역할로 만들어 돌려준다.
 
         답이나 상태를 만들지 않는다. 조건이 없으면 None.
         """
 
 
-class OllamaGoverningConditionExtractor:
+class OllamaCaveatExtractor:
     """답변 생성과 분리된 두 번째 호출로 '값을 좌우하는 조건'만 추출한다.
 
     생성/검증 분리(`docs/engineering/llm-design.md`): 답을 쓴 호출이 자기 답의 조건까지
@@ -45,14 +45,14 @@ class OllamaGoverningConditionExtractor:
         self,
         *,
         client: OllamaChatJsonClient,
-        prompt: GoverningConditionPrompt | None = None,
+        prompt: CaveatPrompt | None = None,
     ) -> None:
         self._client = client
-        self._prompt = prompt or load_governing_condition_prompt()
+        self._prompt = prompt or load_caveat_prompt()
 
     def extract(
         self, *, question: str, candidate: AnswerCandidate, context: AnswerContext
-    ) -> GoverningCondition | None:
+    ) -> Caveat | None:
         if not context.candidates:
             return None
         try:
@@ -68,18 +68,18 @@ class OllamaGoverningConditionExtractor:
             )
         except OllamaClientError:
             # 조건 추출 호출이 실패하면 조건을 못 본 것으로 둔다(제품을 깨지 않는다).
-            # 강등은 일어나지 않지만, 답변 호출이 직접 낸 governing_condition은 그대로 유효.
+            # 강등은 일어나지 않지만, 답변 호출이 직접 낸 caveat은 그대로 유효.
             return None
         if not isinstance(payload, dict):
             return None
-        return governing_condition_from_payload(payload)
+        return caveat_from_payload(payload)
 
 
-def create_governing_condition_extractor_from_config(
+def create_caveat_extractor_from_config(
     *, answer_seed: int | None = None
-) -> GoverningConditionExtractor:
+) -> CaveatExtractor:
     seed = OLLAMA_ANSWER_SEED if answer_seed is None else answer_seed
-    return OllamaGoverningConditionExtractor(
+    return OllamaCaveatExtractor(
         client=OllamaChatJsonClient(
             OllamaChatJsonConfig(
                 base_url=OLLAMA_BASE_URL,

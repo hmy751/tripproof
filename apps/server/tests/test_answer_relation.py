@@ -5,13 +5,13 @@ from server.answers.library_chat import (
     LIBRARY_CHAT_TARGET_ID,
     OllamaLibraryChatAnswerComposer,
 )
-from server.answers.relation import OllamaGoverningConditionExtractor
-from server.extraction.models import EvidenceState, GoverningCondition
+from server.answers.relation import OllamaCaveatExtractor
+from server.extraction.models import EvidenceState, Caveat
 from server.retrieval.models import AnswerContext, RetrievedSource, SourceUnit
 
 # 06 robust fix: 답변 생성과 분리된 두 번째 호출이 '값을 좌우하는 조건'을 채운다.
 # 실제 run 16의 P1-01 형태를 재현한다 — 답변 호출이 조건을 답(body)으로 흡수하고
-# value=null, supported, governing_condition 없이 내놓는 경우.
+# value=null, supported, caveat 없이 내놓는 경우.
 _VALUE = "NonSmoke, LargeBed"
 _CONDITION = "All special requests are subject to availability at check-in."
 
@@ -61,19 +61,19 @@ class _FakeJsonClient:
 class _FakeExtractor:
     """주입형 relation extractor — 항상 같은 조건을 돌려준다."""
 
-    def __init__(self, governing: GoverningCondition | None) -> None:
-        self._governing = governing
+    def __init__(self, caveat: Caveat | None) -> None:
+        self._caveat = caveat
         self.called = False
 
-    def extract(self, *, question, candidate, context) -> GoverningCondition | None:
+    def extract(self, *, question, candidate, context) -> Caveat | None:
         self.called = True
-        return self._governing
+        return self._caveat
 
 
 class _ExplodingExtractor:
     """호출되면 실패하는 extractor — '호출되지 않아야 한다'를 검증할 때 쓴다."""
 
-    def extract(self, *, question, candidate, context) -> GoverningCondition | None:
+    def extract(self, *, question, candidate, context) -> Caveat | None:
         raise AssertionError("relation extractor should not be called")
 
 
@@ -94,13 +94,13 @@ def _p1_01_style_payload() -> dict:
     }
 
 
-# ── extractor: payload의 governing_condition을 파싱한다 ───────────────────────
-def test_extractor_parses_governing_condition() -> None:
+# ── extractor: payload의 caveat을 파싱한다 ───────────────────────
+def test_extractor_parses_caveat() -> None:
     unit = _unit(unit_id="su_condition", text=_CONDITION)
-    extractor = OllamaGoverningConditionExtractor(
+    extractor = OllamaCaveatExtractor(
         client=_FakeJsonClient(
             {
-                "governing_condition": {
+                "caveat": {
                     "source_unit_id": "su_condition",
                     "snippet": "subject to availability",
                     "text": _CONDITION,
@@ -113,19 +113,17 @@ def test_extractor_parses_governing_condition() -> None:
     )
     assert candidate is not None
 
-    governing = extractor.extract(
+    caveat = extractor.extract(
         question="질문", candidate=candidate, context=_context(unit)
     )
 
-    assert governing is not None
-    assert governing.snippet == "subject to availability"
+    assert caveat is not None
+    assert caveat.snippet == "subject to availability"
 
 
 def test_extractor_returns_none_when_no_condition() -> None:
     unit = _unit(unit_id="su_condition", text=_CONDITION)
-    extractor = OllamaGoverningConditionExtractor(
-        client=_FakeJsonClient({"governing_condition": None})
-    )
+    extractor = OllamaCaveatExtractor(client=_FakeJsonClient({"caveat": None}))
     candidate = answer_candidate_from_payload(
         index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
     )
@@ -142,7 +140,7 @@ def test_relation_pass_downgrades_p1_01_that_answer_call_missed() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE)
     condition_unit = _unit(unit_id="su_condition", text=_CONDITION)
     extractor = _FakeExtractor(
-        GoverningCondition(
+        Caveat(
             source_unit_id="su_condition",
             snippet="subject to availability",
             text=_CONDITION,
@@ -151,7 +149,7 @@ def test_relation_pass_downgrades_p1_01_that_answer_call_missed() -> None:
 
     answer = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(_p1_01_style_payload()),
-        relation_extractor=extractor,
+        caveat_extractor=extractor,
     ).compose(
         question="NonSmoke, LargeBed는 확정된 조건이야?",
         context=_context(value_unit, condition_unit),
@@ -161,7 +159,7 @@ def test_relation_pass_downgrades_p1_01_that_answer_call_missed() -> None:
     assert extractor.called is True
     assert item.evidence_state == EvidenceState.NEEDS_REVIEW
     assert item.certification is not None
-    assert item.certification.reason == "governed_by_condition"
+    assert item.certification.reason == "limited_by_caveat"
 
 
 # ── 대조: relation pass가 없으면 같은 P1-01 형태는 supported로 남는다 ──────────
@@ -171,7 +169,7 @@ def test_without_relation_pass_p1_01_style_stays_supported() -> None:
 
     answer = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(_p1_01_style_payload()),
-        relation_extractor=None,
+        caveat_extractor=None,
     ).compose(
         question="NonSmoke, LargeBed는 확정된 조건이야?",
         context=_context(condition_unit),
@@ -190,7 +188,7 @@ def test_relation_pass_skipped_when_not_supported() -> None:
     # _ExplodingExtractor가 호출되면 테스트가 실패한다.
     answer = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(payload),
-        relation_extractor=_ExplodingExtractor(),
+        caveat_extractor=_ExplodingExtractor(),
     ).compose(question="질문", context=_context(condition_unit))
 
     assert answer.items[0].evidence_state == EvidenceState.NEEDS_REVIEW
@@ -204,7 +202,7 @@ def test_relation_pass_skipped_when_answer_call_already_gave_condition() -> None
     payload["items"][0]["value"] = _VALUE
     payload["items"][0]["evidence_snippet"] = _VALUE
     payload["items"][0]["source_unit_id"] = "su_value"
-    payload["items"][0]["governing_condition"] = {
+    payload["items"][0]["caveat"] = {
         "source_unit_id": "su_condition",
         "snippet": "subject to availability",
         "text": _CONDITION,
@@ -212,11 +210,11 @@ def test_relation_pass_skipped_when_answer_call_already_gave_condition() -> None
 
     answer = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(payload),
-        relation_extractor=_ExplodingExtractor(),
+        caveat_extractor=_ExplodingExtractor(),
     ).compose(question="질문", context=_context(value_unit, condition_unit))
 
     # 답변 호출이 직접 낸 조건으로 이미 강등됐고, 두 번째 호출은 일어나지 않았다.
     item = answer.items[0]
     assert item.evidence_state == EvidenceState.NEEDS_REVIEW
     assert item.certification is not None
-    assert item.certification.reason == "governed_by_condition"
+    assert item.certification.reason == "limited_by_caveat"

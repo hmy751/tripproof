@@ -21,7 +21,7 @@ class EvidenceRef:
 
 
 @dataclass(frozen=True)
-class GoverningCondition:
+class Caveat:
     """의미 층(LLM/relation extractor)이 낸 '이 값을 지배하는 조건' 역할.
 
     코드가 `kind`나 page 근접으로 추정해 만드는 게 아니라, 의미 층이 후보 원문에서
@@ -43,7 +43,7 @@ class Certification:
     최종 상태다. 둘을 함께 들고 다녀 report에서 candidate -> certification 전이를
     before/after로 볼 수 있게 한다(제품 응답 body에는 싣지 않는다).
 
-    `governing_condition`은 `governed_by_condition` 강등 때 읽은, 원문에 grounding된
+    `caveat`은 `limited_by_caveat` 강등 때 읽은, 원문에 grounding된
     조건 근거다. 관측용이며 제품 응답 body에는 싣지 않는다.
     """
 
@@ -51,4 +51,4 @@ class Certification:
     reason: str
     proposed_state: EvidenceState
     evidence: list[EvidenceRef] = field(default_factory=list)
-    governing_condition: EvidenceRef | None = None
+    caveat: EvidenceRef | None = None

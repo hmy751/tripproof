@@ -534,12 +534,10 @@ def _certification_detail(
         "state": certification.state.value,
         "reason": certification.reason,
     }
-    # governed_by_condition 강등에서 읽은, 원문에 grounding된 조건 근거. 의미 층(06)이
+    # limited_by_caveat 강등에서 읽은, 원문에 grounding된 조건 근거. 의미 층(06)이
     # 낸 역할을 코드가 읽었음을 report에서 before/after로 보기 위한 관측이다.
-    if certification.governing_condition is not None:
-        detail["governing_condition_snippet"] = (
-            certification.governing_condition.snippet
-        )
+    if certification.caveat is not None:
+        detail["caveat_snippet"] = certification.caveat.snippet
     return detail
 
 

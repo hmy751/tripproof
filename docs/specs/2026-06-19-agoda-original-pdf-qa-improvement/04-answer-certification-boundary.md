@@ -118,7 +118,7 @@ Certification이 받지 않거나 사용하지 않아야 하는 것:
 
 구조 신호가 없거나 애매하면 안전한 쪽으로 간다. 위험한 여행 예약 정보에서 기본값은 `supported`가 아니라 `needs_review` 또는 `missing`이어야 한다.
 
-특히 value-only evidence는 그 값의 존재만 증명한다. 값이 사용자의 행동 판단까지 정당화한다는 뜻은 아니다. 요청 값에 그 값을 지배하는 조건/caveat role이 의미 층(`06`)에서 붙으면, final state는 "확정"이 아니라 조건부 또는 검토 필요로 내려가야 한다 — 이 강등의 trigger는 page 공존이 아니라 `06`이 만든 governing role이다.
+특히 value-only evidence는 그 값의 존재만 증명한다. 값이 사용자의 행동 판단까지 정당화한다는 뜻은 아니다. 요청 값에 그 값을 좌우하는 caveat role이 의미 층(`06`)에서 붙으면, final state는 "확정"이 아니라 조건부 또는 검토 필요로 내려가야 한다 — 이 강등의 trigger는 page 공존이 아니라 `06`이 만든 caveat role이다.
 
 단, "조건/caveat가 이 값에 걸린다"의 판정은 의미 판단이다(위 `구현 범위 재조정`). 코드는 이를 `kind`·page 근접으로 추정하지 않는다 — 실제 문서에서는 한 page에 정책·비용·요청·주의가 다 모여 있어 그 근접 추정이 무관한 값까지 강등시킨다. 이 판단은 LLM/relation extractor가 만든 역할 구성을 코드가 읽는 형태로만 성립한다. 코드가 단독으로 강제하는 것은 grounding과 value-grounding이고, 그것이 없으면 `supported`가 될 수 없다.
 

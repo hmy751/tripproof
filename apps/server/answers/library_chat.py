@@ -13,8 +13,8 @@ from server.answers.candidate import AnswerCandidate, answer_candidate_from_payl
 from server.answers.certification import certify
 from server.answers.models import ChatAnswer, ChatAnswerItem
 from server.answers.relation import (
-    GoverningConditionExtractor,
-    create_governing_condition_extractor_from_config,
+    CaveatExtractor,
+    create_caveat_extractor_from_config,
 )
 from server.extraction.models import Certification, EvidenceState
 from server.llm.ollama import (
@@ -46,14 +46,14 @@ class OllamaLibraryChatAnswerComposer:
         model: str | None = None,
         seed: int | None = None,
         temperature: float | None = 0.0,
-        relation_extractor: GoverningConditionExtractor | None = None,
+        caveat_extractor: CaveatExtractor | None = None,
     ) -> None:
         self._client = client
         self._prompt = prompt or load_library_chat_answer_prompt()
         self._model = model
         self._seed = seed
         self._temperature = temperature
-        self._relation_extractor = relation_extractor
+        self._caveat_extractor = caveat_extractor
 
     @property
     def prompt(self) -> LibraryChatAnswerPrompt:
@@ -79,7 +79,7 @@ class OllamaLibraryChatAnswerComposer:
             question=question,
             payload=payload,
             context=context,
-            relation_extractor=self._relation_extractor,
+            caveat_extractor=self._caveat_extractor,
         )
 
     def runtime_answer_model_snapshot(self) -> dict[str, object]:
@@ -107,9 +107,7 @@ def create_library_chat_answer_composer_from_config(
         model=OLLAMA_ANSWER_MODEL,
         seed=seed,
         temperature=0.0,
-        relation_extractor=create_governing_condition_extractor_from_config(
-            answer_seed=seed
-        ),
+        caveat_extractor=create_caveat_extractor_from_config(answer_seed=seed),
     )
 
 
@@ -134,7 +132,7 @@ def _answer_from_payload(
     question: str,
     payload: object,
     context: AnswerContext,
-    relation_extractor: GoverningConditionExtractor | None = None,
+    caveat_extractor: CaveatExtractor | None = None,
 ) -> ChatAnswer:
     if not isinstance(payload, dict):
         return _missing_answer(
@@ -154,11 +152,11 @@ def _answer_from_payload(
         )
         if candidate is None:
             continue
-        candidate = _enrich_with_governing_condition(
+        candidate = _enrich_with_caveat(
             question=question,
             candidate=candidate,
             context=context,
-            relation_extractor=relation_extractor,
+            caveat_extractor=caveat_extractor,
         )
         certification = certify(candidate=candidate, context=context)
         items.append(
@@ -173,33 +171,33 @@ def _answer_from_payload(
     return ChatAnswer(summary=_summary_for_items(items), items=items)
 
 
-def _enrich_with_governing_condition(
+def _enrich_with_caveat(
     *,
     question: str,
     candidate: AnswerCandidate,
     context: AnswerContext,
-    relation_extractor: GoverningConditionExtractor | None,
+    caveat_extractor: CaveatExtractor | None,
 ) -> AnswerCandidate:
     """별도 relation pass로 '값을 좌우하는 조건' 역할을 채운다(06 robust fix).
 
-    답변 호출이 supported를 제안했는데 governing_condition을 안 채운 경우에만, 답을 쓴
+    답변 호출이 supported를 제안했는데 caveat을 안 채운 경우에만, 답을 쓴
     호출과 분리된 두 번째 호출로 조건만 따로 묻는다(생성/검증 분리). supported가 아니거나
     이미 조건이 있으면 두 번째 호출을 아끼고 그대로 둔다. certify가 그 결과를 읽어
     grounding되면 강등한다 — 코드는 의미를 분류하지 않는다.
     """
 
-    if relation_extractor is None:
+    if caveat_extractor is None:
         return candidate
     if candidate.proposed_state != EvidenceState.SUPPORTED:
         return candidate
-    if candidate.governing_condition is not None:
+    if candidate.caveat is not None:
         return candidate
-    governing = relation_extractor.extract(
+    caveat = caveat_extractor.extract(
         question=question, candidate=candidate, context=context
     )
-    if governing is None:
+    if caveat is None:
         return candidate
-    return replace(candidate, governing_condition=governing)
+    return replace(candidate, caveat=caveat)
 
 
 def _item_from_certification(
@@ -254,10 +252,10 @@ def _supported_body(candidate: AnswerCandidate) -> str:
 def _needs_review_body(
     *, candidate: AnswerCandidate, certification: Certification
 ) -> str:
-    # governed_by_condition: 값은 자료에 있으나 그 값을 지배하는 조건이 함께 있어
+    # limited_by_caveat: 값은 자료에 있으나 그 값을 지배하는 조건이 함께 있어
     # 확정으로 볼 수 없다. 조건 원문을 그대로 길게 노출하지 않고, 조건이 걸려 있어
     # 확인이 필요하다는 사실만 전한다(state를 거슬러 "확정"으로 말하지 않는다, AC5).
-    if certification.reason == "governed_by_condition":
+    if certification.reason == "limited_by_caveat":
         if candidate.value:
             return (
                 f"{candidate.label}은 자료에서 확인되지만, 적용에 조건이 있어 "

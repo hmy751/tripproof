@@ -72,14 +72,14 @@ def _special_request_payload(*, value: str, source_unit_id: str) -> dict:
     }
 
 
-def _governed_payload(
+def _caveat_payload(
     *,
     value: str,
     value_source_id: str,
     condition_source_id: str,
     condition_snippet: str,
 ) -> dict:
-    # 06 의미 층이 낸 governing_condition 역할이 함께 들어온 후보. 값은 grounding되지만
+    # 06 의미 층이 낸 caveat 역할이 함께 들어온 후보. 값은 grounding되지만
     # 그 값을 지배하는 조건이 함께 있다.
     return {
         "items": [
@@ -91,7 +91,7 @@ def _governed_payload(
                 "evidence_state": "supported",
                 "source_unit_id": value_source_id,
                 "evidence_snippet": _VALUE_UNIT,
-                "governing_condition": {
+                "caveat": {
                     "source_unit_id": condition_source_id,
                     "snippet": condition_snippet,
                     "text": _CONDITION_UNIT,
@@ -330,8 +330,8 @@ def test_certification_transition_is_observable() -> None:
     assert certification["reason"] == "value_not_grounded"
 
 
-# ── 06: 의미 층이 붙인 governing condition이 grounding되면 grounded 값도 강등 ─────
-def test_governing_condition_downgrades_grounded_value() -> None:
+# ── 06: 의미 층이 붙인 caveat이 grounding되면 grounded 값도 강등 ─────
+def test_caveat_downgrades_grounded_value() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
     condition_unit = _unit(
         unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
@@ -339,7 +339,7 @@ def test_governing_condition_downgrades_grounded_value() -> None:
     candidate = answer_candidate_from_payload(
         index=1,
         question="NonSmoke, LargeBed는 확정된 조건이야?",
-        payload=_governed_payload(
+        payload=_caveat_payload(
             value=_VALUE_UNIT,
             value_source_id=value_unit.id,
             condition_source_id=condition_unit.id,
@@ -352,21 +352,21 @@ def test_governing_condition_downgrades_grounded_value() -> None:
         candidate=candidate, context=_context(value_unit, condition_unit)
     )
 
-    # 값은 grounding됐지만(value_not_grounded 아님) 의미 층이 붙인 governing condition이
+    # 값은 grounding됐지만(value_not_grounded 아님) 의미 층이 붙인 caveat이
     # 원문에 grounding되므로 단독 supported가 아니라 needs_review로 내린다.
     assert certification.state == EvidenceState.NEEDS_REVIEW
-    assert certification.reason == "governed_by_condition"
-    assert certification.governing_condition is not None
+    assert certification.reason == "limited_by_caveat"
+    assert certification.caveat is not None
 
 
 # ── 06 경계: grounding 안 되는 조건 주장(hallucination 가능)에는 강등하지 않는다 ──
-def test_ungrounded_governing_condition_does_not_downgrade() -> None:
+def test_ungrounded_caveat_does_not_downgrade() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
     # 조건 unit을 context에 넣지 않는다 → LLM이 낸 조건 snippet이 원문에 grounding 안 됨.
     candidate = answer_candidate_from_payload(
         index=1,
         question="특별 요청에 뭐가 있어?",
-        payload=_governed_payload(
+        payload=_caveat_payload(
             value=_VALUE_UNIT,
             value_source_id=value_unit.id,
             condition_source_id="su_condition_absent",
@@ -382,13 +382,13 @@ def test_ungrounded_governing_condition_does_not_downgrade() -> None:
     assert certification.reason == "grounded_value"
 
 
-# ── 06 binding paraphrase: governing condition이 있으면 질문 표현과 무관하게 강등 ──
-def test_governing_condition_is_paraphrase_invariant() -> None:
+# ── 06 binding paraphrase: caveat이 있으면 질문 표현과 무관하게 강등 ──
+def test_caveat_is_paraphrase_invariant() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
     condition_unit = _unit(
         unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
     )
-    payload = _governed_payload(
+    payload = _caveat_payload(
         value=_VALUE_UNIT,
         value_source_id=value_unit.id,
         condition_source_id=condition_unit.id,
@@ -409,23 +409,23 @@ def test_governing_condition_is_paraphrase_invariant() -> None:
         context=_context(value_unit, condition_unit),
     )
 
-    # certify는 질문을 안 보고 governing condition 역할 구조만 읽으므로, 같은 후보면
-    # 표현이 달라도 둘 다 needs_review(governed_by_condition)다.
+    # certify는 질문을 안 보고 caveat 역할 구조만 읽으므로, 같은 후보면
+    # 표현이 달라도 둘 다 needs_review(limited_by_caveat)다.
     assert keyworded.items[0].evidence_state == EvidenceState.NEEDS_REVIEW
     assert paraphrased.items[0].evidence_state == EvidenceState.NEEDS_REVIEW
     assert keyworded.items[0].certification is not None
     assert paraphrased.items[0].certification is not None
-    assert keyworded.items[0].certification.reason == "governed_by_condition"
-    assert paraphrased.items[0].certification.reason == "governed_by_condition"
+    assert keyworded.items[0].certification.reason == "limited_by_caveat"
+    assert paraphrased.items[0].certification.reason == "limited_by_caveat"
 
 
-# ── 06: governed_by_condition body는 조건을 전하되 "확정"으로 말하지 않는다 ──────
-def test_governed_by_condition_body_does_not_assert_confirmation() -> None:
+# ── 06: limited_by_caveat body는 조건을 전하되 "확정"으로 말하지 않는다 ──────
+def test_limited_by_caveat_body_does_not_assert_confirmation() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
     condition_unit = _unit(
         unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
     )
-    payload = _governed_payload(
+    payload = _caveat_payload(
         value=_VALUE_UNIT,
         value_source_id=value_unit.id,
         condition_source_id=condition_unit.id,
@@ -445,13 +445,13 @@ def test_governed_by_condition_body_does_not_assert_confirmation() -> None:
     assert "조건" in item.body
 
 
-# ── 06: governing condition 관측이 report에 남는다 (응답 body 아님) ───────────
-def test_governing_condition_is_observable() -> None:
+# ── 06: caveat 관측이 report에 남는다 (응답 body 아님) ───────────
+def test_caveat_is_observable() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
     condition_unit = _unit(
         unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
     )
-    payload = _governed_payload(
+    payload = _caveat_payload(
         value=_VALUE_UNIT,
         value_source_id=value_unit.id,
         condition_source_id=condition_unit.id,
@@ -467,8 +467,8 @@ def test_governing_condition_is_observable() -> None:
     certification = detail["certification"]
     assert certification is not None
     assert certification["state"] == "needs_review"
-    assert certification["reason"] == "governed_by_condition"
-    assert certification["governing_condition_snippet"] == "subject to availability"
+    assert certification["reason"] == "limited_by_caveat"
+    assert certification["caveat_snippet"] == "subject to availability"
 
 
 class _FakeJsonClient:

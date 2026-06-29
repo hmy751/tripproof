@@ -24,10 +24,10 @@ def certify(*, candidate: AnswerCandidate, context: AnswerContext) -> Certificat
     분류(relation/entailment)이고, source unit kind나 page 근접으로 추정하면 실제
     문서에서 무관한 값까지 강등시킨다(`docs/implementation-notes/2026-06-29-
     certification-structural-proxy-overdowngrade/`). 그 판단은 LLM/relation extractor가
-    `governing_condition` 역할로 내고(`06-evidence-relation-extraction.md`), 코드는 그
+    `caveat` 역할로 내고(`06-evidence-relation-extraction.md`), 코드는 그
     역할이 붙었고 그 조건 snippet이 원문에 grounding되는지(구조)만 본다. grounding된
-    governing condition이 있으면 grounded 값이라도 단독 `supported`가 아니라
-    `needs_review`(governed_by_condition)로 내린다 — 조건 문장의 의미를 코드가 다시
+    caveat이 있으면 grounded 값이라도 단독 `supported`가 아니라
+    `needs_review`(limited_by_caveat)로 내린다 — 조건 문장의 의미를 코드가 다시
     분류하지 않고, 역할 구조 + grounding만 읽는다.
     """
 
@@ -79,14 +79,14 @@ def certify(*, candidate: AnswerCandidate, context: AnswerContext) -> Certificat
     # 값이 grounding됐더라도 단독 supported가 아니라 needs_review로 내린다. 코드는 조건을
     # kind/page로 추정하지 않고(역할은 LLM/relation extractor가 냄) 그 역할 + grounding만
     # 읽는다. grounding 안 되는 조건 주장(LLM hallucination 가능)에는 강등하지 않는다.
-    governing_ref = _ground_governing_condition(candidate=candidate, context=context)
-    if governing_ref is not None:
+    caveat_ref = _ground_caveat(candidate=candidate, context=context)
+    if caveat_ref is not None:
         return Certification(
             state=EvidenceState.NEEDS_REVIEW,
-            reason="governed_by_condition",
+            reason="limited_by_caveat",
             proposed_state=proposed,
             evidence=[evidence_ref],
-            governing_condition=governing_ref,
+            caveat=caveat_ref,
         )
 
     return Certification(
@@ -115,10 +115,10 @@ def _ground(
     )
 
 
-def _ground_governing_condition(
+def _ground_caveat(
     *, candidate: AnswerCandidate, context: AnswerContext
 ) -> EvidenceRef | None:
-    """의미 층이 낸 governing condition 역할을 원문에 grounding한다.
+    """의미 층이 낸 caveat 역할을 원문에 grounding한다.
 
     조건의 snippet이 어떤 후보 source unit에 실재할 때만 EvidenceRef를 돌려준다. LLM이
     지정한 source_unit_id를 먼저 보고, 없거나 안 맞으면 후보 전체에서 그 조건 snippet을
@@ -126,12 +126,12 @@ def _ground_governing_condition(
     검증되지 않은 조건 주장으로 강등하지 않는다.
     """
 
-    governing = candidate.governing_condition
-    if governing is None or governing.snippet is None:
+    caveat = candidate.caveat
+    if caveat is None or caveat.snippet is None:
         return None
 
     named_unit = _source_unit_by_id(
-        context=context, source_unit_id=governing.source_unit_id
+        context=context, source_unit_id=caveat.source_unit_id
     )
     search_units = [named_unit] if named_unit is not None else []
     search_units += [
@@ -142,8 +142,8 @@ def _ground_governing_condition(
     for source_unit in search_units:
         grounded = ground_evidence_ref(
             source_unit=source_unit,
-            evidence_snippet=governing.snippet,
-            value=governing.text,
+            evidence_snippet=caveat.snippet,
+            value=caveat.text,
         )
         if grounded is not None:
             return grounded
