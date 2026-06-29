@@ -72,6 +72,35 @@ def _special_request_payload(*, value: str, source_unit_id: str) -> dict:
     }
 
 
+def _governed_payload(
+    *,
+    value: str,
+    value_source_id: str,
+    condition_source_id: str,
+    condition_snippet: str,
+) -> dict:
+    # 06 의미 층이 낸 governing_condition 역할이 함께 들어온 후보. 값은 grounding되지만
+    # 그 값을 지배하는 조건이 함께 있다.
+    return {
+        "items": [
+            {
+                "id": "special_request",
+                "label": "특별 요청",
+                "body": "NonSmoke와 LargeBed는 확정된 조건입니다.",
+                "value": value,
+                "evidence_state": "supported",
+                "source_unit_id": value_source_id,
+                "evidence_snippet": _VALUE_UNIT,
+                "governing_condition": {
+                    "source_unit_id": condition_source_id,
+                    "snippet": condition_snippet,
+                    "text": _CONDITION_UNIT,
+                },
+            }
+        ]
+    }
+
+
 # ── AC1: candidate 타입에는 final body/state가 없다 ──────────────────────────
 def test_answer_candidate_has_no_final_body_or_state() -> None:
     field_names = {field.name for field in fields(AnswerCandidate)}
@@ -299,6 +328,147 @@ def test_certification_transition_is_observable() -> None:
     assert certification["proposed_state"] == "supported"
     assert certification["state"] == "needs_review"
     assert certification["reason"] == "value_not_grounded"
+
+
+# ── 06: 의미 층이 붙인 governing condition이 grounding되면 grounded 값도 강등 ─────
+def test_governing_condition_downgrades_grounded_value() -> None:
+    value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
+    condition_unit = _unit(
+        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
+    )
+    candidate = answer_candidate_from_payload(
+        index=1,
+        question="NonSmoke, LargeBed는 확정된 조건이야?",
+        payload=_governed_payload(
+            value=_VALUE_UNIT,
+            value_source_id=value_unit.id,
+            condition_source_id=condition_unit.id,
+            condition_snippet="subject to availability",
+        )["items"][0],
+    )
+    assert candidate is not None
+
+    certification = certify(
+        candidate=candidate, context=_context(value_unit, condition_unit)
+    )
+
+    # 값은 grounding됐지만(value_not_grounded 아님) 의미 층이 붙인 governing condition이
+    # 원문에 grounding되므로 단독 supported가 아니라 needs_review로 내린다.
+    assert certification.state == EvidenceState.NEEDS_REVIEW
+    assert certification.reason == "governed_by_condition"
+    assert certification.governing_condition is not None
+
+
+# ── 06 경계: grounding 안 되는 조건 주장(hallucination 가능)에는 강등하지 않는다 ──
+def test_ungrounded_governing_condition_does_not_downgrade() -> None:
+    value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
+    # 조건 unit을 context에 넣지 않는다 → LLM이 낸 조건 snippet이 원문에 grounding 안 됨.
+    candidate = answer_candidate_from_payload(
+        index=1,
+        question="특별 요청에 뭐가 있어?",
+        payload=_governed_payload(
+            value=_VALUE_UNIT,
+            value_source_id=value_unit.id,
+            condition_source_id="su_condition_absent",
+            condition_snippet="subject to availability",
+        )["items"][0],
+    )
+    assert candidate is not None
+
+    certification = certify(candidate=candidate, context=_context(value_unit))
+
+    # 코드는 검증되지 않은(grounding 안 된) 조건 주장으로 강등하지 않는다.
+    assert certification.state == EvidenceState.SUPPORTED
+    assert certification.reason == "grounded_value"
+
+
+# ── 06 binding paraphrase: governing condition이 있으면 질문 표현과 무관하게 강등 ──
+def test_governing_condition_is_paraphrase_invariant() -> None:
+    value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
+    condition_unit = _unit(
+        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
+    )
+    payload = _governed_payload(
+        value=_VALUE_UNIT,
+        value_source_id=value_unit.id,
+        condition_source_id=condition_unit.id,
+        condition_snippet="subject to availability",
+    )
+
+    keyworded = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(payload)
+    ).compose(
+        question="NonSmoke, LargeBed는 확정된 조건이야?",
+        context=_context(value_unit, condition_unit),
+    )
+    paraphrased = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(payload)
+    ).compose(
+        # 같은 의미, "확정/조건" 키워드 없음.
+        question="금연이랑 큰 침대는 그냥 되는 거지?",
+        context=_context(value_unit, condition_unit),
+    )
+
+    # certify는 질문을 안 보고 governing condition 역할 구조만 읽으므로, 같은 후보면
+    # 표현이 달라도 둘 다 needs_review(governed_by_condition)다.
+    assert keyworded.items[0].evidence_state == EvidenceState.NEEDS_REVIEW
+    assert paraphrased.items[0].evidence_state == EvidenceState.NEEDS_REVIEW
+    assert keyworded.items[0].certification is not None
+    assert paraphrased.items[0].certification is not None
+    assert keyworded.items[0].certification.reason == "governed_by_condition"
+    assert paraphrased.items[0].certification.reason == "governed_by_condition"
+
+
+# ── 06: governed_by_condition body는 조건을 전하되 "확정"으로 말하지 않는다 ──────
+def test_governed_by_condition_body_does_not_assert_confirmation() -> None:
+    value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
+    condition_unit = _unit(
+        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
+    )
+    payload = _governed_payload(
+        value=_VALUE_UNIT,
+        value_source_id=value_unit.id,
+        condition_source_id=condition_unit.id,
+        condition_snippet="subject to availability",
+    )
+
+    answer = OllamaLibraryChatAnswerComposer(client=_FakeJsonClient(payload)).compose(
+        question="NonSmoke, LargeBed는 확정된 조건이야?",
+        context=_context(value_unit, condition_unit),
+    )
+
+    item = answer.items[0]
+    assert item.evidence_state == EvidenceState.NEEDS_REVIEW
+    # LLM draft body의 "확정된 조건입니다"가 final body로 새지 않는다.
+    assert "확정된 조건입니다" not in item.body
+    # 조건이 걸려 확인이 필요하다는 사실은 전한다.
+    assert "조건" in item.body
+
+
+# ── 06: governing condition 관측이 report에 남는다 (응답 body 아님) ───────────
+def test_governing_condition_is_observable() -> None:
+    value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
+    condition_unit = _unit(
+        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
+    )
+    payload = _governed_payload(
+        value=_VALUE_UNIT,
+        value_source_id=value_unit.id,
+        condition_source_id=condition_unit.id,
+        condition_snippet="subject to availability",
+    )
+
+    answer = OllamaLibraryChatAnswerComposer(client=_FakeJsonClient(payload)).compose(
+        question="NonSmoke, LargeBed는 확정된 조건이야?",
+        context=_context(value_unit, condition_unit),
+    )
+
+    detail = answer_item_detail(answer.items[0])
+    certification = detail["certification"]
+    assert certification is not None
+    assert certification["state"] == "needs_review"
+    assert certification["reason"] == "governed_by_condition"
+    assert certification["governing_condition_snippet"] == "subject to availability"
 
 
 class _FakeJsonClient:

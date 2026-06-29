@@ -79,11 +79,12 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     prompt = load_library_chat_answer_prompt()
     assert composer.prompt.document.domain == "answer"
     assert composer.prompt.document.name == "library_chat_answer"
-    assert composer.prompt.document.version == "2026-06-10"
+    assert composer.prompt.document.version == "2026-06-29"
     assert composer.prompt.document.title == "Library Chat Answer Prompt"
     assert composer.prompt.document.metadata["display_name_ko"] == "자료함 질문 답변"
     assert composer.prompt.document.metadata["description_ko"] == (
-        "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만든다."
+        "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만들고, "
+        "값을 지배하는 조건/caveat가 있으면 governing_condition으로 함께 보고한다."
     )
     assert (
         "# 자료함 질문 답변 프롬프트"
@@ -95,7 +96,7 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     )
     assert composer.prompt.snapshot()["bodyHash"] == prompt.document.body_hash
     assert composer.prompt.snapshot()["assetPath"] == (
-        "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
+        "apps/server/prompts/assets/answer/library_chat_answer/2026-06-29.md"
     )
     assert "displayNameKo" not in composer.prompt.snapshot()
     assert "descriptionKo" not in composer.prompt.snapshot()

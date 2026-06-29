@@ -1155,7 +1155,7 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     assert record.runtime_config_snapshot.prompt is not None
     assert record.runtime_config_snapshot.prompt.domain == "answer"
     assert record.runtime_config_snapshot.prompt.name == "library_chat_answer"
-    assert record.runtime_config_snapshot.prompt.version == "2026-06-10"
+    assert record.runtime_config_snapshot.prompt.version == "2026-06-29"
     assert (
         record.runtime_config_snapshot.prompt.body_hash == prompt_snapshot["bodyHash"]
     )
@@ -1164,16 +1164,16 @@ def test_question_observation_records_prompt_snapshot_when_composer_exposes_prom
     )
     assert (
         record.runtime_config_snapshot.prompt.asset_path
-        == "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
+        == "apps/server/prompts/assets/answer/library_chat_answer/2026-06-29.md"
     )
     assert record.step("prompt_snapshot").facts == {
         "available": True,
         "prompt_domain": "answer",
         "prompt_name": "library_chat_answer",
-        "prompt_version": "2026-06-10",
+        "prompt_version": "2026-06-29",
         "prompt_body_hash": prompt_snapshot["bodyHash"],
         "prompt_file_hash": prompt_snapshot["fileHash"],
-        "prompt_asset_path": "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md",
+        "prompt_asset_path": "apps/server/prompts/assets/answer/library_chat_answer/2026-06-29.md",
     }
     body = response.json()
     assert "observation" not in body

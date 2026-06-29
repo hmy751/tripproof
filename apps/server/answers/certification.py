@@ -20,12 +20,15 @@ def certify(*, candidate: AnswerCandidate, context: AnswerContext) -> Certificat
     - value-grounding: certified value가 그 근거에 실재하는가("확정" 같은 상태 단어를
       값으로 들고 오면 여기서 걸린다 — 단어를 읽어서가 아니라 값이 원문에 없어서다).
 
-    "이 값을 지배하는 조건/caveat가 있는가"의 판단은 여기서 하지 않는다. 그건 의미
+    "이 값을 지배하는 조건/caveat가 있는가"의 판단은 코드가 추정하지 않는다. 그건 의미
     분류(relation/entailment)이고, source unit kind나 page 근접으로 추정하면 실제
     문서에서 무관한 값까지 강등시킨다(`docs/implementation-notes/2026-06-29-
     certification-structural-proxy-overdowngrade/`). 그 판단은 LLM/relation extractor가
-    역할로 내고 코드가 그 역할 구조를 읽는 의미 층으로 재귀속했다(04 spec의
-    `구현 범위 재조정`).
+    `governing_condition` 역할로 내고(`06-evidence-relation-extraction.md`), 코드는 그
+    역할이 붙었고 그 조건 snippet이 원문에 grounding되는지(구조)만 본다. grounding된
+    governing condition이 있으면 grounded 값이라도 단독 `supported`가 아니라
+    `needs_review`(governed_by_condition)로 내린다 — 조건 문장의 의미를 코드가 다시
+    분류하지 않고, 역할 구조 + grounding만 읽는다.
     """
 
     proposed = candidate.proposed_state
@@ -72,6 +75,20 @@ def certify(*, candidate: AnswerCandidate, context: AnswerContext) -> Certificat
             evidence_ref=evidence_ref,
         )
 
+    # 의미 층(06)이 '이 값을 지배하는 조건' 역할을 붙였고 그 조건이 원문에 grounding되면,
+    # 값이 grounding됐더라도 단독 supported가 아니라 needs_review로 내린다. 코드는 조건을
+    # kind/page로 추정하지 않고(역할은 LLM/relation extractor가 냄) 그 역할 + grounding만
+    # 읽는다. grounding 안 되는 조건 주장(LLM hallucination 가능)에는 강등하지 않는다.
+    governing_ref = _ground_governing_condition(candidate=candidate, context=context)
+    if governing_ref is not None:
+        return Certification(
+            state=EvidenceState.NEEDS_REVIEW,
+            reason="governed_by_condition",
+            proposed_state=proposed,
+            evidence=[evidence_ref],
+            governing_condition=governing_ref,
+        )
+
     return Certification(
         state=EvidenceState.SUPPORTED,
         reason="grounded_value",
@@ -96,6 +113,41 @@ def _ground(
         evidence_snippet=candidate.evidence_snippet,
         value=candidate.value,
     )
+
+
+def _ground_governing_condition(
+    *, candidate: AnswerCandidate, context: AnswerContext
+) -> EvidenceRef | None:
+    """의미 층이 낸 governing condition 역할을 원문에 grounding한다.
+
+    조건의 snippet이 어떤 후보 source unit에 실재할 때만 EvidenceRef를 돌려준다. LLM이
+    지정한 source_unit_id를 먼저 보고, 없거나 안 맞으면 후보 전체에서 그 조건 snippet을
+    찾는다(조건은 인용 값과 다른 unit에 있을 수 있다). grounding 안 되면 None — 코드는
+    검증되지 않은 조건 주장으로 강등하지 않는다.
+    """
+
+    governing = candidate.governing_condition
+    if governing is None or governing.snippet is None:
+        return None
+
+    named_unit = _source_unit_by_id(
+        context=context, source_unit_id=governing.source_unit_id
+    )
+    search_units = [named_unit] if named_unit is not None else []
+    search_units += [
+        retrieved.source_unit
+        for retrieved in context.candidates
+        if retrieved.source_unit is not named_unit
+    ]
+    for source_unit in search_units:
+        grounded = ground_evidence_ref(
+            source_unit=source_unit,
+            evidence_snippet=governing.snippet,
+            value=governing.text,
+        )
+        if grounded is not None:
+            return grounded
+    return None
 
 
 def _value_grounded(*, value: str, source_unit: SourceUnit) -> bool:

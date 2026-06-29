@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from server.extraction.models import EvidenceState
+from server.extraction.models import EvidenceState, GoverningCondition
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,7 @@ class NormalizedAnswerItemPayload:
     value: str | None
     source_unit_id: str | None
     evidence_snippet: str | None
+    governing_condition: GoverningCondition | None
 
     def item_id(self, *, index: int) -> str:
         return _build_item_id(payload=self.raw, index=index)
@@ -51,7 +52,28 @@ def normalize_answer_item_payload(
         evidence_snippet=_optional_string(
             _field(payload, "evidence_snippet", "evidenceSnippet")
         ),
+        governing_condition=_governing_condition_from_payload(payload),
     )
+
+
+def _governing_condition_from_payload(
+    payload: dict[object, object],
+) -> GoverningCondition | None:
+    """LLM이 낸 '이 값을 지배하는 조건' 역할을 정규화한다.
+
+    의미 층이 후보 원문에서 식별한 관계 신호다. 코드는 이 값을 만들지 않고 받기만 한다.
+    셋 다 비어 있으면(조건 없음) None으로 둔다.
+    """
+
+    raw = _field(payload, "governing_condition", "governingCondition")
+    if not isinstance(raw, dict):
+        return None
+    source_unit_id = _optional_string(_field(raw, "source_unit_id", "sourceUnitId"))
+    snippet = _optional_string(_field(raw, "snippet"))
+    text = _optional_string(_field(raw, "text"))
+    if source_unit_id is None and snippet is None and text is None:
+        return None
+    return GoverningCondition(source_unit_id=source_unit_id, snippet=snippet, text=text)
 
 
 def _build_item_id(*, payload: dict[object, object], index: int) -> str:

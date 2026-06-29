@@ -529,11 +529,18 @@ def _certification_detail(
     # reason은 강등/통과 근거다.
     if certification is None:
         return None
-    return {
+    detail: dict[str, QuestionObservationFactValue] = {
         "proposed_state": certification.proposed_state.value,
         "state": certification.state.value,
         "reason": certification.reason,
     }
+    # governed_by_condition 강등에서 읽은, 원문에 grounding된 조건 근거. 의미 층(06)이
+    # 낸 역할을 코드가 읽었음을 report에서 before/after로 보기 위한 관측이다.
+    if certification.governing_condition is not None:
+        detail["governing_condition_snippet"] = (
+            certification.governing_condition.snippet
+        )
+    return detail
 
 
 def source_unit_locator_summary(*, page: int, unit_index: int) -> str:

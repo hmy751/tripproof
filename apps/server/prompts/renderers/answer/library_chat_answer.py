@@ -8,7 +8,7 @@ from server.prompts.runtime.prompt_store import load_prompt_document
 
 LIBRARY_CHAT_PROMPT_DOMAIN = "answer"
 LIBRARY_CHAT_PROMPT_NAME = "library_chat_answer"
-LIBRARY_CHAT_PROMPT_VERSION = "2026-06-10"
+LIBRARY_CHAT_PROMPT_VERSION = "2026-06-29"
 
 
 @dataclass(frozen=True)

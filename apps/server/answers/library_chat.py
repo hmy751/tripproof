@@ -167,7 +167,7 @@ def _item_from_certification(
         return ChatAnswerItem(
             id=item_id,
             label=candidate.label,
-            body=_needs_review_body(candidate),
+            body=_needs_review_body(candidate=candidate, certification=certification),
             evidence_state=EvidenceState.NEEDS_REVIEW,
             value=candidate.value,
             evidence=list(certification.evidence),
@@ -197,7 +197,19 @@ def _supported_body(candidate: AnswerCandidate) -> str:
     return f"{candidate.label}은 자료에서 확인되었습니다."
 
 
-def _needs_review_body(candidate: AnswerCandidate) -> str:
+def _needs_review_body(
+    *, candidate: AnswerCandidate, certification: Certification
+) -> str:
+    # governed_by_condition: 값은 자료에 있으나 그 값을 지배하는 조건이 함께 있어
+    # 확정으로 볼 수 없다. 조건 원문을 그대로 길게 노출하지 않고, 조건이 걸려 있어
+    # 확인이 필요하다는 사실만 전한다(state를 거슬러 "확정"으로 말하지 않는다, AC5).
+    if certification.reason == "governed_by_condition":
+        if candidate.value:
+            return (
+                f"{candidate.label}은 자료에서 확인되지만, 적용에 조건이 있어 "
+                f"확정 여부는 원문 확인이 필요합니다: {candidate.value}"
+            )
+        return f"{candidate.label}은 적용 조건이 있어 원문 확인이 필요합니다."
     if candidate.value:
         return (
             f"{candidate.label}은 자료에서 확인되지만 보장 여부는 "
