@@ -35,6 +35,17 @@
 
 따라서 `04`의 강제 범위는 candidate/certify/body 분리 + 두 mechanical check까지로 좁히고, "조건이 값에 걸리나"의 판단은 의미 층(relation/entailment, `05` 위)으로 재귀속한다.
 
+## 검증 (run 15)
+
+위 방향을 적용한 뒤(certify에서 `conditional_source_kind`·same-page `value_only_with_condition` 제거, grounding/value-grounding만 유지) 같은 원문 PDF·questions·seed로 production run을 다시 돌렸다(run 15, 출처/수치는 `raw.md`).
+
+- 과잉강등 해소: run 14에서 `supported`가 0개였는데, run 15는 날짜·위치·객실·체크인 제시물·취소정책(P0-01·02·04·05·06)이 `supported`로 복구됐다.
+- 제거한 두 규칙 사유는 0건. run 15의 certification 사유 집합은 `{grounded_value, candidate_missing}`뿐이었다.
+- 코드가 강등을 강요하지 않음: 남은 `missing`(P0-03·07·P1-01)은 전부 `candidate_missing` — LLM이 스스로 missing을 낸 것이고 코드가 내린 게 아니다.
+- 단, P1-01(특별요청 needs_review)의 안전망은 이 run에서 실증되지 않았다. LLM이 abstain(`candidate_missing`)해서 value-grounding 강등("확정"을 값으로 → needs_review)이 발동할 입력 자체가 없었다. 그 강등은 단위 테스트로만 증명되며(value="확정"), LLM이 supported+"확정"을 낼 때 안정적으로 잡으려면 의미 층이 필요하다 — 이번 코드 fix의 범위 밖이다.
+
+즉 이 fix의 목표(과잉강등 제거, 깨끗한 값 supported 복구, 코드는 mechanical만)는 실제 데이터로 달성됐고, 조건-지배 판단은 의도대로 의미 층 몫으로 남았다.
+
 ## 다시 볼 경계
 
 certification/상태 게이트를 구현할 때 멈춰서 확인한다.

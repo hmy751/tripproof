@@ -25,6 +25,8 @@
 
 아래 단계 계약과 AC의 조건 기반 부분(특히 value-only가 조건/caveat와 함께일 때의 강등)은 이 의미 층이 역할 신호를 제공할 때 성립하는 목표다. 코드만으로 구조 신호 없이 그 판단을 흉내 내지 않는다.
 
+이 재조정은 구현·검증됐다. `certify`에서 조건 추정 강등(`conditional_source_kind`, same-page `value_only_with_condition`)을 제거하고 grounding/value-grounding만 남긴 뒤, 같은 원문 PDF로 production run을 다시 돌려 과잉강등 해소를 확인했다 — 날짜·위치·객실이 `supported`로 복구됐고, 제거된 규칙 사유는 0건, 남은 `missing`은 LLM abstain(`candidate_missing`)뿐이었다. 근거: `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`.
+
 ## 사용자 장면
 
 사용자가 예약 확인서에 대해 자연스러운 질문 하나를 던진다.

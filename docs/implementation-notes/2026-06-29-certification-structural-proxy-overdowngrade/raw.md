@@ -83,8 +83,32 @@ P1-01 (특별요청, 기대 needs_review)
 - P0-07은 인용 unit이 `policy`라 강등됐는데, 이 질문은 정책이 답이라 정책 문단 인용이 정상이다.
 - P1-01에선 특별요청 값과 caveat가 한 `request_note`/`field_group` unit으로 묶여 들어왔다. 즉 LLM이 이 unit을 supported로 인용했다면 `conditional_source_kind`로 잡혔을 것이다 — 이 run에선 LLM이 abstain해서 미실증.
 
+## 검증 run 15 (mechanical-only 적용 후)
+
+- 경로: `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/15-answer-certification-mechanical-only/` (gitignore됨)
+- created_at: `2026-06-29T08:47:34Z`
+- code: HEAD `694aef37fb0f697dc5354c2ef74bbc50ca541c35` + dirty (working-tree의 mechanical-only fix, 커밋 전 검증)
+- runtime: run 14와 동일 (`production` / `supabase` top_k=3 / `gemma3:4b` / seed `20260624`)
+
+evidence_state: run 14 → run 15
+
+| 질문 | 기대 | run 14 | run 15 | run 15 reason |
+| --- | --- | --- | --- | --- |
+| AGODA-P0-01 | supported | needs_review (2) | supported | grounded_value |
+| AGODA-P0-02 | supported | needs_review | supported | grounded_value |
+| AGODA-P0-03 | missing | missing | missing | candidate_missing |
+| AGODA-P0-04 | supported | needs_review | supported | grounded_value |
+| AGODA-P0-05 | supported | needs_review | supported (2) | grounded_value |
+| AGODA-P0-06 | supported | missing | supported | grounded_value |
+| AGODA-P0-07 | supported | needs_review | missing | candidate_missing |
+| AGODA-P1-01 | needs_review | missing | missing | candidate_missing |
+
+- run 15 사유 집합: `{grounded_value, candidate_missing}` — 제거한 `value_only_with_condition`·`conditional_source_kind`는 0건.
+- supported 복구: P0-01·02·04·05·06. missing 3개는 전부 LLM abstain(`candidate_missing`)이라 코드 강등이 아니다.
+- P1-01은 LLM abstain으로 value-grounding 강등이 미발동 — 이 run은 P1-01 needs_review를 실증하지 못한다(단위 테스트로만 증명).
+
 ## 재진입 메모
 
-- 코드를 mechanical check(grounding + value-grounding)만으로 후퇴시키고, conditional_source_kind·value_only_with_condition(same-page) 강등은 제거한다.
+- 코드를 mechanical check(grounding + value-grounding)만으로 후퇴시키고, conditional_source_kind·value_only_with_condition(same-page) 강등은 제거했다(run 15에서 과잉강등 해소 확인).
 - "조건이 값에 걸리나"는 LLM/relation extractor가 역할로 내고 `05`가 후보를 공급/관찰하며, 코드는 그 역할 구조를 읽는 의미 층으로 재귀속한다.
 - 같은 비교를 다시 할 때는 위 출처 블록의 seed/PDF/questions로 production run을 재현한다.

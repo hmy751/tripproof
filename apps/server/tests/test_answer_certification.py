@@ -112,14 +112,16 @@ def test_value_only_special_request_is_not_supported() -> None:
     assert certification.reason == "value_not_grounded"
 
 
-# ── AC4: 값과 조건 문맥이 함께 후보에 있으면 needs_review 계열 ────────────────
-def test_value_with_colocated_condition_is_needs_review() -> None:
+# ── 경계: 같은 page의 조건 unit으로는 코드가 더 이상 강등하지 않는다 ──────────
+def test_colocated_condition_is_not_downgraded_by_code() -> None:
+    # 구현 범위 재조정(2026-06-29): "조건이 이 값에 걸리나"는 코드가 kind/page 근접으로
+    # 추정하지 않는다(실제 문서에서 무관한 값까지 강등시켜서). 값이 실제 grounding되면,
+    # 같은 page에 조건 kind unit이 있어도 코드는 supported로 둔다. 조건-지배 판단은
+    # 의미 층(relation/entailment, 05 위)으로 재귀속됐다.
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
     condition_unit = _unit(
         unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
     )
-    # 값이 실제 grounding되더라도(value="NonSmoke, LargeBed"), 같은 page에 조건/caveat
-    # kind 근거가 함께 있으면 value-only 인용으로 확정할 수 없다.
     candidate = answer_candidate_from_payload(
         index=1,
         question="NonSmoke, LargeBed는 확정된 조건이야?",
@@ -133,30 +135,29 @@ def test_value_with_colocated_condition_is_needs_review() -> None:
         candidate=candidate, context=_context(value_unit, condition_unit)
     )
 
-    assert certification.state == EvidenceState.NEEDS_REVIEW
-    assert certification.reason == "value_only_with_condition"
+    assert certification.state == EvidenceState.SUPPORTED
+    assert certification.reason == "grounded_value"
 
 
 # ── paraphrase 회귀: 같은 후보/근거면 질문 표현이 달라도 같은 state ───────────
 def test_certification_is_paraphrase_invariant() -> None:
+    # certify는 질문을 보지 않으므로 표현이 달라도 결과가 같다. 여기서는 실제 P1-01
+    # 실패 형태(value="확정")로, value-grounding이 두 표현 모두에서 동일하게 강등시킨다.
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
-    condition_unit = _unit(
-        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
-    )
-    payload = _special_request_payload(value=_VALUE_UNIT, source_unit_id=value_unit.id)
+    payload = _special_request_payload(value="확정", source_unit_id=value_unit.id)
 
     keyworded = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(payload)
     ).compose(
         question="NonSmoke, LargeBed는 확정된 조건이야?",
-        context=_context(value_unit, condition_unit),
+        context=_context(value_unit),
     )
     paraphrased = OllamaLibraryChatAnswerComposer(
         client=_FakeJsonClient(payload)
     ).compose(
         # 같은 의미, "확정/조건" 키워드 없음.
         question="금연이랑 큰 침대는 그냥 되는 거지?",
-        context=_context(value_unit, condition_unit),
+        context=_context(value_unit),
     )
 
     assert keyworded.items[0].evidence_state == EvidenceState.NEEDS_REVIEW
@@ -166,15 +167,26 @@ def test_certification_is_paraphrase_invariant() -> None:
 
 # ── AC5: final body는 certified state를 거슬러 "확정"처럼 말할 수 없다 ─────────
 def test_needs_review_body_does_not_assert_confirmation() -> None:
+    # LLM이 needs_review를 제안하면서도 draft body에 "확정된 조건입니다"를 썼더라도,
+    # needs_review final body는 코드 template으로 만들어 그 overclaim이 새지 않는다.
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
-    condition_unit = _unit(
-        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
-    )
-    payload = _special_request_payload(value=_VALUE_UNIT, source_unit_id=value_unit.id)
+    payload = {
+        "items": [
+            {
+                "id": "special_request",
+                "label": "특별 요청",
+                "body": "NonSmoke와 LargeBed는 확정된 조건입니다.",
+                "value": _VALUE_UNIT,
+                "evidence_state": "needs_review",
+                "source_unit_id": value_unit.id,
+                "evidence_snippet": _VALUE_UNIT,
+            }
+        ]
+    }
 
     answer = OllamaLibraryChatAnswerComposer(client=_FakeJsonClient(payload)).compose(
         question="NonSmoke, LargeBed는 확정된 조건이야?",
-        context=_context(value_unit, condition_unit),
+        context=_context(value_unit),
     )
 
     item = answer.items[0]
@@ -184,8 +196,12 @@ def test_needs_review_body_does_not_assert_confirmation() -> None:
     assert answer.summary != "자료에서 확인한 답변입니다."
 
 
-# ── AC6: 조건형(취소/노쇼·현장 비용)에서 값/비용명만으로 전체 정책을 확정하지 않음 ─
-def test_policy_kind_source_cannot_be_supported_from_value_only() -> None:
+# ── 경계: 조건 kind source를 인용했다는 이유만으로는 코드가 강등하지 않는다 ────
+def test_policy_kind_source_is_not_downgraded_by_code() -> None:
+    # 구현 범위 재조정 이후: conditional_source_kind 강등은 제거됐다(정책이 답인
+    # 질문에서 정책 문단 인용은 정상인데, "정책 kind를 인용했다"만으로 강등하면
+    # 정당한 답까지 needs_review가 됐다). 정책이 질문에 충분히 답하는지(부분 vs 전체)는
+    # 의미 판단이라 의미 층의 몫이다. 코드는 grounding/value-grounding만 본다.
     policy_unit = _unit(
         unit_id="su_policy",
         text="No-show results in a charge of the first night.",
@@ -208,8 +224,8 @@ def test_policy_kind_source_cannot_be_supported_from_value_only() -> None:
 
     certification = certify(candidate=candidate, context=_context(policy_unit))
 
-    assert certification.state == EvidenceState.NEEDS_REVIEW
-    assert certification.reason == "conditional_source_kind"
+    assert certification.state == EvidenceState.SUPPORTED
+    assert certification.reason == "grounded_value"
 
 
 # ── 경계: 조건 없는 순수 값 lookup은 여전히 supported (over-downgrade 방지) ────
@@ -268,14 +284,11 @@ def test_certification_does_not_upgrade_candidate() -> None:
 # ── AC7: candidate -> certification 전이가 관측 record에 남는다 ───────────────
 def test_certification_transition_is_observable() -> None:
     value_unit = _unit(unit_id="su_value", text=_VALUE_UNIT, kind="label_value")
-    condition_unit = _unit(
-        unit_id="su_condition", text=_CONDITION_UNIT, kind="request_note"
-    )
-    payload = _special_request_payload(value=_VALUE_UNIT, source_unit_id=value_unit.id)
+    payload = _special_request_payload(value="확정", source_unit_id=value_unit.id)
 
     answer = OllamaLibraryChatAnswerComposer(client=_FakeJsonClient(payload)).compose(
         question="NonSmoke, LargeBed는 확정된 조건이야?",
-        context=_context(value_unit, condition_unit),
+        context=_context(value_unit),
     )
 
     detail = answer_item_detail(answer.items[0])
@@ -285,7 +298,7 @@ def test_certification_transition_is_observable() -> None:
     # 그 전이와 근거가 report에서 before/after로 보인다.
     assert certification["proposed_state"] == "supported"
     assert certification["state"] == "needs_review"
-    assert certification["reason"] == "value_only_with_condition"
+    assert certification["reason"] == "value_not_grounded"
 
 
 class _FakeJsonClient:
