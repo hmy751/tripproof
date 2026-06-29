@@ -27,6 +27,9 @@
 - reconciliation 이후 baseline(2026-06-23): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/06-20260623T092247Z-postreconcile-current-baseline-production/`
 - source unit boundary final(2026-06-24): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/09-20260624T072332Z-field-groups-cleaned-after-production/` (`source-units.md` 포함)
 - measurement preflight repeat(2026-06-24): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/12-20260624T122630Z-measurement-preflight-repeat-seeded/repeat.json`
+- `04` answer certification 과잉강등 관측(2026-06-29, code `08f141e`): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/14-answer-certification-04-after-production/`
+- `04` answer certification mechanical-only 해소 검증(2026-06-29, 이후 `989727c` 커밋): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/15-answer-certification-mechanical-only/` (상세 출처·수치: `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`)
+- `06` relation pass 실험(2026-06-29, run 16~19, A/B는 되돌림): run-id 폴더별 출처·수치는 `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`(`raw.md`). 코드: inline `5d1880f`(run 16), 분리 호출 `574dee4`(run 17), per-unit·순서불변 `118a916`(run 18·19).
 - 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline", `02`의 "V1 구현 결과"와 "Field-group follow-up 구현/측정 결과"를 본다.
 
 ## 읽는 순서
