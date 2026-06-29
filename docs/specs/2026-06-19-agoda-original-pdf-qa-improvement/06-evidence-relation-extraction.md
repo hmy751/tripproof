@@ -4,6 +4,14 @@
 
 상태: draft sub-spec. answer certification boundary(`04`) 이후, 이미 후보에 들어온 값과 그 값을 조건부로 만드는 caveat 사이의 역할·관계를 만드는 의미 층이다. relation extractor v1(답 호출과 분리된 caveat 검출)은 코드에 있으나(`574dee4`), gemma3:4b에서 무관한 조건을 과잉 부착한다 — per-unit·순서 불변 변형(`118a916`)을 시도했으나 그 과잉을 못 잡아 되돌렸다(`8040665`). 따라서 이 문서의 계약(특히 paraphrase-안정 needs_review)은 아직 달성되지 않은 목표이며, 현재 baseline은 과잉강등을 알려진 한계로 안고 있다. 측정·경계: `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`.
 
+측정 run (2026-06-29, production·seed 20260624; per-unit·순서불변 A/B는 `8040665`로 되돌림):
+
+- inline 검출(`5d1880f`): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/16-evidence-relation-layer-06-after-production/`
+- 분리 호출(`574dee4`): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/17-evidence-relation-pass-separated/`
+- per-unit B(`118a916`, `mode=pairwise`): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/18-caveat-pairwise-B/`
+- 순서불변 A(`118a916`, `mode=order_invariant`): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/19-caveat-order-invariant-A/`
+- 질문별 수치·과잉 부착 caveat 발췌: `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`
+
 이 문서의 중심은 검색을 더 넓히는 일도, 코드가 상태를 더 똑똑하게 정하는 일도 아니다. "이 값은 이 조건에 좌우된다 / 이 값에 필요한 조건 역할이 비었다"를 LLM/relation extractor가 역할 구조로 내고, `04` 코드 certification이 그 역할 구조를 읽어 state를 정하게 하는 것이다. 의미 판단의 자리를 코드도 검색도 아닌 여기에 둔다.
 
 관련 판단:

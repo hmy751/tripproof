@@ -3,7 +3,7 @@
 작성일: 2026-06-24
 재작성일: 2026-06-29, 순수 coverage로 재범위
 
-상태: draft sub-spec. answer certification boundary(`04`) 이후, 하위 요청(role)별로 필요한 source unit 후보를 더 안정적으로 공급하고, 후보가 없을 때 그 원인을 구분하는 retrieval coverage slice다.
+상태: draft sub-spec, 아직 미구현. answer certification boundary(`04`) 이후, 하위 요청(role)별로 필요한 source unit 후보를 더 안정적으로 공급하고, 후보가 없을 때 그 원인을 구분하는 retrieval coverage slice다. 아직 코드/eval 없음 — `05` 전용 run은 만들지 않았다(2026-06-29 기준 run 14~19는 전부 `04` certification·`06` relation 작업이다).
 
 이 문서의 중심은 retrieval 점수 자체가 아니다. 하위 요청별로 필요한 source unit 후보를 받을 수 있는지, 후보가 없을 때 어디서 빠졌는지 읽을 수 있는지, 그리고 받은 후보가 값만 담는지 그 값을 좌우할 수 있는 조건 문맥도 담는지를 관찰해 `06`에 넘기는 것이다.
 
