@@ -2,7 +2,7 @@
 
 작성일: 2026-06-19
 
-상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` answer certification boundary(구현됨), `05` 후보 coverage, `06` 근거 관계 추출(의미 층) 순서로 다룬다. `04`는 코드가 grounding/value-grounding 같은 mechanical check만 강제하는 범위로 좁혔고, "조건이 값을 좌우하는가"의 의미 판단은 `06` 의미 층으로 재귀속했다(근거: `04`의 `구현 범위 재조정`, `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`). `06`은 v1(분리 호출)을 시도했으나(`574dee4`) gemma3:4b가 무관한 조건을 과잉 부착해, per-unit·순서불변 변형(`118a916`)을 되돌렸다(`8040665`). 이후 `07` A/B repeat + 계측 재실행에서 분리 검출기(A)가 net-negative(24건 중 14건 실행됐으나 거의 빈손, 유일한 grounding 출력이 false alarm)로 나와 별도 relation 호출을 제거하기로 했다(방향 B). 단 이 층이 존재한 이유인 안전망(값이 적혀 있으나 보장은 아닌 경우)은 두 안 다 미해결이라 `08`·`05`로 이월한다.
+상태: active spec. Agoda 예약 확인서 원문 PDF에서 드러난 QA 실패를 측정하고, 그 결과를 실제 product 개선으로 이어가기 위한 상위 기준이다. `02` source unit boundary slice는 `09-20260624T072332Z-field-groups-cleaned-after-production`으로 완료했고, `03` measurement preflight는 `12-20260624T122630Z-measurement-preflight-repeat-seeded`로 구현/확인했다. 남은 product 작업은 `04` answer certification boundary(구현됨), `05` 후보 coverage, `06` 근거 관계 추출(의미 층) 순서로 다룬다. `04`는 코드가 grounding/value-grounding 같은 mechanical check만 강제하는 범위로 좁혔고, "조건이 값을 좌우하는가"의 의미 판단은 `06` 의미 층으로 재귀속했다(근거: `04`의 `구현 범위 재조정`, `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`). `06`은 v1(분리 호출)을 시도했으나(`574dee4`) gemma3:4b가 무관한 조건을 과잉 부착해, per-unit·순서불변 변형(`118a916`)을 되돌렸다(`8040665`). 이후 `07` A/B repeat + 계측 재실행에서 분리 검출기(A)가 net-negative(24건 중 14건 실행됐으나 거의 빈손, 유일한 grounding 출력이 false alarm)로 나와 별도 relation 호출을 제거하기로 했다(방향 B). 단 이 층이 존재한 이유인 안전망(값이 적혀 있으나 보장은 아닌 경우)은 두 안 다 미해결이라 `08`·`05`로 이월한다. 이후 `08` answer body 합성 층을 구현·측정했고(commit `84fbb18`, run 26·27), P1-01의 안전망 실효 경로가 별도 검출기가 아니라 **답변 모델 inline caveat + certify**임을 깨끗한 A/B에서 확인했다(방향 B와 일치) — 단 그 경로는 강한 답변 모델에 기대 약한 모델에선 비어, 안전망 근본 문제는 여전히 `05`·`06`과 함께 남는다.
 
 이 spec 묶음의 중심은 `측정 -> 실패 유형 이해 -> product 개선 -> 같은 원문 PDF로 재확인`이다. `run.json`과 HTML report는 이 흐름을 돕는 관찰 도구이지, 개선의 목표가 아니다.
 
@@ -31,6 +31,7 @@
 - `04` answer certification mechanical-only 해소 검증(2026-06-29, 이후 `989727c` 커밋): `eval/runs/question-dataset/2026-06-19-agoda-original-pdf-qa-improvement/15-answer-certification-mechanical-only/` (상세 출처·수치: `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`)
 - `06` relation pass 실험(2026-06-29, run 16~19, A/B는 되돌림): run-id 폴더별 출처·수치는 `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`(`raw.md`). 코드: inline `5d1880f`(run 16), 분리 호출 `574dee4`(run 17), per-unit·순서불변 `118a916`(run 18·19).
 - `07` relation vs model upgrade A/B(2026-06-29~30 KST): A `eval/runs/question-dataset/23-20260629T-relation-qwen14b-pairwise-A/repeat.json`, B `eval/runs/question-dataset/24-20260629T-answer-qwen14b-relation-disabled-B/repeat.json`, caveat 출처 계측 재실행(A) `eval/runs/question-dataset/25-20260630T-relation-qwen14b-pairwise-A-instrumented/repeat.json`. 결론: 분리 relation 호출 제거(방향 B) — 단 안전망 문제는 미해결로 `08`·`05` 이월. 상세·confound·계측 수치는 `07`.
+- `08` answer body 합성 층 구현·A/B(2026-06-30, commit `84fbb18`): A `eval/runs/question-dataset/26-20260630T-answer-gemma4b-body-gemma4b-caveat-disabled-A/`, B `eval/runs/question-dataset/27-20260630T-answer-qwen14b-body-gemma4b-caveat-disabled-B/`. 답변 모델만 변수인 깨끗한 A/B(caveat disabled·합성 모델 `gemma3:4b` 고정). 점수는 답변 모델에서 +1(1/8→2/8), qwen ~8배 latency, 점수차는 답변 모델에서 옴. 질문별 수치·P1-01 trace·구현 관찰은 `docs/implementation-notes/2026-06-30-answer-body-synthesis-layer/`, 계약·AC는 `08`.
 - 시점별 역할·수치 비교는 `01`의 "측정 timeline과 현재 baseline", `02`의 "V1 구현 결과"와 "Field-group follow-up 구현/측정 결과"를 본다.
 
 ## 읽는 순서
@@ -50,7 +51,7 @@
 7. `07-relation-vs-model-upgrade-ab.md`
    `06`이 정밀도 천장에 막힌 뒤, relation 층 유지+강한 검출 모델(A) vs 분리 제거+답변 모델 단독(B)을 repeat eval로 비교하고, 계측 재실행으로 A의 분리 검출기 동작을 직접 확인했다. 분리 검출기가 net-negative(거의 빈손, 유일한 grounding이 false alarm)여서 별도 relation 호출을 제거하기로 했다(방향 B). 단 A/B는 두 변수를 동시에 바꾼 confound이고, 안전망 문제(값이 적혀 있으나 보장 아닌 경우)는 두 안 다 미해결이라 `08`·`05`로 이어 본다.
 8. `08-answer-body-synthesis-layer.md`
-   사용자 답변 문장(body)을 답변 호출에서 떼어, certification으로 value·evidence·state를 확정한 뒤 맨 끝 LLM 호출이 그 확정 데이터를 종합해 답변을 만든다. body가 payload와 어긋나는 문제를 고치되, body는 확정 결과를 말로 옮길 뿐 state를 못 바꾼다(`04` 가드레일). 미구현·eval 없음.
+   사용자 답변 문장(body)을 답변 호출에서 떼어, certification으로 value·evidence·state를 확정한 뒤 맨 끝 LLM 호출이 그 확정 데이터를 종합해 답변을 만든다. body가 payload와 어긋나는 문제를 고치되, body는 확정 결과를 말로 옮길 뿐 state를 못 바꾼다(`04` 가드레일). 구현됨(commit `84fbb18`), 깨끗한 A/B로 측정(run 26·27) — 점수 +1·qwen ~8배 latency, 모델 선택은 미결.
 
 ## 왜 지금
 
@@ -132,7 +133,7 @@ Agoda 개선 분석은 sample fixture run을 기준으로 삼지 않는다. samp
 | 4 | `05-subrequest-retrieval-coverage.md` | role별 후보를 더 잘 받고 missing 원인을 구분하는가 | role별 후보 경로와 missing 원인이 보이고, 후보가 값만/조건도 담는지 `06`에 넘길 수 있다 |
 | 5 | `06-evidence-relation-extraction.md` | 값을 좌우하는 조건이 있을 때 표현·키워드와 무관하게 안정적으로 needs_review로 가는가 | 의미 층이 값↔조건 역할을 내고 코드가 읽어, P1-01이 paraphrase에도 needs_review로 간다 |
 | 6 | `07-relation-vs-model-upgrade-ab.md` | 좋은 모델이면 relation 층이 추가 복잡도를 정당화하나, 모델 단독이 나은가 | 완료: repeat eval + 계측 재실행에서 분리 검출기가 net-negative로 나와 별도 relation 호출 제거(방향 B). 단 안전망 문제 자체는 미해결로 `08`·`05` 이월 |
-| 7 | `08-answer-body-synthesis-layer.md` | 답변 문장(body)이 확정 payload와 일치하나 | body를 끝 LLM 합성으로 옮겨 state·evidence와 어긋나지 않고 초안 잔재(틀린 label·placeholder)가 안 샌다 |
+| 7 | `08-answer-body-synthesis-layer.md` | 답변 문장(body)이 확정 payload와 일치하나 | 구현됨: body를 끝 LLM 합성으로 옮겨 state·evidence와 어긋나지 않고(단위 테스트 고정) 초안 잔재가 안 샌다. A/B는 점수 +1·qwen ~8배 latency, 모델 선택·"제대로 분리"(추출 프롬프트 body 제거)는 미결 |
 
 문서 번호는 retrieval -> 의미 -> certification의 pipeline 위치 순서다. 다만 구현 우선순위에서는 `06`이 먼저다 — `06`은 알려진 위험 실패(P1-01)를 안정적으로 막는 binding fix이고, P1-01의 조건 후보는 이미 retrieval에 들어와 있어 `05`(coverage) 완성을 기다리지 않아도 그 케이스로 구현·검증할 수 있다. `05`는 조건 후보가 실제로 빠지는 compound question을 위한 coverage 일반화다. `07`·`08`은 `06` 결과 이후의 후속 결정(`07`: relation 층 유지/제거)과 개선(`08`: body 합성 분리)이다.
 
@@ -154,7 +155,7 @@ source unit 구조화와 측정 preflight는 `02`~`03`에서 닫았고, `04`는 
 - `06-evidence-relation-extraction.md`: 이미 후보에 들어온 값과 caveat의 역할·관계를 LLM/relation extractor가 만들어, 코드가 그 역할 구조를 읽고 P1-01을 안정적으로 needs_review로 보낼 수 있게 한다.
 - `05-subrequest-retrieval-coverage.md`: 조건 후보가 실제로 빠지는 compound question에서 role별 후보를 더 잘 공급하고 missing 원인(source unit 부재 / retrieval miss / relation extraction miss)을 읽을 수 있게 한다.
 - `07-relation-vs-model-upgrade-ab.md`(측정 완료): A·B repeat + 계측 재실행에서 분리 검출기가 net-negative여서 별도 relation 호출 제거(방향 B). 단 A/B는 confound이고 안전망 문제는 미해결로 `08`·`05`로 이월.
-- `08-answer-body-synthesis-layer.md`: 답변 문장(body)을 certification 뒤 끝 LLM 합성으로 분리해, body가 확정 state·evidence와 일치하고 초안 잔재가 안 새게 한다.
+- `08-answer-body-synthesis-layer.md`(구현됨, run 26·27): 답변 문장(body)을 certification 뒤 끝 LLM 합성으로 분리해, body가 확정 state·evidence와 일치하고 초안 잔재가 안 새게 한다. 측정·관찰은 `docs/implementation-notes/2026-06-30-answer-body-synthesis-layer/`.
 
 ## 남은 판단
 

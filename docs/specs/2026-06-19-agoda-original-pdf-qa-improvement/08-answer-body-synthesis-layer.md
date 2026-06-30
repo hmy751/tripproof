@@ -1,8 +1,15 @@
 # Answer body 합성 층 분리
 
-작성일: 2026-06-29
+작성일: 2026-06-29 · 구현: 2026-06-30 (commit `84fbb18`)
 
-상태: draft sub-spec, 아직 미구현·eval 없음. 사용자-facing 답변 문장(body)을 답변 생성 호출에서 떼어, **확정된 데이터를 읽고 맨 끝에 합성하는 전용 층**으로 옮기기 위한 spec이다.
+상태: 구현됨. 사용자-facing 답변 문장(body)을 답변 생성 호출에서 떼어, **확정된 데이터를 읽고 맨 끝에 합성하는 전용 층**으로 옮겼다. `supported`·`needs_review` body는 합성으로 만들고, `missing`은 합성하지 않으며, 합성 실패·이상 출력 시 code template으로 폴백한다. 깨끗한 A/B(답변 모델만 변수, caveat 분리 호출 disabled·합성 모델 `gemma3:4b` 고정)로 측정했다.
+
+기준 run (production·seed 20260624·repeat 3·caveat disabled·합성 모델 `gemma3:4b`):
+
+- A(답변 모델 `gemma3:4b`): `eval/runs/question-dataset/26-20260630T-answer-gemma4b-body-gemma4b-caveat-disabled-A/`
+- B(답변 모델 `qwen3:14b`): `eval/runs/question-dataset/27-20260630T-answer-qwen14b-body-gemma4b-caveat-disabled-B/`
+
+질문별 수치·latency·P1-01 trace·구현 관찰은 `docs/implementation-notes/2026-06-30-answer-body-synthesis-layer/`에 보존한다(run artifact는 gitignore).
 
 ## 왜 지금
 
@@ -46,8 +53,12 @@
 | 입력 | 질문 + certified items 목록(label, value, final state, evidence snippet) |
 | 출력 | 사용자-facing 답변 문장 — 확정된 항목들을 종합한 하나의 coherent 답변 |
 | 넘지 말 선 | state를 못 바꿈(needs_review→확정 금지), 새 값·새 근거 못 만듦, certified evidence 밖 사실 추가 금지 |
+| 모델 | 답변(추출) 모델과 분리한 별도 호출(env `TRIPPROOF_OLLAMA_BODY_MODEL`, 기본 `gemma3:4b`). 어려운 판단은 앞에서 끝났으므로 작은 모델로 둔다 |
+| 토글 | `TRIPPROOF_BODY_SYNTHESIS_ENABLED`로 끄면 합성 없이 code template body만 쓴다. "합성 vs template만"을 단일 변수로 재기 위한 측정 게이트다 |
 
 상태별 어조는 `04`를 따른다: `supported`만 확정 어조, `needs_review`는 "확인 필요" 어조, `missing`은 없음. body 합성 LLM은 텍스트만 만들고 state 라벨을 쥐지 못한다 — state는 코드가 소유한 채 입력으로만 전달된다.
+
+합성 실패·이상 출력(JSON 깨짐, id 불일치, prompt leak, `needs_review` body가 확정 표현을 씀)이면 합성 결과를 통째로 버리고 항목별 code template으로 폴백한다. 코드 안전망은 두 층이다: ① state가 합성 *전*에 잠겨 합성이 못 뒤집고, ② 폴백 template이 항상 깔려 있다. 단 `needs_review` 과잉확정 차단(`_looks_confirmed`)은 정확 문구 blocklist라 얇다 — 의미적 우회를 다 막지는 못하고, 진짜 방어는 ①과 합성 프롬프트다(상세: implementation-note).
 
 ## 이게 고치려는 것
 
@@ -65,6 +76,17 @@
 6. body 합성은 추가 LLM 호출이므로 비용·latency를 관찰·기록하고, 개선이 측정될 때만 유지한다(`llm-design.md`).
 7. product response body에는 observation/debug/eval field를 추가하지 않는다.
 
+구현 상태: AC1·2·4·5·7은 코드로 충족하고 단위 테스트가 고정한다(합성이 `body`만 교체해 state/value/evidence 불변, missing은 template, 폴백, 초안 draft 미사용). AC3는 구조(잠긴 state)로 막되 표현 차단은 얇은 blocklist라 부분적이다. AC6의 latency는 측정했으나(아래) "개선이 측정될 때만 유지"는 미결 — 점수 이득이 작고 비용이 커서 모델·합성 유지 판단이 남았다.
+
+## 측정 결과 (2026-06-30)
+
+깨끗한 A/B(답변 모델만 변수). 둘 다 caveat 분리 호출 disabled, 합성 모델 `gemma3:4b` 고정.
+
+- **rule pass**: A(답변 `gemma3:4b`) 1/8·1/8·1/8, B(답변 `qwen3:14b`) 2/8·2/8·2/8 — 평평하지 않고 일관된 +1.
+- **완성도**: B가 준비물(신분증·결제카드), 위치, 객실/인원을 더 채웠고 P1-01을 `needs_review`로 옳게 보냈다. 다만 eval cue 채점이 부분문자열 게이트라 이 향상을 점수에 덜 반영한다(예: P1-01 B는 state는 맞췄으나 답에 "Remarks" 글자가 없어 fail). **pass 수를 제품 품질로 직접 환산하지 않는다.**
+- **비용**: B(qwen 답변)가 문항당 ~47초로 A(gemma)의 ~6초 대비 ~8배 느렸다(8문항 셋 ~6.4분 vs ~50초). 관측은 명시 duration metric이 아니라 observation export 타임스탬프 간격 추론이다.
+- **귀속**: 점수·완성도 차이는 **답변(추출) 모델 강약**에서 오지 body 합성층에서 오지 않는다. 합성층은 잠긴 사실을 문장으로 옮길 뿐이다. (수치·trace: implementation-note.)
+
 ## 확인 방법
 
 1. 같은 원문 PDF·`questions.json`으로 실행해, certified state와 최종 답변 문장이 모순되지 않는지 본다(특히 `needs_review`가 "확정"으로 새지 않는지).
@@ -75,9 +97,9 @@
 
 ## 열린 관찰: 값의 불확실성 표현이 안전망과 닿는 지점
 
-`07` A/B run(`eval/runs/question-dataset/25-20260630T-relation-qwen14b-pairwise-A-instrumented/repeat.json`)에서, "값이 자료에 적혀 있으나 보장은 아닌" 케이스가 안전망(`needs_review`)에 닿은 실효 경로는 별도 조건 분류기가 아니라, **답변 모델이 값을 단정 토큰 대신 "명시됐으나 확정 아님" 같은 불확실성 문장으로 쓰고, 그게 원문에 글자로 없어 value-grounding에서 떨어진** 우연이었다(`07`의 "이 결정이 닫지 않는 것" 참고).
+깨끗한 A/B의 B(run 27, 답변 `qwen3:14b`, caveat 분리 호출 disabled)에서 P1-01("특별 요청은 확정인가")이 `needs_review`에 닿은 실효 경로가 드러났다: **답변 모델이 조건을 답변 payload 안에서 직접(inline) 냈고(`caveat_source: inline`), certify가 그 조건이 원문에 grounding됨을 보고 `limited_by_caveat`로 강등**했다. 별도 조건 검출기는 꺼져 있었다. 즉 이 케이스의 안전망은 "별도 검출기"가 아니라 **답변 모델 inline + 코드 grounding/certify** 조합에서 나왔다 — `07`의 방향 B(분리 호출 대신 inline)와 한 줄로 맞는 실데이터다. (같은 질문에서 약한 답변 모델 `gemma3:4b`(run 26)는 조건을 inline으로 못 내 `ungrounded → missing`으로 떨어졌다.)
 
-이건 `08`의 분리 방향과 닿는 **가설**이다 — body 합성을 떼어내면, 답변 모델은 매끄러운 문장 대신 **값과 그 불확실성을 정직하게 표현**하는 데 집중할 수 있고, 안전망은 그 정직한 값에 대한 grounding 엄격성 + certify에서 나온다. 즉 "별도 검출기"보다 "값의 불확실성 표현 + grounding 엄격성"이 안전망의 더 단순한 자리일 수 있다. 단 이건 검증되지 않은 가설이며, 안전망 정밀도 자체의 결정은 `07`·`06` 영역이다 — `08`은 이 표현/합성 분리만 다룬다.
+이건 `08`의 분리 방향과 닿는 **가설**과 이어진다 — body 합성을 떼어내면, 답변 모델은 매끄러운 문장 대신 **값과 그 불확실성을 정직하게 표현**하는 데 집중할 수 있고, 안전망은 그 정직한 값에 대한 grounding 엄격성 + certify에서 나온다. 단 안전망 정밀도 자체의 결정은 `07`·`06` 영역이고, `08`은 표현/합성 분리만 다룬다. 또한 위 P1-01 성공은 강한 답변 모델(qwen)에 기댔고, 약한 모델에선 inline 자체가 비어 안전망이 안 선다 — 이 의존은 미해결로 `05`·`06`과 함께 본다.
 
 ## 이번 slice에서 섞지 않는 범위
 
