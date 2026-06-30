@@ -39,6 +39,12 @@
 
 따라서 P1-01은 후보를 더 많이 찾는 일(`05`)이 아니라, 이미 들어온 값과 조건의 역할·관계를 만드는 일(`06`)이 binding fix다. `05`는 조건 후보가 실제로 빠지는 compound question — 즉 값 후보는 들어오지만 그 값을 좌우할 수 있는 조건/요청/정책 후보가 role query에서 누락되는 경우 — 를 위한 coverage 일반화다. P1-01은 그 일반화의 동기이지, `05`가 닫을 케이스가 아니다.
 
+## retrieved-but-misused도 coverage 문제가 아니다
+
+`05` 경계와 관련해, `07` A/B run에서 관찰된 또 다른 비-coverage 실패를 여기 정리해 둔다(출처: `eval/runs/question-dataset/25-20260630T-relation-qwen14b-pairwise-A-instrumented/repeat.json` 등 07 묶음). 취소·노쇼 정책은 retrieval 후보에 또렷이 들어와 있었는데도, 노쇼 질문의 답은 그 근거를 인용하지 못해 `missing`으로 떨어졌고, 같은 노쇼 내용이 다른 질문(방 요청)에는 엉뚱하게 새어 들어가기도 했다. 즉 후보를 못 받은 게 아니라, 받은 후보를 답변이 맞는 질문에 붙이지 못한 **selection/인용 문제**다.
+
+이건 `05`가 *고칠* 문제가 아니라(답변 candidate·인용 쪽 몫이다) `05`가 *구분해야* 하는 경우다. coverage 관찰이 "retrieved-but-misused"를 "retrieval miss"와 섞으면, 후보를 더 찾는 헛수고로 빠진다. 그래서 missing 원인 구분(아래 책임 범위)에 "후보는 들어왔으나 답변이 안 썼/잘못 붙였음"을 retrieval miss와 별도로 읽을 수 있어야 한다.
+
 ## 사용자 장면
 
 사용자가 하나의 질문을 던졌고, LLM 후보와 `04` certification은 final state를 정하려면 어떤 candidate/evidence role이 충분하거나 부족한지 드러냈다. 이제 검색 단계가 그 role에 필요한 source unit 후보를 더 안정적으로 공급해야 한다.
