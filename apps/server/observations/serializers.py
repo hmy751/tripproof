@@ -136,6 +136,16 @@ def runtime_config_snapshot_to_payload(
             "temperature": snapshot.relation_model.temperature,
         }
 
+    body_model = None
+    if snapshot.body_model is not None:
+        body_model = {
+            "enabled": snapshot.body_model.enabled,
+            "backend": snapshot.body_model.backend,
+            "model": snapshot.body_model.model,
+            "seed": snapshot.body_model.seed,
+            "temperature": snapshot.body_model.temperature,
+        }
+
     return {
         "retrieval": {
             "backend": snapshot.retrieval.backend,
@@ -151,6 +161,7 @@ def runtime_config_snapshot_to_payload(
         "prompt": prompt,
         "answer_model": answer_model,
         "relation_model": relation_model,
+        "body_model": body_model,
     }
 
 

@@ -5,6 +5,7 @@ from server.answers.library_chat import (
     LIBRARY_CHAT_TARGET_ID,
     OllamaLibraryChatAnswerComposer,
 )
+from server.answers.body_synthesis import OllamaAnswerBodySynthesizer
 from server.answers.relation import OllamaCaveatExtractor
 from server.extraction.models import EvidenceState, Caveat
 from server.retrieval.models import AnswerContext, RetrievedSource, SourceUnit
@@ -250,6 +251,26 @@ def test_composer_reports_relation_model_snapshot_when_configured() -> None:
         "mode": "pairwise",
         "backend": "ollama",
         "model": "qwen3:14b",
+        "seed": 20260624,
+        "temperature": 0.0,
+    }
+
+
+def test_composer_reports_body_model_snapshot_when_configured() -> None:
+    synthesizer = OllamaAnswerBodySynthesizer(
+        client=_FakeJsonClient({"items": []}),
+        model="gemma3:4b",
+        seed=20260624,
+    )
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(_p1_01_style_payload()),
+        body_synthesizer=synthesizer,
+    )
+
+    assert composer.runtime_body_model_snapshot() == {
+        "enabled": True,
+        "backend": "ollama",
+        "model": "gemma3:4b",
         "seed": 20260624,
         "temperature": 0.0,
     }

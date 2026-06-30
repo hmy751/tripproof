@@ -12,6 +12,7 @@ from server.questions.observation import (
 from server.runtime.config_snapshot import (
     RuntimeConfigSettings,
     answer_model_runtime_config_snapshot_from_composer,
+    body_model_runtime_config_snapshot_from_composer,
     prompt_runtime_config_snapshot_from_composer,
     relation_model_runtime_config_snapshot_from_composer,
     runtime_config_snapshot_from_settings,
@@ -86,6 +87,9 @@ class AskQuestionUseCase:
                     self._answer_composer
                 ),
                 relation_model=relation_model_runtime_config_snapshot_from_composer(
+                    self._answer_composer
+                ),
+                body_model=body_model_runtime_config_snapshot_from_composer(
                     self._answer_composer
                 ),
             ),

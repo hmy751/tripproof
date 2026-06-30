@@ -4,10 +4,18 @@ from dataclasses import replace
 from typing import Protocol
 
 from server.core.config import (
+    BODY_SYNTHESIS_ENABLED,
     OLLAMA_ANSWER_SEED,
     OLLAMA_ANSWER_MODEL,
     OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
+    OLLAMA_BODY_MODEL,
+    OLLAMA_BODY_SEED,
+    OLLAMA_BODY_TIMEOUT_SECONDS,
+)
+from server.answers.body_synthesis import (
+    AnswerBodySynthesizer,
+    create_answer_body_synthesizer_from_config,
 )
 from server.answers.candidate import AnswerCandidate, answer_candidate_from_payload
 from server.answers.certification import certify
@@ -47,6 +55,7 @@ class OllamaLibraryChatAnswerComposer:
         seed: int | None = None,
         temperature: float | None = 0.0,
         caveat_extractor: CaveatExtractor | None = None,
+        body_synthesizer: AnswerBodySynthesizer | None = None,
     ) -> None:
         self._client = client
         self._prompt = prompt or load_library_chat_answer_prompt()
@@ -54,6 +63,7 @@ class OllamaLibraryChatAnswerComposer:
         self._seed = seed
         self._temperature = temperature
         self._caveat_extractor = caveat_extractor
+        self._body_synthesizer = body_synthesizer
 
     @property
     def prompt(self) -> LibraryChatAnswerPrompt:
@@ -80,6 +90,7 @@ class OllamaLibraryChatAnswerComposer:
             payload=payload,
             context=context,
             caveat_extractor=self._caveat_extractor,
+            body_synthesizer=self._body_synthesizer,
         )
 
     def runtime_answer_model_snapshot(self) -> dict[str, object]:
@@ -102,11 +113,24 @@ class OllamaLibraryChatAnswerComposer:
                 return snapshot
         return {"enabled": True}
 
+    def runtime_body_model_snapshot(self) -> dict[str, object]:
+        if self._body_synthesizer is None:
+            return {"enabled": False}
+        snapshot_method = getattr(
+            self._body_synthesizer, "runtime_body_model_snapshot", None
+        )
+        if callable(snapshot_method):
+            snapshot = snapshot_method()
+            if isinstance(snapshot, dict):
+                return snapshot
+        return {"enabled": True}
+
 
 def create_library_chat_answer_composer_from_config(
     *, answer_seed: int | None = None
 ) -> LibraryChatAnswerComposer:
     seed = OLLAMA_ANSWER_SEED if answer_seed is None else answer_seed
+    body_seed = OLLAMA_BODY_SEED if OLLAMA_BODY_SEED is not None else seed
     return OllamaLibraryChatAnswerComposer(
         client=OllamaChatJsonClient(
             OllamaChatJsonConfig(
@@ -120,6 +144,16 @@ def create_library_chat_answer_composer_from_config(
         seed=seed,
         temperature=0.0,
         caveat_extractor=create_caveat_extractor_from_config(answer_seed=seed),
+        body_synthesizer=(
+            create_answer_body_synthesizer_from_config(
+                base_url=OLLAMA_BASE_URL,
+                model=OLLAMA_BODY_MODEL,
+                timeout_seconds=OLLAMA_BODY_TIMEOUT_SECONDS,
+                seed=body_seed,
+            )
+            if BODY_SYNTHESIS_ENABLED
+            else None
+        ),
     )
 
 
@@ -145,6 +179,7 @@ def _answer_from_payload(
     payload: object,
     context: AnswerContext,
     caveat_extractor: CaveatExtractor | None = None,
+    body_synthesizer: AnswerBodySynthesizer | None = None,
 ) -> ChatAnswer:
     if not isinstance(payload, dict):
         return _missing_answer(
@@ -175,7 +210,9 @@ def _answer_from_payload(
         # 얹는다. 제품 body 렌더는 이 필드를 읽지 않는다.
         certification = replace(certification, caveat_source=caveat_source)
         items.append(
-            _item_from_certification(candidate=candidate, certification=certification)
+            _item_from_certification(
+                question=question, candidate=candidate, certification=certification
+            )
         )
 
     if not items:
@@ -183,6 +220,9 @@ def _answer_from_payload(
             reason="답변 생성기가 검증 가능한 answer item을 반환하지 않았습니다."
         )
 
+    items = _items_with_synthesized_bodies(
+        question=question, items=items, body_synthesizer=body_synthesizer
+    )
     return ChatAnswer(summary=_summary_for_items(items), items=items)
 
 
@@ -221,14 +261,14 @@ def _enrich_with_caveat(
 
 
 def _item_from_certification(
-    *, candidate: AnswerCandidate, certification: Certification
+    *, question: str, candidate: AnswerCandidate, certification: Certification
 ) -> ChatAnswerItem:
     item_id = candidate.item_id()
     if certification.state == EvidenceState.SUPPORTED:
         return ChatAnswerItem(
             id=item_id,
             label=candidate.label,
-            body=_supported_body(candidate),
+            body=_supported_body(question=question, candidate=candidate),
             evidence_state=EvidenceState.SUPPORTED,
             value=candidate.value,
             evidence=list(certification.evidence),
@@ -239,7 +279,9 @@ def _item_from_certification(
         return ChatAnswerItem(
             id=item_id,
             label=candidate.label,
-            body=_needs_review_body(candidate=candidate, certification=certification),
+            body=_needs_review_body(
+                question=question, candidate=candidate, certification=certification
+            ),
             evidence_state=EvidenceState.NEEDS_REVIEW,
             value=candidate.value,
             evidence=list(certification.evidence),
@@ -249,7 +291,9 @@ def _item_from_certification(
     return ChatAnswerItem(
         id=item_id,
         label=candidate.label,
-        body=_missing_body(candidate=candidate, certification=certification),
+        body=_missing_body(
+            question=question, candidate=candidate, certification=certification
+        ),
         evidence_state=EvidenceState.MISSING,
         value=None,
         evidence=[],
@@ -258,42 +302,108 @@ def _item_from_certification(
 
 
 # ── Final body rendering (certified state 뒤에서만 생성) ─────────────────────
-# body는 certification 결과를 풀어 쓰는 마지막 단계다. state를 승격하거나 새 값을
-# 만들 수 없고, certified state를 거슬러 "확정"처럼 말할 수 없다(AC5). needs_review/
-# missing body는 LLM draft를 쓰지 않고 코드 template으로 만들어 overclaim을 막는다.
-def _supported_body(candidate: AnswerCandidate) -> str:
-    if candidate.draft_body:
-        return candidate.draft_body
+# body는 certification 결과를 풀어 쓰는 마지막 단계다. state를 승격하거나 새 값을 만들 수
+# 없다. supported/needs_review는 인증 뒤 전용 합성 호출을 먼저 쓰고, 실패하면 아래 코드
+# template으로 폴백한다. missing은 합성하지 않고 항상 template으로 둔다.
+def _items_with_synthesized_bodies(
+    *,
+    question: str,
+    items: list[ChatAnswerItem],
+    body_synthesizer: AnswerBodySynthesizer | None,
+) -> list[ChatAnswerItem]:
+    if body_synthesizer is None:
+        return items
+
+    synthesizable = [
+        item
+        for item in items
+        if item.evidence_state in {EvidenceState.SUPPORTED, EvidenceState.NEEDS_REVIEW}
+    ]
+    if not synthesizable:
+        return items
+
+    body_map = body_synthesizer.synthesize(question=question, items=synthesizable)
+    if body_map is None:
+        return items
+
+    return [
+        (
+            replace(item, body=body_map[item.id])
+            if item.id in body_map and item.evidence_state != EvidenceState.MISSING
+            else item
+        )
+        for item in items
+    ]
+
+
+def _supported_body(*, question: str, candidate: AnswerCandidate) -> str:
+    label = _body_label(question=question, candidate=candidate)
     if candidate.value:
-        return f"{candidate.label}: {candidate.value}"
-    return f"{candidate.label}은 자료에서 확인되었습니다."
+        return f"{label}: {candidate.value}"
+    return f"{label}은 자료에서 확인되었습니다."
 
 
 def _needs_review_body(
-    *, candidate: AnswerCandidate, certification: Certification
+    *, question: str, candidate: AnswerCandidate, certification: Certification
 ) -> str:
+    label = _body_label(question=question, candidate=candidate)
     # limited_by_caveat: 값은 자료에 있으나 그 값을 지배하는 조건이 함께 있어
-    # 확정으로 볼 수 없다. 조건 원문을 그대로 길게 노출하지 않고, 조건이 걸려 있어
-    # 확인이 필요하다는 사실만 전한다(state를 거슬러 "확정"으로 말하지 않는다, AC5).
+    # 확정으로 볼 수 없다. 조건 근거가 있으면 그 요지를 드러내되 state를 거슬러
+    # "확정"으로 말하지 않는다(AC5).
     if certification.reason == "limited_by_caveat":
+        caveat = (
+            f" 조건: {certification.caveat.snippet}"
+            if certification.caveat is not None
+            else ""
+        )
         if candidate.value:
             return (
-                f"{candidate.label}은 자료에서 확인되지만, 적용에 조건이 있어 "
-                f"확정 여부는 원문 확인이 필요합니다: {candidate.value}"
+                f"{label}은 자료에서 확인되지만, 적용 조건 때문에 원문 확인이 "
+                f"필요합니다: {candidate.value}.{caveat}"
             )
-        return f"{candidate.label}은 적용 조건이 있어 원문 확인이 필요합니다."
+        return f"{label}은 적용 조건이 있어 원문 확인이 필요합니다.{caveat}"
     if candidate.value:
         return (
-            f"{candidate.label}은 자료에서 확인되지만 보장 여부는 "
+            f"{label}은 자료에서 확인되지만 보장 여부는 "
             f"원문 확인이 필요합니다: {candidate.value}"
         )
-    return f"{candidate.label}은 원문 확인이 필요합니다."
+    return f"{label}은 원문 확인이 필요합니다."
 
 
-def _missing_body(*, candidate: AnswerCandidate, certification: Certification) -> str:
+def _missing_body(
+    *, question: str, candidate: AnswerCandidate, certification: Certification
+) -> str:
+    label = _body_label(question=question, candidate=candidate)
     if certification.reason == "candidate_missing":
-        return f"현재 등록된 자료에서 {candidate.label}을 확인하지 못했습니다."
-    return f"현재 등록된 자료에서 {candidate.label}의 근거를 확인하지 못했습니다."
+        return f"현재 등록된 자료에서 {label}을 확인하지 못했습니다."
+    return f"현재 등록된 자료에서 {label}의 근거를 확인하지 못했습니다."
+
+
+def _body_label(*, question: str, candidate: AnswerCandidate) -> str:
+    if candidate.label != "답변":
+        return candidate.label
+    subject = _question_subject(question)
+    return subject or candidate.label
+
+
+def _question_subject(question: str) -> str | None:
+    stripped = question.strip().rstrip("?!.。")
+    for suffix in (
+        "가 어떻게 돼",
+        "이 어떻게 돼",
+        "은 어떻게 돼",
+        "는 어떻게 돼",
+        " 어떻게 돼",
+        "가 뭐야",
+        "이 뭐야",
+        "은 뭐야",
+        "는 뭐야",
+        " 뭐야",
+    ):
+        if stripped.endswith(suffix):
+            subject = stripped[: -len(suffix)].strip()
+            return subject or None
+    return None
 
 
 def _summary_for_items(items: list[ChatAnswerItem]) -> str:

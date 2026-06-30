@@ -38,6 +38,7 @@ from server.observations.export import LocalArtifactObservationExporter  # noqa:
 from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
 from server.runtime.config_snapshot import (  # noqa: E402
     answer_model_runtime_config_snapshot_from_composer,
+    body_model_runtime_config_snapshot_from_composer,
     relation_model_runtime_config_snapshot_from_composer,
 )
 from server.testing import (  # noqa: E402
@@ -530,6 +531,9 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
     relation_model = relation_model_runtime_config_snapshot_from_composer(
         app.state.library_chat_answer_composer
     )
+    body_model = body_model_runtime_config_snapshot_from_composer(
+        app.state.library_chat_answer_composer
+    )
     answer_composer = answer_model.backend if answer_model is not None else "unknown"
     answer_model_name = answer_model.model if answer_model is not None else None
     answer_seed = answer_model.seed if answer_model is not None else None
@@ -542,6 +546,11 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
     relation_temperature = (
         relation_model.temperature if relation_model is not None else None
     )
+    body_enabled = body_model.enabled if body_model is not None else None
+    body_backend = body_model.backend if body_model is not None else None
+    body_model_name = body_model.model if body_model is not None else None
+    body_seed = body_model.seed if body_model is not None else None
+    body_temperature = body_model.temperature if body_model is not None else None
     return {
         "mode": runtime_mode,
         "production_like": runtime_mode == RUNTIME_MODE_PRODUCTION,
@@ -563,6 +572,11 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
         "relation_model": relation_model_name,
         "relation_seed": relation_seed,
         "relation_temperature": relation_temperature,
+        "body_synthesis_enabled": body_enabled,
+        "body_model_backend": body_backend,
+        "body_model": body_model_name,
+        "body_seed": body_seed,
+        "body_temperature": body_temperature,
     }
 
 

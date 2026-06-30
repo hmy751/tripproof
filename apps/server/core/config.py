@@ -50,6 +50,18 @@ OLLAMA_ANSWER_TIMEOUT_SECONDS = float(
 _OLLAMA_ANSWER_SEED_RAW = os.getenv("TRIPPROOF_OLLAMA_ANSWER_SEED", "").strip()
 OLLAMA_ANSWER_SEED = int(_OLLAMA_ANSWER_SEED_RAW) if _OLLAMA_ANSWER_SEED_RAW else None
 
+OLLAMA_BODY_MODEL = os.getenv("TRIPPROOF_OLLAMA_BODY_MODEL", "gemma3:4b")
+OLLAMA_BODY_TIMEOUT_SECONDS = float(
+    os.getenv("TRIPPROOF_OLLAMA_BODY_TIMEOUT_SECONDS", "120.0")
+)
+_OLLAMA_BODY_SEED_RAW = os.getenv("TRIPPROOF_OLLAMA_BODY_SEED", "").strip()
+OLLAMA_BODY_SEED = int(_OLLAMA_BODY_SEED_RAW) if _OLLAMA_BODY_SEED_RAW else None
+# 인증 후 body 합성 호출을 켤지(기본) 끌지의 토글. 끄면 합성 없이 code template body만
+# 쓴다. 합성층이 밋밋한 template 대비 무엇을 버는지 A/B로 재기 위한 단일 변수다.
+BODY_SYNTHESIS_ENABLED = os.getenv(
+    "TRIPPROOF_BODY_SYNTHESIS_ENABLED", "1"
+).strip().lower() not in {"0", "false", "no", "off"}
+
 OLLAMA_CAVEAT_MODEL = os.getenv("TRIPPROOF_OLLAMA_CAVEAT_MODEL", OLLAMA_ANSWER_MODEL)
 OLLAMA_CAVEAT_TIMEOUT_SECONDS = float(
     os.getenv(
