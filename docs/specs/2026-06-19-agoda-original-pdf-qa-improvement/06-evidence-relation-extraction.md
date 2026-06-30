@@ -2,7 +2,7 @@
 
 작성일: 2026-06-29
 
-상태: draft sub-spec. answer certification boundary(`04`) 이후, 이미 후보에 들어온 값과 그 값을 조건부로 만드는 caveat 사이의 역할·관계를 만드는 의미 층이다. relation extractor v1(답 호출과 분리된 caveat 검출)은 코드에 있으나(`574dee4`), gemma3:4b에서 무관한 조건을 과잉 부착한다 — per-unit·순서 불변 변형(`118a916`)을 시도했으나 그 과잉을 못 잡아 되돌렸다(`8040665`). 따라서 이 문서의 계약(특히 paraphrase-안정 needs_review)은 아직 달성되지 않은 목표이며, 현재 baseline은 과잉강등을 알려진 한계로 안고 있다. 측정·경계: `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`.
+상태: draft sub-spec. answer certification boundary(`04`) 이후, 이미 후보에 들어온 값과 그 값을 조건부로 만드는 caveat 사이의 역할·관계를 만드는 의미 층이다. relation extractor v1(답 호출과 분리된 caveat 검출)은 코드에 있으나(`574dee4`), gemma3:4b에서 무관한 조건을 과잉 부착한다 — per-unit·순서 불변 변형(`118a916`)을 시도했으나 그 과잉을 못 잡아 되돌렸다(`8040665`). 이후 이 **분리 relation 호출 방향**은 `07` A/B에서 net-negative로 확인돼 폐기됐다(방향 B). 의미 층의 안전망 실효 경로는 `08`에서 "답변 모델 inline caveat + certify"로 옮겨가 P1-01을 `needs_review`로 보내는 데까지 확인됐고, 단 강한 답변 모델 의존이라 근본 문제(특히 paraphrase-안정 needs_review)는 미해결로 남는다. 따라서 `06`은 "이 값은 이 조건에 좌우된다 / 필요한 조건 역할이 비었다"는 **역할 구조 설계 의도** 문서로 남되, 분리 호출 구현 방향은 폐기된 것으로 읽는다. 측정·경계: `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`, 이후 결론은 `07`·`08`.
 
 측정 run (2026-06-29, production·seed 20260624; per-unit·순서불변 A/B는 `8040665`로 되돌림):
 

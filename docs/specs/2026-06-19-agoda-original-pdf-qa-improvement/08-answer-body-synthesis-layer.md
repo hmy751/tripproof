@@ -2,7 +2,7 @@
 
 작성일: 2026-06-29 · 구현: 2026-06-30 (commit `84fbb18`)
 
-상태: 구현됨. 사용자-facing 답변 문장(body)을 답변 생성 호출에서 떼어, **확정된 데이터를 읽고 맨 끝에 합성하는 전용 층**으로 옮겼다. `supported`·`needs_review` body는 합성으로 만들고, `missing`은 합성하지 않으며, 합성 실패·이상 출력 시 code template으로 폴백한다. 깨끗한 A/B(답변 모델만 변수, caveat 분리 호출 disabled·합성 모델 `gemma3:4b` 고정)로 측정했다.
+상태: 구현됨. 사용자-facing 답변 문장(body)을 답변 생성 호출에서 떼어, **확정된 데이터를 읽고 맨 끝에 합성하는 전용 층**으로 옮겼다. `supported`·`needs_review` body는 합성으로 만들고, `missing`은 합성하지 않으며, 합성 실패·이상 출력 시 code template으로 폴백한다. 깨끗한 A/B(답변 모델만 변수, caveat 분리 호출 disabled·합성 모델 `gemma3:4b` 고정)로 측정했다. 단 합성 유지·모델 선택(완성도 vs ~8배 latency)은 미결이다(아래 측정 결과·AC6).
 
 기준 run (production·seed 20260624·repeat 3·caveat disabled·합성 모델 `gemma3:4b`):
 
@@ -76,7 +76,7 @@
 6. body 합성은 추가 LLM 호출이므로 비용·latency를 관찰·기록하고, 개선이 측정될 때만 유지한다(`llm-design.md`).
 7. product response body에는 observation/debug/eval field를 추가하지 않는다.
 
-구현 상태: AC1·2·4·5·7은 코드로 충족하고 단위 테스트가 고정한다(합성이 `body`만 교체해 state/value/evidence 불변, missing은 template, 폴백, 초안 draft 미사용). AC3는 구조(잠긴 state)로 막되 표현 차단은 얇은 blocklist라 부분적이다. AC6의 latency는 측정했으나(아래) "개선이 측정될 때만 유지"는 미결 — 점수 이득이 작고 비용이 커서 모델·합성 유지 판단이 남았다.
+구현 상태: AC1·2·4·5·7은 코드로 충족하고 단위 테스트가 핵심 경로(합성이 `body`만 교체해 state/value/evidence 불변, missing은 template, 합성 비활성·실패 폴백, needs_review 과잉확정 폴백, 초안 draft 미사용)를 고정한다. 단 적대적 폴백(id 불일치·중복·prompt leak) 직접 테스트 커버는 얇다(impl-note). AC3는 구조(잠긴 state)로 막되 표현 차단은 얇은 blocklist라 부분적이다. answer_summary(요약 문장)는 아직 code template이라 항목 body만 합성된다 — 답 텍스트가 반은 합성·반은 template로 갈린다(impl-note). AC6의 latency·비용은 측정했으나("비용"은 추가 LLM 호출 latency로 관찰, 토큰/요금 별도 metric 없음) "개선이 측정될 때만 유지"는 미결 — 점수 이득이 작고 비용이 커서 모델·합성 유지 판단이 남았다.
 
 ## 측정 결과 (2026-06-30)
 

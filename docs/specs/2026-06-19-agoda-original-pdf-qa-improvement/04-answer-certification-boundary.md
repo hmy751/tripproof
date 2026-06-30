@@ -3,7 +3,7 @@
 작성일: 2026-06-24
 재작성일: 2026-06-29
 
-상태: draft sub-spec. source unit 구조화(`02`)와 측정 preflight(`03`) 이후, LLM 답변 후보가 자기 답을 스스로 인증하지 못하게 막는 첫 product safety vertical이다.
+상태: draft sub-spec — mechanical certification(grounding/value-grounding)은 구현·검증됐고, "조건이 값을 좌우하는가"의 의미 판단은 `06`으로, final body 합성은 `08`(구현됨)로 재귀속했다. `04`는 그 경계(코드가 final state를 소유하고 body가 state를 거스를 수 없다는 가드레일)를 소유한다. source unit 구조화(`02`)와 측정 preflight(`03`) 이후, LLM 답변 후보가 자기 답을 스스로 인증하지 못하게 막는 첫 product safety vertical이다.
 
 이 문서의 중심은 질문 분해 자체가 아니다. 검색이 가져온 source unit과 LLM이 만든 후보를 final answer로 바로 투영하지 않고, 그 사이에 code-owned certification boundary를 둔다. 최종 상태와 최종 문장은 이 boundary 뒤에서만 만들어진다.
 
@@ -62,7 +62,7 @@
 | code certification | 정규화된 후보와 evidence set 구조 | final evidence state, certification reason | 질문/답변 문구를 키워드로 읽어 의미를 추측하지 않는다 |
 | final body | final state와 certified facts | 사용자-facing 문장 | state를 승격하거나 새 값을 만들지 않는다 |
 
-이번 slice는 `LLM 후보 -> code certification -> final body` 경계를 product contract로 세운다. retrieval 후보를 더 넓히는 작업은 `05-subrequest-retrieval-coverage.md`에서 다룬다.
+이번 slice는 `LLM 후보 -> code certification -> final body` 경계를 product contract로 세운다. final body의 실제 생성(확정 데이터 기반 합성)과 그 측정은 `08`(구현됨)이 받고, `04`는 body가 certified state를 거스를 수 없다는 가드레일만 둔다. retrieval 후보를 더 넓히는 작업은 `05-subrequest-retrieval-coverage.md`에서 다룬다.
 
 ## 단계 계약
 

@@ -94,7 +94,7 @@ source unit 구조화의 효과를 timeline으로 보면 다음과 같다.
 - text-only dedupe가 서로 다른 위치의 같은 문구를 지우지 않도록 bbox overlap을 함께 본다.
 - boundary 회귀 테스트는 Agoda/booking keyword에 기대지 않는 neutral geometry fixture로 보강했다. booking-domain keyword는 boundary 생성이 아니라 semantic annotation/recall 보조 쪽으로 분리한다.
 
-2026-06-24 cleanup에서는 `07`/`08` source unit 관찰에서 드러난 두 가지 문제를 더 보완했다.
+2026-06-24 cleanup에서는 `07`/`08` field-group 관찰 run(스펙 문서 `07`·`08`이 아니라 source unit 관찰 run-id)에서 드러난 두 가지 문제를 더 보완했다.
 
 - pdfplumber가 일부 Hangul/CJK 글자를 겹쳐 추출해 `대대한한민민국국`처럼 보이던 artifact를 word/table text 수집 단계에서 정리한다. ASCII 영문/숫자 반복은 보존한다.
 - large/value-only table cell이 주변 line-region field group을 과하게 억제하지 않게 했다. 반대로 compact labeled table row/cell은 중복 source unit을 만들지 않도록 line-region을 억제한다.
@@ -114,8 +114,8 @@ source unit 구조화의 효과를 timeline으로 보면 다음과 같다.
 - state match가 true인 항목은 `checkin_action`, `stay_dates`, `missing_checkin_start_time`, `property_location`, `room_and_party`, `on_site_extra_costs`다.
 - `property_location`은 `u.10` line-region field group에서 `Property/Address` 라벨과 실제 값이 함께 잡혀 supported evidence로 복구됐다.
 - `Remarks + NonSmoke/LargeBed + 특별 요청은 숙소 상황에 따라 결정`은 `u.12` line-region field group으로 보존됐다. 다만 `special_request_boundary`의 최종 state는 여전히 false라서, 이후에는 source unit boundary보다 subrequest retrieval/state validation 쪽에서 다룬다.
-- `08`에서 보이던 중복 glyph artifact는 `09` source-units 문서에서 `대대한`, `체체`, `福福`, `하하카`, `예예약`, `모모든` 패턴이 사라진 것으로 확인했다.
-- `08`에 있던 과도한 `Booking ID ... Number of Rooms ... Booking Reference No ... Number of Extra Beds ...` line-region은 `09`에서 제거됐다.
+- `08` field-group run에서 보이던 중복 glyph artifact는 `09` source-units 문서에서 `대대한`, `체체`, `福福`, `하하카`, `예예약`, `모모든` 패턴이 사라진 것으로 확인했다.
+- `08` field-group run에 있던 과도한 `Booking ID ... Number of Rooms ... Booking Reference No ... Number of Extra Beds ...` line-region은 `09`에서 제거됐다.
 
 따라서 `07`/`08`은 field-group 방향성 관찰로, `09`는 02 source unit boundary slice의 최종 확인 run으로 본다.
 

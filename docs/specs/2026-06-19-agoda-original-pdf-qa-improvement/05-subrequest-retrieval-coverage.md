@@ -23,6 +23,7 @@
 
 - 하위 요청(candidate/evidence role)별로 source unit 후보를 더 안정적으로 공급한다.
 - 후보가 없을 때 원인을 source unit 부재 / retrieval miss / candidate·relation extraction miss로 구분 가능하게 한다.
+- 후보가 retrieval됐는데도 답변이 인용하지 못하거나 다른 질문에 잘못 붙인 경우(selection/인용 실패, 벽②)를 retrieval miss(후보 없음)와 *구분*해 읽는다 — `05`는 이를 구분만 하고 고치진 않는다.
 - 받은 후보가 값만 담는지, 그 값을 좌우할 수 있는 caveat 문맥도 담는지를 관찰해 `06`에 넘긴다.
 - 후보가 어떤 source unit locator/kind에서, 어떤 경로(vector / lexical / kind hint / 인접 context)로 들어왔는지 보존한다.
 
@@ -108,6 +109,7 @@ lexical recall은 답을 만드는 규칙이 아니다. vector search가 놓칠 
 - 후보가 값만 담는가, 그 값을 좌우할 수 있는 조건 문맥도 함께 담는가
 - 후보가 vector, lexical, kind hint, 인접 context 중 어떤 경로로 들어왔는가
 - 후보가 없으면 source unit 부재인지, retrieval miss인지, candidate/relation extraction miss인지 구분 가능한가
+- 후보가 retrieval됐는데도 답변이 그 후보를 안 썼거나 다른 질문에 잘못 붙였는가(selection 실패, 벽②) — retrieval miss(후보 없음)와 구분한다
 
 이 관찰은 후보가 값/조건을 담았는지까지만 본다. "그 조건이 이 값을 좌우한다"는 역할 판정은 여기서 하지 않고 `06`에 넘긴다.
 

@@ -16,6 +16,7 @@
 - `docs/implementation-notes/2026-06-29-certification-keyword-gate-mirror-trap/`
 - `docs/implementation-notes/2026-06-29-certification-structural-proxy-overdowngrade/`
 - `docs/implementation-notes/2026-06-29-caveat-relation-pass-overfire/`
+- `docs/implementation-notes/2026-06-30-answer-body-synthesis-layer/`
 - `docs/engineering/llm-design.md`
 - `eval/datasets/agoda-booking-confirmation/questions.json`
 
