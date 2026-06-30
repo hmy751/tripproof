@@ -65,7 +65,25 @@ def caveat_from_payload(
     셋 다 비어 있으면(조건 없음) None으로 둔다.
     """
 
-    raw = _field(payload, "caveat", "caveat")
+    raw = _field(payload, "caveat", "governingCondition")
+    return _caveat_from_object(raw)
+
+
+def caveats_from_payload(payload: dict[object, object]) -> list[Caveat]:
+    """relation pass의 per-unit 응답 `{ "caveats": [...] }`을 정규화한다."""
+
+    raw = _field(payload, "caveats")
+    if not isinstance(raw, list):
+        return []
+    caveats: list[Caveat] = []
+    for item in raw:
+        caveat = _caveat_from_object(item)
+        if caveat is not None:
+            caveats.append(caveat)
+    return caveats
+
+
+def _caveat_from_object(raw: object) -> Caveat | None:
     if not isinstance(raw, dict):
         return None
     source_unit_id = _optional_string(_field(raw, "source_unit_id", "sourceUnitId"))

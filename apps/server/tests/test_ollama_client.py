@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import json
 
-from server.llm.ollama import OllamaChatJsonClient, OllamaChatJsonConfig
+import pytest
+
+from server.llm.ollama import (
+    OllamaChatJsonClient,
+    OllamaChatJsonConfig,
+    OllamaClientError,
+)
 
 
 def test_ollama_chat_json_client_sends_configured_seed(monkeypatch) -> None:
@@ -44,3 +50,21 @@ def test_ollama_chat_json_client_sends_configured_seed(monkeypatch) -> None:
         "temperature": 0.0,
         "seed": 1234,
     }
+
+
+def test_ollama_chat_json_client_wraps_timeout(monkeypatch) -> None:
+    def fake_urlopen(http_request, *, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("server.llm.ollama.request.urlopen", fake_urlopen)
+
+    client = OllamaChatJsonClient(
+        OllamaChatJsonConfig(
+            base_url="http://ollama.local",
+            model="qwen3:14b",
+            timeout_seconds=1.0,
+        )
+    )
+
+    with pytest.raises(OllamaClientError, match="timed out"):
+        client.generate_json(system="system", user="user")

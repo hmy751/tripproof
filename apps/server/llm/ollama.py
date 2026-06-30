@@ -56,7 +56,7 @@ class OllamaChatJsonClient:
                 http_request, timeout=self._timeout_seconds
             ) as response:
                 raw = response.read()
-        except error.URLError as exc:
+        except (TimeoutError, error.URLError) as exc:
             raise OllamaClientError(f"Ollama chat request failed: {exc}") from exc
 
         try:

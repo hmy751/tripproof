@@ -38,6 +38,7 @@ from server.observations.export import LocalArtifactObservationExporter  # noqa:
 from server.retrieval.embeddings import EmbeddingProfile  # noqa: E402
 from server.runtime.config_snapshot import (  # noqa: E402
     answer_model_runtime_config_snapshot_from_composer,
+    relation_model_runtime_config_snapshot_from_composer,
 )
 from server.testing import (  # noqa: E402
     InMemoryRetrievalRepository,
@@ -526,10 +527,21 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
     answer_model = answer_model_runtime_config_snapshot_from_composer(
         app.state.library_chat_answer_composer
     )
+    relation_model = relation_model_runtime_config_snapshot_from_composer(
+        app.state.library_chat_answer_composer
+    )
     answer_composer = answer_model.backend if answer_model is not None else "unknown"
     answer_model_name = answer_model.model if answer_model is not None else None
     answer_seed = answer_model.seed if answer_model is not None else None
     answer_temperature = answer_model.temperature if answer_model is not None else None
+    relation_enabled = relation_model.enabled if relation_model is not None else None
+    relation_mode = relation_model.mode if relation_model is not None else None
+    relation_backend = relation_model.backend if relation_model is not None else None
+    relation_model_name = relation_model.model if relation_model is not None else None
+    relation_seed = relation_model.seed if relation_model is not None else None
+    relation_temperature = (
+        relation_model.temperature if relation_model is not None else None
+    )
     return {
         "mode": runtime_mode,
         "production_like": runtime_mode == RUNTIME_MODE_PRODUCTION,
@@ -545,6 +557,12 @@ def _runtime_artifact(*, app, runtime_mode: RuntimeMode) -> dict[str, Any]:
         "answer_seed": answer_seed,
         "answer_seed_specified": answer_seed is not None,
         "answer_temperature": answer_temperature,
+        "relation_extractor_enabled": relation_enabled,
+        "relation_extractor_mode": relation_mode,
+        "relation_model_backend": relation_backend,
+        "relation_model": relation_model_name,
+        "relation_seed": relation_seed,
+        "relation_temperature": relation_temperature,
     }
 
 

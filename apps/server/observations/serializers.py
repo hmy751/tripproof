@@ -125,6 +125,17 @@ def runtime_config_snapshot_to_payload(
             "temperature": snapshot.answer_model.temperature,
         }
 
+    relation_model = None
+    if snapshot.relation_model is not None:
+        relation_model = {
+            "enabled": snapshot.relation_model.enabled,
+            "mode": snapshot.relation_model.mode,
+            "backend": snapshot.relation_model.backend,
+            "model": snapshot.relation_model.model,
+            "seed": snapshot.relation_model.seed,
+            "temperature": snapshot.relation_model.temperature,
+        }
+
     return {
         "retrieval": {
             "backend": snapshot.retrieval.backend,
@@ -139,6 +150,7 @@ def runtime_config_snapshot_to_payload(
         },
         "prompt": prompt,
         "answer_model": answer_model,
+        "relation_model": relation_model,
     }
 
 

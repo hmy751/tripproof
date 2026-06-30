@@ -77,6 +77,19 @@ class _ExplodingExtractor:
         raise AssertionError("relation extractor should not be called")
 
 
+class _SequenceJsonClient:
+    """호출마다 다음 payload를 돌려준다 — order_invariant의 2회 호출을 구분한다."""
+
+    def __init__(self, payloads: list[object]) -> None:
+        self._payloads = payloads
+        self._calls = 0
+
+    def generate_json(self, *, system: str, user: str) -> object:
+        payload = self._payloads[min(self._calls, len(self._payloads) - 1)]
+        self._calls += 1
+        return payload
+
+
 def _p1_01_style_payload() -> dict:
     # run 16 P1-01 실제 형태: 조건을 답으로 흡수, value=null, supported, 조건칸 없음.
     return {
@@ -90,6 +103,15 @@ def _p1_01_style_payload() -> dict:
                 "source_unit_id": "su_condition",
                 "evidence_snippet": "All special requests",
             }
+        ]
+    }
+
+
+def _caveats_payload(*entries: tuple[str, str]) -> dict:
+    return {
+        "caveats": [
+            {"source_unit_id": sid, "snippet": snip, "text": _CONDITION}
+            for sid, snip in entries
         ]
     }
 
@@ -133,6 +155,104 @@ def test_extractor_returns_none_when_no_condition() -> None:
         extractor.extract(question="질문", candidate=candidate, context=_context(unit))
         is None
     )
+
+
+def test_pairwise_extractor_parses_caveats_list() -> None:
+    unit = _unit(unit_id="su_condition", text=_CONDITION)
+    extractor = OllamaCaveatExtractor(
+        client=_FakeJsonClient(
+            _caveats_payload(("su_condition", "subject to availability"))
+        ),
+        mode="pairwise",
+    )
+    candidate = answer_candidate_from_payload(
+        index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
+    )
+    assert candidate is not None
+
+    caveat = extractor.extract(
+        question="질문", candidate=candidate, context=_context(unit)
+    )
+
+    assert caveat is not None
+    assert caveat.source_unit_id == "su_condition"
+    assert caveat.snippet == "subject to availability"
+
+
+def test_order_invariant_keeps_caveat_stable_across_orders() -> None:
+    unit = _unit(unit_id="su_condition", text=_CONDITION)
+    client = _SequenceJsonClient(
+        [
+            _caveats_payload(("su_condition", "subject to availability")),
+            _caveats_payload(("su_condition", "subject to availability")),
+        ]
+    )
+    extractor = OllamaCaveatExtractor(client=client, mode="order_invariant")
+    candidate = answer_candidate_from_payload(
+        index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
+    )
+    assert candidate is not None
+
+    caveat = extractor.extract(
+        question="질문", candidate=candidate, context=_context(unit)
+    )
+
+    assert caveat is not None
+    assert caveat.source_unit_id == "su_condition"
+
+
+def test_order_invariant_drops_caveat_unstable_across_orders() -> None:
+    unit = _unit(unit_id="su_condition", text=_CONDITION)
+    client = _SequenceJsonClient(
+        [
+            _caveats_payload(("su_condition", "subject to availability")),
+            {"caveats": []},
+        ]
+    )
+    extractor = OllamaCaveatExtractor(client=client, mode="order_invariant")
+    candidate = answer_candidate_from_payload(
+        index=1, question="질문", payload=_p1_01_style_payload()["items"][0]
+    )
+    assert candidate is not None
+
+    assert (
+        extractor.extract(question="질문", candidate=candidate, context=_context(unit))
+        is None
+    )
+
+
+def test_composer_reports_relation_model_snapshot_when_disabled() -> None:
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(_p1_01_style_payload()),
+        caveat_extractor=None,
+    )
+
+    assert composer.runtime_relation_model_snapshot() == {
+        "enabled": False,
+        "mode": "disabled",
+    }
+
+
+def test_composer_reports_relation_model_snapshot_when_configured() -> None:
+    extractor = OllamaCaveatExtractor(
+        client=_FakeJsonClient({"caveat": None}),
+        mode="pairwise",
+        model="qwen3:14b",
+        seed=20260624,
+    )
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(_p1_01_style_payload()),
+        caveat_extractor=extractor,
+    )
+
+    assert composer.runtime_relation_model_snapshot() == {
+        "enabled": True,
+        "mode": "pairwise",
+        "backend": "ollama",
+        "model": "qwen3:14b",
+        "seed": 20260624,
+        "temperature": 0.0,
+    }
 
 
 # ── 핵심: 별도 relation pass가 P1-01의 누락을 메워 needs_review로 강등한다 ─────

@@ -90,6 +90,18 @@ class OllamaLibraryChatAnswerComposer:
             "temperature": self._temperature,
         }
 
+    def runtime_relation_model_snapshot(self) -> dict[str, object]:
+        if self._caveat_extractor is None:
+            return {"enabled": False, "mode": "disabled"}
+        snapshot_method = getattr(
+            self._caveat_extractor, "runtime_relation_model_snapshot", None
+        )
+        if callable(snapshot_method):
+            snapshot = snapshot_method()
+            if isinstance(snapshot, dict):
+                return snapshot
+        return {"enabled": True}
+
 
 def create_library_chat_answer_composer_from_config(
     *, answer_seed: int | None = None

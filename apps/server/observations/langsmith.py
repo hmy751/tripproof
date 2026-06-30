@@ -301,6 +301,7 @@ def _flat_runtime_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
     embedding = _dict_payload(snapshot.get("embedding"))
     prompt = _dict_payload(snapshot.get("prompt"))
     answer_model = _dict_payload(snapshot.get("answer_model"))
+    relation_model = _dict_payload(snapshot.get("relation_model"))
 
     _set_if_present(metadata, "tripproof.retrieval_backend", retrieval.get("backend"))
     _set_if_present(metadata, "tripproof.retrieval_top_k", retrieval.get("top_k"))
@@ -325,6 +326,24 @@ def _flat_runtime_metadata(snapshot: dict[str, Any]) -> dict[str, Any]:
     _set_if_present(
         metadata, "tripproof.answer_model_temperature", answer_model.get("temperature")
     )
+    _set_if_present(
+        metadata, "tripproof.relation_model_enabled", relation_model.get("enabled")
+    )
+    _set_if_present(
+        metadata, "tripproof.relation_model_mode", relation_model.get("mode")
+    )
+    _set_if_present(
+        metadata, "tripproof.relation_model_backend", relation_model.get("backend")
+    )
+    _set_if_present(metadata, "tripproof.relation_model", relation_model.get("model"))
+    _set_if_present(
+        metadata, "tripproof.relation_model_seed", relation_model.get("seed")
+    )
+    _set_if_present(
+        metadata,
+        "tripproof.relation_model_temperature",
+        relation_model.get("temperature"),
+    )
     return metadata
 
 
@@ -346,6 +365,7 @@ def _runtime_hints_for_step(step_name: str, snapshot: dict[str, Any]) -> dict[st
     embedding = _dict_payload(snapshot.get("embedding"))
     prompt = _dict_payload(snapshot.get("prompt"))
     answer_model = _dict_payload(snapshot.get("answer_model"))
+    relation_model = _dict_payload(snapshot.get("relation_model"))
 
     if step_name in {
         "retrieval_preparation",
@@ -382,6 +402,10 @@ def _runtime_hints_for_step(step_name: str, snapshot: dict[str, Any]) -> dict[st
     if step_name in {"answer_pipeline", "composer_call"}:
         _copy_hint(hints, "answer_model_backend", answer_model.get("backend"))
         _copy_hint(hints, "answer_model", answer_model.get("model"))
+        _copy_hint(hints, "relation_model_enabled", relation_model.get("enabled"))
+        _copy_hint(hints, "relation_model_mode", relation_model.get("mode"))
+        _copy_hint(hints, "relation_model_backend", relation_model.get("backend"))
+        _copy_hint(hints, "relation_model", relation_model.get("model"))
 
     return hints
 
