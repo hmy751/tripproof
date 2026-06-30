@@ -14,6 +14,8 @@ class OllamaChatJsonConfig:
     base_url: str
     model: str
     timeout_seconds: float
+    seed: int | None = None
+    temperature: float = 0.0
 
 
 class OllamaChatJsonClient:
@@ -23,8 +25,13 @@ class OllamaChatJsonClient:
         self._base_url = config.base_url.rstrip("/")
         self._model = config.model
         self._timeout_seconds = config.timeout_seconds
+        self._seed = config.seed
+        self._temperature = config.temperature
 
     def generate_json(self, *, system: str, user: str) -> object:
+        options: dict[str, object] = {"temperature": self._temperature}
+        if self._seed is not None:
+            options["seed"] = self._seed
         payload = json.dumps(
             {
                 "model": self._model,
@@ -34,7 +41,7 @@ class OllamaChatJsonClient:
                 ],
                 "stream": False,
                 "format": "json",
-                "options": {"temperature": 0},
+                "options": options,
             }
         ).encode("utf-8")
         http_request = request.Request(
@@ -49,7 +56,7 @@ class OllamaChatJsonClient:
                 http_request, timeout=self._timeout_seconds
             ) as response:
                 raw = response.read()
-        except error.URLError as exc:
+        except (TimeoutError, error.URLError) as exc:
             raise OllamaClientError(f"Ollama chat request failed: {exc}") from exc
 
         try:

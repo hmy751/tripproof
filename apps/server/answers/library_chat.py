@@ -1,20 +1,30 @@
 from __future__ import annotations
 
-import re
+from dataclasses import replace
 from typing import Protocol
 
 from server.core.config import (
+    BODY_SYNTHESIS_ENABLED,
+    OLLAMA_ANSWER_SEED,
     OLLAMA_ANSWER_MODEL,
     OLLAMA_ANSWER_TIMEOUT_SECONDS,
     OLLAMA_BASE_URL,
+    OLLAMA_BODY_MODEL,
+    OLLAMA_BODY_SEED,
+    OLLAMA_BODY_TIMEOUT_SECONDS,
 )
-from server.extraction.models import EvidenceState
-from server.answers.library_chat_grounding import ground_evidence_ref
-from server.answers.library_chat_payload import (
-    NormalizedAnswerItemPayload,
-    normalize_answer_item_payload,
+from server.answers.body_synthesis import (
+    AnswerBodySynthesizer,
+    create_answer_body_synthesizer_from_config,
 )
+from server.answers.candidate import AnswerCandidate, answer_candidate_from_payload
+from server.answers.certification import certify
 from server.answers.models import ChatAnswer, ChatAnswerItem
+from server.answers.relation import (
+    CaveatExtractor,
+    create_caveat_extractor_from_config,
+)
+from server.extraction.models import Certification, EvidenceState
 from server.llm.ollama import (
     OllamaChatJsonClient,
     OllamaChatJsonConfig,
@@ -24,7 +34,7 @@ from server.prompts.renderers.answer.library_chat_answer import (
     LibraryChatAnswerPrompt,
     load_library_chat_answer_prompt,
 )
-from server.retrieval.models import AnswerContext, SourceUnit
+from server.retrieval.models import AnswerContext
 
 LIBRARY_CHAT_TARGET_ID = "library_chat_answer"
 
@@ -42,10 +52,18 @@ class OllamaLibraryChatAnswerComposer:
         client: OllamaChatJsonClient,
         prompt: LibraryChatAnswerPrompt | None = None,
         model: str | None = None,
+        seed: int | None = None,
+        temperature: float | None = 0.0,
+        caveat_extractor: CaveatExtractor | None = None,
+        body_synthesizer: AnswerBodySynthesizer | None = None,
     ) -> None:
         self._client = client
         self._prompt = prompt or load_library_chat_answer_prompt()
         self._model = model
+        self._seed = seed
+        self._temperature = temperature
+        self._caveat_extractor = caveat_extractor
+        self._body_synthesizer = body_synthesizer
 
     @property
     def prompt(self) -> LibraryChatAnswerPrompt:
@@ -67,25 +85,75 @@ class OllamaLibraryChatAnswerComposer:
         except OllamaClientError as exc:
             return _missing_answer(reason=f"답변 생성에 실패했습니다: {exc}")
 
-        return _answer_from_payload(question=question, payload=payload, context=context)
+        return _answer_from_payload(
+            question=question,
+            payload=payload,
+            context=context,
+            caveat_extractor=self._caveat_extractor,
+            body_synthesizer=self._body_synthesizer,
+        )
 
-    def runtime_answer_model_snapshot(self) -> dict[str, str | None]:
+    def runtime_answer_model_snapshot(self) -> dict[str, object]:
         return {
             "backend": "ollama",
             "model": self._model,
+            "seed": self._seed,
+            "temperature": self._temperature,
         }
 
+    def runtime_relation_model_snapshot(self) -> dict[str, object]:
+        if self._caveat_extractor is None:
+            return {"enabled": False, "mode": "disabled"}
+        snapshot_method = getattr(
+            self._caveat_extractor, "runtime_relation_model_snapshot", None
+        )
+        if callable(snapshot_method):
+            snapshot = snapshot_method()
+            if isinstance(snapshot, dict):
+                return snapshot
+        return {"enabled": True}
 
-def create_library_chat_answer_composer_from_config() -> LibraryChatAnswerComposer:
+    def runtime_body_model_snapshot(self) -> dict[str, object]:
+        if self._body_synthesizer is None:
+            return {"enabled": False}
+        snapshot_method = getattr(
+            self._body_synthesizer, "runtime_body_model_snapshot", None
+        )
+        if callable(snapshot_method):
+            snapshot = snapshot_method()
+            if isinstance(snapshot, dict):
+                return snapshot
+        return {"enabled": True}
+
+
+def create_library_chat_answer_composer_from_config(
+    *, answer_seed: int | None = None
+) -> LibraryChatAnswerComposer:
+    seed = OLLAMA_ANSWER_SEED if answer_seed is None else answer_seed
+    body_seed = OLLAMA_BODY_SEED if OLLAMA_BODY_SEED is not None else seed
     return OllamaLibraryChatAnswerComposer(
         client=OllamaChatJsonClient(
             OllamaChatJsonConfig(
                 base_url=OLLAMA_BASE_URL,
                 model=OLLAMA_ANSWER_MODEL,
                 timeout_seconds=OLLAMA_ANSWER_TIMEOUT_SECONDS,
+                seed=seed,
             )
         ),
         model=OLLAMA_ANSWER_MODEL,
+        seed=seed,
+        temperature=0.0,
+        caveat_extractor=create_caveat_extractor_from_config(answer_seed=seed),
+        body_synthesizer=(
+            create_answer_body_synthesizer_from_config(
+                base_url=OLLAMA_BASE_URL,
+                model=OLLAMA_BODY_MODEL,
+                timeout_seconds=OLLAMA_BODY_TIMEOUT_SECONDS,
+                seed=body_seed,
+            )
+            if BODY_SYNTHESIS_ENABLED
+            else None
+        ),
     )
 
 
@@ -104,9 +172,14 @@ def _format_source_blocks(
     return prompt.user_message(question=question, source_blocks=source_blocks)
 
 
-# ── Payload → answer mapping ────────────────────────────────────────────────
+# ── Payload → candidate → certification → final item ────────────────────────
 def _answer_from_payload(
-    *, question: str, payload: object, context: AnswerContext
+    *,
+    question: str,
+    payload: object,
+    context: AnswerContext,
+    caveat_extractor: CaveatExtractor | None = None,
+    body_synthesizer: AnswerBodySynthesizer | None = None,
 ) -> ChatAnswer:
     if not isinstance(payload, dict):
         return _missing_answer(
@@ -119,139 +192,234 @@ def _answer_from_payload(
             reason="답변 생성기가 answer item을 반환하지 않았습니다."
         )
 
-    items = [
-        item
-        for index, raw_item in enumerate(raw_items, start=1)
-        if (
-            item := _item_from_payload(
-                index=index, question=question, payload=raw_item, context=context
+    items: list[ChatAnswerItem] = []
+    for index, raw_item in enumerate(raw_items, start=1):
+        candidate = answer_candidate_from_payload(
+            index=index, question=question, payload=raw_item
+        )
+        if candidate is None:
+            continue
+        candidate, caveat_source = _enrich_with_caveat(
+            question=question,
+            candidate=candidate,
+            context=context,
+            caveat_extractor=caveat_extractor,
+        )
+        certification = certify(candidate=candidate, context=context)
+        # caveat provenance(inline vs 분리 호출)는 certify가 모른다 — 여기서 관측용으로
+        # 얹는다. 제품 body 렌더는 이 필드를 읽지 않는다.
+        certification = replace(certification, caveat_source=caveat_source)
+        items.append(
+            _item_from_certification(
+                question=question, candidate=candidate, certification=certification
             )
         )
-        is not None
-    ]
+
     if not items:
         return _missing_answer(
             reason="답변 생성기가 검증 가능한 answer item을 반환하지 않았습니다."
         )
 
+    items = _items_with_synthesized_bodies(
+        question=question, items=items, body_synthesizer=body_synthesizer
+    )
     return ChatAnswer(summary=_summary_for_items(items), items=items)
 
 
-def _item_from_payload(
+def _enrich_with_caveat(
     *,
-    index: int,
     question: str,
-    payload: object,
+    candidate: AnswerCandidate,
     context: AnswerContext,
-) -> ChatAnswerItem | None:
-    item_payload = normalize_answer_item_payload(question=question, payload=payload)
-    if item_payload is None:
-        return None
+    caveat_extractor: CaveatExtractor | None,
+) -> tuple[AnswerCandidate, str | None]:
+    """별도 relation pass로 '값을 좌우하는 조건' 역할을 채운다(06 robust fix).
 
-    if item_payload.evidence_state == EvidenceState.SUPPORTED:
-        return _supported_item_from_payload(
-            index=index,
-            question=question,
-            payload=item_payload,
-            context=context,
+    답변 호출이 supported를 제안했는데 caveat을 안 채운 경우에만, 답을 쓴
+    호출과 분리된 두 번째 호출로 조건만 따로 묻는다(생성/검증 분리). supported가 아니거나
+    이미 조건이 있으면 두 번째 호출을 아끼고 그대로 둔다. certify가 그 결과를 읽어
+    grounding되면 강등한다 — 코드는 의미를 분류하지 않는다.
+
+    함께 caveat provenance를 돌려준다(관측용). 답변 모델이 inline으로 이미 caveat을
+    냈으면 분리 호출은 어차피 skip되므로 "inline"이다. 분리 호출이 실제로 돌았는지
+    (separate_call/separate_call_empty)와 inline이 가로챘는지를 eval에서 구분하기 위함이다.
+    실행 조건은 기존과 동일하다 — provenance 기록만 추가한다.
+    """
+
+    if candidate.caveat is not None:
+        return candidate, "inline"
+    if caveat_extractor is None:
+        return candidate, None
+    if candidate.proposed_state != EvidenceState.SUPPORTED:
+        return candidate, None
+    caveat = caveat_extractor.extract(
+        question=question, candidate=candidate, context=context
+    )
+    if caveat is None:
+        return candidate, "separate_call_empty"
+    return replace(candidate, caveat=caveat), "separate_call"
+
+
+def _item_from_certification(
+    *, question: str, candidate: AnswerCandidate, certification: Certification
+) -> ChatAnswerItem:
+    item_id = candidate.item_id()
+    if certification.state == EvidenceState.SUPPORTED:
+        return ChatAnswerItem(
+            id=item_id,
+            label=candidate.label,
+            body=_supported_body(question=question, candidate=candidate),
+            evidence_state=EvidenceState.SUPPORTED,
+            value=candidate.value,
+            evidence=list(certification.evidence),
+            certification=certification,
         )
 
-    if item_payload.evidence_state == EvidenceState.NEEDS_REVIEW:
-        return _needs_review_item_from_payload(
-            index=index,
-            payload=item_payload,
+    if certification.state == EvidenceState.NEEDS_REVIEW:
+        return ChatAnswerItem(
+            id=item_id,
+            label=candidate.label,
+            body=_needs_review_body(
+                question=question, candidate=candidate, certification=certification
+            ),
+            evidence_state=EvidenceState.NEEDS_REVIEW,
+            value=candidate.value,
+            evidence=list(certification.evidence),
+            certification=certification,
         )
 
-    return _missing_item_from_payload(
-        index=index,
-        payload=item_payload,
-    )
-
-
-def _supported_item_from_payload(
-    *,
-    index: int,
-    question: str,
-    payload: NormalizedAnswerItemPayload,
-    context: AnswerContext,
-) -> ChatAnswerItem:
-    if (
-        not payload.body
-        or payload.source_unit_id is None
-        or payload.evidence_snippet is None
-    ):
-        return _ungrounded_item(index=index, label=payload.label)
-    # 시간 질문인데 답 모양이 시각이 아니면 SUPPORTED라도 ungrounded로 강등하는 정직성
-    # 게이트. 결과 MISSING은 실제 grounding 실패와 구분되지 않는다(시간 외 질문은 통과).
-    if not _supported_value_matches_question(
-        question=question, value=payload.value, body=payload.body
-    ):
-        return _ungrounded_item(index=index, label=payload.label)
-
-    source_unit = _source_unit_by_id(
-        context=context, source_unit_id=payload.source_unit_id
-    )
-    if source_unit is None:
-        return _ungrounded_item(index=index, label=payload.label)
-
-    evidence_ref = ground_evidence_ref(
-        source_unit=source_unit,
-        evidence_snippet=payload.evidence_snippet,
-        value=payload.value,
-    )
-    if evidence_ref is None:
-        return _ungrounded_item(index=index, label=payload.label)
-
     return ChatAnswerItem(
-        id=payload.item_id(index=index),
-        label=payload.label,
-        body=payload.body,
-        evidence_state=EvidenceState.SUPPORTED,
-        value=payload.value,
-        evidence=[evidence_ref],
-    )
-
-
-def _needs_review_item_from_payload(
-    *,
-    index: int,
-    payload: NormalizedAnswerItemPayload,
-) -> ChatAnswerItem:
-    return ChatAnswerItem(
-        id=payload.item_id(index=index),
-        label=payload.label,
-        body=payload.body or f"{payload.label}은 원문 확인이 필요합니다.",
-        evidence_state=EvidenceState.NEEDS_REVIEW,
-        value=payload.value,
-        evidence=[],
-    )
-
-
-def _missing_item_from_payload(
-    *,
-    index: int,
-    payload: NormalizedAnswerItemPayload,
-) -> ChatAnswerItem:
-    return ChatAnswerItem(
-        id=payload.item_id(index=index),
-        label=payload.label,
-        body=payload.body
-        or f"현재 등록된 자료에서 {payload.label}을 확인하지 못했습니다.",
+        id=item_id,
+        label=candidate.label,
+        body=_missing_body(
+            question=question, candidate=candidate, certification=certification
+        ),
         evidence_state=EvidenceState.MISSING,
         value=None,
         evidence=[],
+        certification=certification,
     )
+
+
+# ── Final body rendering (certified state 뒤에서만 생성) ─────────────────────
+# body는 certification 결과를 풀어 쓰는 마지막 단계다. state를 승격하거나 새 값을 만들 수
+# 없다. supported/needs_review는 인증 뒤 전용 합성 호출을 먼저 쓰고, 실패하면 아래 코드
+# template으로 폴백한다. missing은 합성하지 않고 항상 template으로 둔다.
+def _items_with_synthesized_bodies(
+    *,
+    question: str,
+    items: list[ChatAnswerItem],
+    body_synthesizer: AnswerBodySynthesizer | None,
+) -> list[ChatAnswerItem]:
+    if body_synthesizer is None:
+        return items
+
+    synthesizable = [
+        item
+        for item in items
+        if item.evidence_state in {EvidenceState.SUPPORTED, EvidenceState.NEEDS_REVIEW}
+    ]
+    if not synthesizable:
+        return items
+
+    body_map = body_synthesizer.synthesize(question=question, items=synthesizable)
+    if body_map is None:
+        return items
+
+    return [
+        (
+            replace(item, body=body_map[item.id])
+            if item.id in body_map and item.evidence_state != EvidenceState.MISSING
+            else item
+        )
+        for item in items
+    ]
+
+
+def _supported_body(*, question: str, candidate: AnswerCandidate) -> str:
+    label = _body_label(question=question, candidate=candidate)
+    if candidate.value:
+        return f"{label}: {candidate.value}"
+    return f"{label}은 자료에서 확인되었습니다."
+
+
+def _needs_review_body(
+    *, question: str, candidate: AnswerCandidate, certification: Certification
+) -> str:
+    label = _body_label(question=question, candidate=candidate)
+    # limited_by_caveat: 값은 자료에 있으나 그 값을 지배하는 조건이 함께 있어
+    # 확정으로 볼 수 없다. 조건 근거가 있으면 그 요지를 드러내되 state를 거슬러
+    # "확정"으로 말하지 않는다(AC5).
+    if certification.reason == "limited_by_caveat":
+        caveat = (
+            f" 조건: {certification.caveat.snippet}"
+            if certification.caveat is not None
+            else ""
+        )
+        if candidate.value:
+            return (
+                f"{label}은 자료에서 확인되지만, 적용 조건 때문에 원문 확인이 "
+                f"필요합니다: {candidate.value}.{caveat}"
+            )
+        return f"{label}은 적용 조건이 있어 원문 확인이 필요합니다.{caveat}"
+    if candidate.value:
+        return (
+            f"{label}은 자료에서 확인되지만 보장 여부는 "
+            f"원문 확인이 필요합니다: {candidate.value}"
+        )
+    return f"{label}은 원문 확인이 필요합니다."
+
+
+def _missing_body(
+    *, question: str, candidate: AnswerCandidate, certification: Certification
+) -> str:
+    label = _body_label(question=question, candidate=candidate)
+    if certification.reason == "candidate_missing":
+        return f"현재 등록된 자료에서 {label}을 확인하지 못했습니다."
+    return f"현재 등록된 자료에서 {label}의 근거를 확인하지 못했습니다."
+
+
+def _body_label(*, question: str, candidate: AnswerCandidate) -> str:
+    if candidate.label != "답변":
+        return candidate.label
+    subject = _question_subject(question)
+    return subject or candidate.label
+
+
+def _question_subject(question: str) -> str | None:
+    stripped = question.strip().rstrip("?!.。")
+    for suffix in (
+        "가 어떻게 돼",
+        "이 어떻게 돼",
+        "은 어떻게 돼",
+        "는 어떻게 돼",
+        " 어떻게 돼",
+        "가 뭐야",
+        "이 뭐야",
+        "은 뭐야",
+        "는 뭐야",
+        " 뭐야",
+    ):
+        if stripped.endswith(suffix):
+            subject = stripped[: -len(suffix)].strip()
+            return subject or None
+    return None
 
 
 def _summary_for_items(items: list[ChatAnswerItem]) -> str:
     supported_count = sum(
         item.evidence_state == EvidenceState.SUPPORTED for item in items
     )
+    needs_review_count = sum(
+        item.evidence_state == EvidenceState.NEEDS_REVIEW for item in items
+    )
     missing_count = sum(item.evidence_state == EvidenceState.MISSING for item in items)
-    if supported_count and missing_count:
-        return "자료에서 확인한 내용과 확인되지 않은 항목입니다."
+    if supported_count and (needs_review_count or missing_count):
+        return "자료에서 확인한 내용과 추가 확인이 필요한 항목입니다."
     if supported_count:
         return "자료에서 확인한 답변입니다."
+    if needs_review_count:
+        return "자료에 있으나 확정 여부는 원문 확인이 필요한 항목입니다."
     return "현재 등록된 자료만으로는 답을 확인하지 못했습니다."
 
 
@@ -268,63 +436,4 @@ def _missing_answer(*, reason: str) -> ChatAnswer:
                 evidence=[],
             )
         ],
-    )
-
-
-def _ungrounded_item(*, index: int, label: str) -> ChatAnswerItem:
-    return ChatAnswerItem(
-        id=f"answer_{index}",
-        label=label,
-        body=f"현재 등록된 자료에서 {label}의 근거를 확인하지 못했습니다.",
-        evidence_state=EvidenceState.MISSING,
-        value=None,
-        evidence=[],
-    )
-
-
-def _source_unit_by_id(
-    *, context: AnswerContext, source_unit_id: str
-) -> SourceUnit | None:
-    for candidate in context.candidates:
-        if candidate.source_unit.id == source_unit_id:
-            return candidate.source_unit
-    return None
-
-
-# ── Answer-shape validation (time questions) ────────────────────────────────
-def _supported_value_matches_question(
-    *, question: str, value: str | None, body: str
-) -> bool:
-    if not _question_asks_time(question):
-        return True
-    answer_text = value or body
-    return _looks_like_time_answer(answer_text)
-
-
-def _question_asks_time(question: str) -> bool:
-    normalized = question.lower()
-    return any(
-        term in normalized
-        for term in (
-            "몇 시",
-            "몇시",
-            "시간",
-            "시각",
-            "시작",
-            "부터",
-            "time",
-            "start",
-            "starts",
-            "from",
-        )
-    )
-
-
-def _looks_like_time_answer(value: str) -> bool:
-    normalized = value.lower()
-    return bool(
-        re.search(r"\b\d{1,2}:\d{2}\b", normalized)
-        or re.search(r"\b(am|pm)\b", normalized)
-        or re.search(r"(오전|오후)\s*\d{1,2}\s*시", normalized)
-        or re.search(r"\d{1,2}\s*시", normalized)
     )

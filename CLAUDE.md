@@ -23,8 +23,22 @@
 
 ## 코드 변경 원칙
 
-- 코드를 설계하거나 변경할 때는 `docs/engineering/`(`principle.md` / `architecture.md` / `testing.md` / `ai-coding.md`)을 기준으로 삼는다.
-- 제품 동작의 강제는 테스트가 맡고, 이 문서는 테스트로 잡기 어려운 설계·구조·실패 판단을 정할 때 보는 기준이다.
+`docs/engineering/`은 TripProof의 engineering 판단 기준이다 — 제품 동작의 강제는 테스트가 맡고, 이 문서는 테스트가 못 잡는 설계 판단을 든다.
+
+@docs/engineering/README.md
+<!-- Claude는 위 줄로 README(판단 기준 인덱스)를 세션 시작 시 강제 로드(import)한다.
+     Codex는 import 구문을 해석하지 않으니 아래 라우터를 직접 보고 해당 문서를 기준으로 읽는다. (의도된 비대칭) -->
+
+- 파일을 수정하거나 설계를 새로 잡기 전 짧게 판단한다: 이 변경이 product behavior, architecture boundary, eval/product 분리, shared API, retrieval/LLM behavior, persistence, testing strategy, AI coding workflow, 삭제/마이그레이션/큰 refactor를 건드리는가?
+- 아니라면 주변 코드 패턴과 관련 테스트를 우선한다. 하나라도 해당하면 그 경계 문서를 기준으로 삼는다:
+  - product/eval/architecture boundary·의존 방향 → `architecture.md`
+  - 구조·추상화 시점·관심사 경계·실패 정책 → `principle.md`
+  - 동작을 무엇으로 확인하나(테스트·fixture·eval 해석) → `testing.md`
+  - LLM을 제품에 넣는 출력/계약 설계 → `llm-design.md` ⚠ 자주 틀림: code는 의미 role을 발명하지 않는다(있냐없냐만) — 의미 분류는 LLM/relation extractor, 승격은 code
+  - AI에게 코드를 맡길 때의 경계 → `ai-coding.md`
+  - formatter와 review 책임 구분 → `code-style.md`
+- cross-cutting 변경이나 되돌리기 비용이 큰 변경에서는 `docs/engineering/` 전체를 확인한다.
+- 사용자가 준 reading list는 우선 context이지, repo 기준을 배제하는 닫힌 목록이 아니다.
 
 ## 권한과 중단
 
@@ -43,6 +57,15 @@
 - 검증은 현재 변경의 목적에 맞게 고른다. 코드 형식, 타입, 단위 테스트, product/eval 실행은 서로 다른 확인이다.
 - 자료 QA, LLM, retrieval, eval 질문셋을 다룰 때는 단순 형식/단위 테스트 통과를 product behavior 통과로 말하지 않는다. 실제 자료 입력과 질문 실행 결과를 별도로 확인한다.
 - `docs/decisions/`, `docs/implementation-notes/`, `docs/work-log.md`처럼 대화 세션, 판단 과정, AI/subagent 검토 흔적이 들어갈 수 있는 문서를 새로 쓰거나 크게 고친 뒤에는 `public-doc-wording-reviewer`를 report-only로 실행한다. 이 agent는 승인 gate가 아니라 private source 누수와 공개 문서 독립성을 점검하는 마지막 확인이다. 실행하지 않으면 이유를 짧게 남긴다.
+
+## Branch 규칙
+
+- branch 이름은 `<kind>/<kebab-case-subject>`를 쓴다.
+- `kind`는 작업 성격을 나타낸다: `feat`, `fix`, `refactor`, `spec`, `eval`, `docs`, `chore`.
+- subject는 모듈명보다 product slice, 관찰된 실패 유형, architecture boundary를 우선한다. 예: `feat/agoda-pdf-source-units`, `fix/certification-keyword-gate`, `refactor/server-use-cases`, `spec/agoda-original-pdf-qa-improvement`, `eval/question-runtime-recording`.
+- AI 도구명, 작업자명, 개인 실행 환경 이름은 branch prefix로 쓰지 않는다.
+- `feature`는 `feat`와 중복되므로 새 branch에서는 쓰지 않는다. repo 운영·브릿지·스크립트 정리는 보통 `chore`, product contract 문서는 `spec`, 일반 판단 문서는 `docs`를 쓴다.
+- 백업·임시 통합 branch는 공유 컨벤션으로 올리지 않고, 필요할 때만 목적과 날짜가 드러나게 만든다.
 
 ## Commit 규칙
 

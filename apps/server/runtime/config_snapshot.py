@@ -43,6 +43,27 @@ class PromptRuntimeConfigSnapshot:
 class AnswerModelRuntimeConfigSnapshot:
     backend: str
     model: str | None
+    seed: int | None = None
+    temperature: float | None = None
+
+
+@dataclass(frozen=True)
+class RelationModelRuntimeConfigSnapshot:
+    enabled: bool
+    mode: str | None = None
+    backend: str | None = None
+    model: str | None = None
+    seed: int | None = None
+    temperature: float | None = None
+
+
+@dataclass(frozen=True)
+class BodyModelRuntimeConfigSnapshot:
+    enabled: bool
+    backend: str | None = None
+    model: str | None = None
+    seed: int | None = None
+    temperature: float | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +72,8 @@ class RuntimeConfigSnapshot:
     embedding: EmbeddingRuntimeConfigSnapshot
     prompt: PromptRuntimeConfigSnapshot | None = None
     answer_model: AnswerModelRuntimeConfigSnapshot | None = None
+    relation_model: RelationModelRuntimeConfigSnapshot | None = None
+    body_model: BodyModelRuntimeConfigSnapshot | None = None
 
 
 def runtime_config_snapshot_from_settings(
@@ -58,6 +81,8 @@ def runtime_config_snapshot_from_settings(
     *,
     prompt: PromptRuntimeConfigSnapshot | None = None,
     answer_model: AnswerModelRuntimeConfigSnapshot | None = None,
+    relation_model: RelationModelRuntimeConfigSnapshot | None = None,
+    body_model: BodyModelRuntimeConfigSnapshot | None = None,
 ) -> RuntimeConfigSnapshot:
     return RuntimeConfigSnapshot(
         retrieval=RetrievalRuntimeConfigSnapshot(
@@ -73,6 +98,8 @@ def runtime_config_snapshot_from_settings(
         ),
         prompt=prompt,
         answer_model=answer_model,
+        relation_model=relation_model,
+        body_model=body_model,
     )
 
 
@@ -133,9 +160,87 @@ def answer_model_runtime_config_snapshot_from_composer(
     return AnswerModelRuntimeConfigSnapshot(
         backend=backend,
         model=_string_snapshot_value(snapshot, "model"),
+        seed=_int_snapshot_value(snapshot, "seed"),
+        temperature=_float_snapshot_value(snapshot, "temperature"),
+    )
+
+
+def relation_model_runtime_config_snapshot_from_composer(
+    answer_composer: object,
+) -> RelationModelRuntimeConfigSnapshot | None:
+    snapshot_method = getattr(answer_composer, "runtime_relation_model_snapshot", None)
+    if not callable(snapshot_method):
+        return None
+
+    try:
+        snapshot = snapshot_method()
+    except Exception:
+        return None
+
+    if not isinstance(snapshot, dict):
+        return None
+
+    enabled = _bool_snapshot_value(snapshot, "enabled")
+    if enabled is None:
+        return None
+
+    return RelationModelRuntimeConfigSnapshot(
+        enabled=enabled,
+        mode=_string_snapshot_value(snapshot, "mode"),
+        backend=_string_snapshot_value(snapshot, "backend"),
+        model=_string_snapshot_value(snapshot, "model"),
+        seed=_int_snapshot_value(snapshot, "seed"),
+        temperature=_float_snapshot_value(snapshot, "temperature"),
+    )
+
+
+def body_model_runtime_config_snapshot_from_composer(
+    answer_composer: object,
+) -> BodyModelRuntimeConfigSnapshot | None:
+    snapshot_method = getattr(answer_composer, "runtime_body_model_snapshot", None)
+    if not callable(snapshot_method):
+        return None
+
+    try:
+        snapshot = snapshot_method()
+    except Exception:
+        return None
+
+    if not isinstance(snapshot, dict):
+        return None
+
+    enabled = _bool_snapshot_value(snapshot, "enabled")
+    if enabled is None:
+        return None
+
+    return BodyModelRuntimeConfigSnapshot(
+        enabled=enabled,
+        backend=_string_snapshot_value(snapshot, "backend"),
+        model=_string_snapshot_value(snapshot, "model"),
+        seed=_int_snapshot_value(snapshot, "seed"),
+        temperature=_float_snapshot_value(snapshot, "temperature"),
     )
 
 
 def _string_snapshot_value(snapshot: dict[object, object], key: str) -> str | None:
     value = snapshot.get(key)
     return value if isinstance(value, str) else None
+
+
+def _int_snapshot_value(snapshot: dict[object, object], key: str) -> int | None:
+    value = snapshot.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _float_snapshot_value(snapshot: dict[object, object], key: str) -> float | None:
+    value = snapshot.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _bool_snapshot_value(snapshot: dict[object, object], key: str) -> bool | None:
+    value = snapshot.get(key)
+    return value if isinstance(value, bool) else None

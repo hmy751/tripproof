@@ -14,9 +14,28 @@ uv run python eval/run_question_dataset.py \
   --json
 ```
 
-이 runner는 `eval/datasets/agoda-booking-confirmation/questions.json`과 공개 sample material fixture를 사용해 `POST /api/materials`, `POST /api/questions`를 호출한다. 각 질문은 별도 `correlation_id`를 갖고, `run.json`의 `question_results`와 observation JSONL의 `question_answer` record는 그 값으로 연결된다.
+기본 실행은 앱의 production config에 가까운 runtime을 사용한다. runner가 fake embedding이나 `missing` answer composer를 기본으로 주입하지 않고, `create_app()`이 읽는 설정에 따라 실제 answer composer, embedding provider/generation, retrieval backend를 탄다. 각 질문은 별도 `correlation_id`를 갖고, `run.json`의 `question_results`와 observation JSONL의 `question_answer` record는 그 값으로 연결된다.
 
-기본 answer composer는 `missing` backend라 실제 정답 품질 점수가 아니라 실패 추적 DX를 확인하는 용도다. retrieval 후보가 report에 보이도록 dataset runner는 실행 조건으로 deterministic fake embedding을 사용한다. 이 설정은 eval runtime config이며 product code가 eval artifact를 읽는 구조가 아니다.
+원문 Agoda PDF baseline을 만들 때는 실제 PDF를 그대로 넘긴다.
+
+```bash
+uv run python eval/run_question_dataset.py \
+  --material-pdf-file fixtures/private/accommodation-checkin/agoda-fukuoka-booking-confirmation-private.pdf \
+  --json
+```
+
+`--material-pdf-file`을 쓰면 `run.json`의 `run_purpose.id`가 `original_pdf_baseline`으로 남는다. 기본 text fixture 실행은 `sample_fixture_smoke`로 남으며, product API와 report join 확인용이지 원문 PDF 개선 근거로 해석하지 않는다.
+
+빠른 smoke나 renderer 테스트처럼 외부 provider 품질을 보지 않을 때만 deterministic mode를 명시한다.
+
+```bash
+uv run python eval/run_question_dataset.py \
+  --runtime-mode deterministic \
+  --question-limit 3 \
+  --json
+```
+
+`--runtime-mode deterministic`은 fake embedding, memory retrieval, 기본 `missing` answer composer를 쓰는 test-double 실행이다. 이 run은 product API와 report join 확인용이며 원문 PDF QA 품질 baseline으로 해석하지 않는다.
 
 가장 얇은 correlation smoke만 확인하려면 다음 runner를 쓴다.
 

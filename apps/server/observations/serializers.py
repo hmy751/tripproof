@@ -121,6 +121,29 @@ def runtime_config_snapshot_to_payload(
         answer_model = {
             "backend": snapshot.answer_model.backend,
             "model": snapshot.answer_model.model,
+            "seed": snapshot.answer_model.seed,
+            "temperature": snapshot.answer_model.temperature,
+        }
+
+    relation_model = None
+    if snapshot.relation_model is not None:
+        relation_model = {
+            "enabled": snapshot.relation_model.enabled,
+            "mode": snapshot.relation_model.mode,
+            "backend": snapshot.relation_model.backend,
+            "model": snapshot.relation_model.model,
+            "seed": snapshot.relation_model.seed,
+            "temperature": snapshot.relation_model.temperature,
+        }
+
+    body_model = None
+    if snapshot.body_model is not None:
+        body_model = {
+            "enabled": snapshot.body_model.enabled,
+            "backend": snapshot.body_model.backend,
+            "model": snapshot.body_model.model,
+            "seed": snapshot.body_model.seed,
+            "temperature": snapshot.body_model.temperature,
         }
 
     return {
@@ -137,6 +160,8 @@ def runtime_config_snapshot_to_payload(
         },
         "prompt": prompt,
         "answer_model": answer_model,
+        "relation_model": relation_model,
+        "body_model": body_model,
     }
 
 

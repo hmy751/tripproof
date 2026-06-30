@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 
@@ -18,3 +18,44 @@ class EvidenceRef:
     label: str
     locator: str
     snippet: str
+
+
+@dataclass(frozen=True)
+class Caveat:
+    """의미 층(LLM/relation extractor)이 낸 '이 값을 지배하는 조건' 역할.
+
+    코드가 `kind`나 page 근접으로 추정해 만드는 게 아니라, 의미 층이 후보 원문에서
+    식별해 낸 값↔조건 관계다(`06-evidence-relation-extraction.md`). 코드 certification은
+    이 역할이 붙었는지와 그 snippet이 원문에 grounding되는지(구조)만 보고 상태를 내린다 —
+    조건 문장의 의미를 코드가 다시 분류하지 않는다.
+    """
+
+    source_unit_id: str | None
+    snippet: str | None
+    text: str | None
+
+
+@dataclass(frozen=True)
+class Certification:
+    """코드가 소유하는 final state 판정 결과.
+
+    `proposed_state`는 LLM 후보가 제안한 advisory 상태이고 `state`가 코드가 확정한
+    최종 상태다. 둘을 함께 들고 다녀 report에서 candidate -> certification 전이를
+    before/after로 볼 수 있게 한다(제품 응답 body에는 싣지 않는다).
+
+    `caveat`은 `limited_by_caveat` 강등 때 읽은, 원문에 grounding된
+    조건 근거다. 관측용이며 제품 응답 body에는 싣지 않는다.
+
+    `caveat_source`는 certify에 도달한 caveat이 어디서 왔는지를 표시하는 관측용
+    provenance다: "inline"(답변 모델이 답변 payload에 함께 냄), "separate_call"(분리
+    relation 호출이 냄), "separate_call_empty"(분리 호출이 돌았으나 caveat 없음),
+    None(분리 층 없음/supported 아님/조건 없음). A/B에서 분리 검출기가 실제로 일했는지
+    inline이 가로챘는지를 eval 로그로 구분하기 위한 것이며 제품 body에는 싣지 않는다.
+    """
+
+    state: EvidenceState
+    reason: str
+    proposed_state: EvidenceState
+    evidence: list[EvidenceRef] = field(default_factory=list)
+    caveat: EvidenceRef | None = None
+    caveat_source: str | None = None

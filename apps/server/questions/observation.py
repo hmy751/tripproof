@@ -12,6 +12,7 @@ from server.observations.steps import (
     merge_safe_facts,
 )
 from server.answers.models import ChatAnswer, ChatAnswerItem
+from server.extraction.models import Certification
 from server.retrieval.models import AnswerContext, RetrievedSource
 from server.retrieval.search import SourceRetrievalTrace
 from server.runtime.config_snapshot import (
@@ -444,13 +445,10 @@ def retrieval_candidate_detail(
     candidate: RetrievedSource,
 ) -> dict[str, QuestionObservationFactValue]:
     source_unit = candidate.source_unit
-    return {
+    detail = {
         "source_unit_id": source_unit.id,
         "material_id": source_unit.material_id,
-        "locator": source_unit_locator_summary(
-            page=source_unit.page,
-            unit_index=source_unit.unit_index,
-        ),
+        "locator": locator_summary(source_unit.locator),
         "page": source_unit.page,
         "unit_index": source_unit.unit_index,
         "char_length": len(source_unit.text),
@@ -459,22 +457,45 @@ def retrieval_candidate_detail(
         "vector_score": candidate.vector_score,
         "text": source_unit.text,
     }
+    detail.update(source_unit_metadata_detail(source_unit.metadata))
+    return detail
 
 
 def answer_context_block(
     candidate: RetrievedSource,
 ) -> dict[str, QuestionObservationFactValue]:
     source_unit = candidate.source_unit
-    return {
+    detail = {
         "source_unit_id": source_unit.id,
         "material_id": source_unit.material_id,
-        "locator": source_unit_locator_summary(
-            page=source_unit.page,
-            unit_index=source_unit.unit_index,
-        ),
+        "locator": locator_summary(source_unit.locator),
         "char_length": len(source_unit.text),
         "text": source_unit.text,
     }
+    detail.update(source_unit_metadata_detail(source_unit.metadata))
+    return detail
+
+
+def source_unit_metadata_detail(
+    metadata: dict[str, object],
+) -> dict[str, QuestionObservationFactValue]:
+    keys = (
+        "kind",
+        "structural_kind",
+        "bbox",
+        "line_count",
+        "layout_source",
+        "source_text_role",
+        "source_fragment_count",
+        "table_index",
+        "row_index",
+        "column_index",
+        "cell_count",
+        "group_block_count",
+        "extraction_backend",
+        "fallback_used",
+    )
+    return {key: metadata[key] for key in keys if key in metadata}
 
 
 def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFactValue]:
@@ -484,6 +505,10 @@ def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFac
         "body": item.body,
         "value": item.value,
         "evidence_state": item.evidence_state.value,
+        # product 경로는 항상 domain ChatAnswerItem(certification 보유)을 넘긴다.
+        # eval 쪽 정적 test double은 response model을 duck-typing으로 흘려보내므로
+        # certification이 없을 수 있다 — 그 경우 관측에 None으로 남긴다.
+        "certification": _certification_detail(getattr(item, "certification", None)),
         "evidence": [
             {
                 "material_id": evidence.material_id,
@@ -494,6 +519,30 @@ def answer_item_detail(item: ChatAnswerItem) -> dict[str, QuestionObservationFac
             for evidence in item.evidence
         ],
     }
+
+
+def _certification_detail(
+    certification: Certification | None,
+) -> dict[str, QuestionObservationFactValue] | None:
+    # candidate -> certification 전이를 report에서 before/after로 보기 위한 관측용
+    # 기록이다. proposed_state는 LLM 후보가 제안한 상태, state는 코드가 확정한 상태,
+    # reason은 강등/통과 근거다.
+    if certification is None:
+        return None
+    detail: dict[str, QuestionObservationFactValue] = {
+        "proposed_state": certification.proposed_state.value,
+        "state": certification.state.value,
+        "reason": certification.reason,
+    }
+    # limited_by_caveat 강등에서 읽은, 원문에 grounding된 조건 근거. 의미 층(06)이
+    # 낸 역할을 코드가 읽었음을 report에서 before/after로 보기 위한 관측이다.
+    if certification.caveat is not None:
+        detail["caveat_snippet"] = certification.caveat.snippet
+    # caveat provenance(inline vs 분리 호출). A/B에서 분리 검출기가 실제로 일했는지
+    # 답변 모델 inline이 가로챘는지를 eval 로그로 구분하기 위한 관측이다.
+    if certification.caveat_source is not None:
+        detail["caveat_source"] = certification.caveat_source
+    return detail
 
 
 def source_unit_locator_summary(*, page: int, unit_index: int) -> str:

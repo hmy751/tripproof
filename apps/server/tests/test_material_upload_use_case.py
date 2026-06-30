@@ -6,8 +6,11 @@ import pytest
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
+from server.materials.layout import PageLayout, PdfLine, PdfWord
 from server.materials.observation import InMemoryMaterialUploadObservationSink
+from server.materials.pdf import ParsedPdf
 from server.materials.store import MaterialStore
+import server.use_cases.materials as materials_use_case
 from server.runtime.config_snapshot import RuntimeConfigSettings
 from server.testing import InMemoryRetrievalRepository
 from server.use_cases.materials import (
@@ -55,6 +58,61 @@ def test_upload_material_use_case_returns_ready_trace_without_http_adapter() -> 
     assert record.failure_kind is None
 
 
+def test_upload_material_use_case_builds_layout_source_units(monkeypatch) -> None:
+    sink = InMemoryMaterialUploadObservationSink()
+    store = MaterialStore(
+        retrieval_repository=InMemoryRetrievalRepository(), retrieval_backend="memory"
+    )
+    use_case = UploadMaterialUseCase(
+        store=store,
+        observation_sink=sink,
+        runtime_config=_runtime_config(store),
+        max_upload_bytes=20 * 1024 * 1024,
+    )
+    layout = _page_layout(
+        [
+            _layout_line("Booking Details", top=72, size=16),
+            _layout_line("Arrival : 2025-03-09", top=100),
+            _layout_line("Departure : 2025-03-13", top=120),
+            _layout_line("Bring a valid photo ID at check-in.", top=150),
+        ]
+    )
+    monkeypatch.setattr(
+        materials_use_case,
+        "parse_pdf",
+        lambda _raw: ParsedPdf(
+            page_count=1,
+            text=(
+                "[page 1]\nBooking Details\nArrival : 2025-03-09\n"
+                "Departure : 2025-03-13\nBring a valid photo ID at check-in."
+            ),
+            preview="Booking Details Arrival : 2025-03-09",
+            layout_pages=(layout,),
+        ),
+    )
+
+    result = use_case.run(
+        UploadMaterialCommand(
+            file_name="booking.pdf",
+            content_type="application/pdf",
+            uploaded_bytes=b"%PDF layout bytes",
+            display_name="Booking",
+        )
+    )
+
+    records = store.retrieval_records([result.material.id])
+
+    assert result.material.status == "ready"
+    assert len(records.source_units) >= 3
+    assert records.source_units[0].metadata["extraction_backend"] == "pdfplumber"
+    assert any(
+        unit.metadata["structural_kind"] == "key_value_row"
+        for unit in records.source_units
+    )
+    assert not hasattr(result.material, "debug")
+    assert not hasattr(result.material, "raw")
+
+
 def test_upload_material_use_case_records_too_large_failure_without_http_adapter() -> (
     None
 ):
@@ -91,6 +149,10 @@ def test_upload_material_use_case_records_too_large_failure_without_http_adapter
 
 
 def _pdf_with_text(text: str) -> bytes:
+    return _pdf_with_positioned_lines([(24, 72, 720, text)])
+
+
+def _pdf_with_positioned_lines(lines: list[tuple[int, int, int, str]]) -> bytes:
     writer = PdfWriter()
     page = writer.add_blank_page(width=612, height=792)
     font = DictionaryObject(
@@ -104,11 +166,53 @@ def _pdf_with_text(text: str) -> bytes:
         {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
     )
     stream = DecodedStreamObject()
-    stream.set_data(f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode("utf-8"))
+    commands = [
+        f"BT /F1 {font_size} Tf {x} {y} Td ({_pdf_literal(text)}) Tj ET"
+        for font_size, x, y, text in lines
+    ]
+    stream.set_data("\n".join(commands).encode("utf-8"))
     page[NameObject("/Contents")] = stream
     buffer = BytesIO()
     writer.write(buffer)
     return buffer.getvalue()
+
+
+def _pdf_literal(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _page_layout(lines: list[PdfLine]) -> PageLayout:
+    return PageLayout(page=1, width=612, height=792, lines=tuple(lines))
+
+
+def _layout_line(text: str, *, top: float, size: float = 10) -> PdfLine:
+    words = []
+    for index, part in enumerate(text.split(), start=1):
+        x0 = 72 + (index - 1) * 52
+        words.append(
+            PdfWord(
+                page=1,
+                text=part,
+                x0=x0,
+                top=top,
+                x1=x0 + max(10, len(part) * 5),
+                bottom=top + size,
+                order=index,
+                font_name="Helvetica",
+                size=size,
+            )
+        )
+    return PdfLine(
+        page=1,
+        text=text,
+        words=tuple(words),
+        x0=min(word.x0 for word in words),
+        top=top,
+        x1=max(word.x1 for word in words),
+        bottom=top + size,
+        order=1,
+        font_size=size,
+    )
 
 
 def _runtime_config(store: MaterialStore) -> RuntimeConfigSettings:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from server.materials.ids import new_material_id
+from server.materials.layout import PageLayout
 from server.retrieval.chunking import build_source_units
 from server.retrieval.embeddings import (
     EmbeddingProfile,
@@ -113,13 +114,17 @@ class MaterialIngestionPipeline:
         *,
         file_name: str,
         text: str,
+        layout_pages: tuple[PageLayout, ...] = (),
         events: MaterialIngestionEvents,
     ) -> ReadyMaterialIngestionResult:
         material_id = new_material_id()
         events.material_id_assigned(material_id)
         try:
             source_units = build_source_units(
-                material_id=material_id, file_name=file_name, text=text
+                material_id=material_id,
+                file_name=file_name,
+                text=text,
+                layout_pages=layout_pages,
             )
         except Exception:
             events.source_unit_build_failed()

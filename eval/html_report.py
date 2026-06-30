@@ -68,6 +68,7 @@ def render_html_report(*, run_json_path: Path) -> str:
             "<body>",
             "<main>",
             _render_header(run=run, summary=summary),
+            _render_run_context(run),
             _render_summary(summary),
             _render_question_table(questions),
             *[_render_question_detail(question) for question in questions],
@@ -407,7 +408,7 @@ def _material_sources(run: dict[str, Any]) -> dict[str, str]:
     upload = _dict(requests.get("material_upload"))
     material_id = _text(upload.get("material_id"))
     dataset = _dict(run.get("dataset"))
-    source = _text(dataset.get("material_text_file"))
+    source = _material_input_source(dataset)
     if not material_id or not source:
         return {}
     return {material_id: source}
@@ -438,6 +439,8 @@ def _find_step(steps: list[Any], step_name: str) -> dict[str, Any] | None:
 
 
 def _render_header(*, run: dict[str, Any], summary: RunSummary) -> str:
+    purpose = _run_purpose(run)
+    material_input = _material_input(run)
     return "".join(
         [
             '<section class="hero">',
@@ -447,10 +450,44 @@ def _render_header(*, run: dict[str, Any], summary: RunSummary) -> str:
             f"<p>{_h(_text(run.get('kind'), fallback='eval run'))}</p>",
             "</div>",
             "<dl>",
+            _stat("purpose", purpose["label"]),
+            _stat("input", material_input["kind_label"]),
             _stat("created", _text(run.get("created_at"), fallback="not recorded")),
             _stat("questions", str(summary.question_count)),
             _stat("observations", str(summary.observation_count)),
             "</dl>",
+            "</section>",
+        ]
+    )
+
+
+def _render_run_context(run: dict[str, Any]) -> str:
+    purpose = _run_purpose(run)
+    material_input = _material_input(run)
+    baseline_note = (
+        "이 run은 원문 PDF baseline입니다. 같은 질문셋으로 source unit, retrieval, answer/evidence 경로를 읽는 기준으로 사용합니다."
+        if purpose["id"] == "original_pdf_baseline"
+        else "이 run은 sample fixture smoke입니다. product API와 report join 확인용이며 Agoda original PDF baseline으로 해석하지 않습니다."
+    )
+    return "".join(
+        [
+            '<section class="run-context">',
+            "<h2>Run context</h2>",
+            '<div class="context-grid">',
+            '<article class="context-card">',
+            "<h3>Purpose</h3>",
+            f"<p>{_h(purpose['label'])}</p>",
+            f'<p class="section-help">{_h(baseline_note)}</p>',
+            "</article>",
+            '<article class="context-card">',
+            "<h3>Material input</h3>",
+            '<dl class="block-meta">',
+            _stat("kind", material_input["kind_label"]),
+            _stat("source", material_input["source"]),
+            _stat("uploaded file", material_input["uploaded_file_name"]),
+            "</dl>",
+            "</article>",
+            "</div>",
             "</section>",
         ]
     )
@@ -521,11 +558,13 @@ def _render_question_detail(question: QuestionReport) -> str:
             _render_eval_verdict(question),
             _render_observation_trace(question),
             _render_evidence_path(question),
+            _render_failure_classification_cues(question),
             '<details class="raw-facts">',
             "<summary>Raw details <span>ids, LangSmith hint, Answer projection facts</span></summary>",
             _render_trace_details(question),
             '<p class="section-help">아래 JSON은 product observation의 answer_projection facts입니다. eval expected/pass-fail은 run.json 쪽에만 있습니다.</p>',
             _render_json(question.answer_projection),
+            _render_raw_observation(question),
             "</details>",
             "</section>",
         ]
@@ -610,8 +649,20 @@ def _render_trace_step(step: object) -> str:
             _status_badge(status),
             _render_fact_summary(facts),
             "</div>",
+            _render_trace_step_json(step),
             _render_trace_tree(children) if children else "",
             "</li>",
+        ]
+    )
+
+
+def _render_trace_step_json(step: dict[str, Any]) -> str:
+    return "".join(
+        [
+            '<details class="trace-step-json">',
+            "<summary>Raw observation step JSON</summary>",
+            _render_json(step),
+            "</details>",
         ]
     )
 
@@ -655,6 +706,79 @@ def _render_evidence_path(question: QuestionReport) -> str:
             "</section>",
         ]
     )
+
+
+def _render_failure_classification_cues(question: QuestionReport) -> str:
+    source_units = _source_unit_blocks(question.retrieval_candidates)
+    evidence_refs = _answer_evidence_refs(question.answer_items)
+    context_source_ids = {
+        _text(block.get("source_unit_id"))
+        for block in question.context_blocks
+        if isinstance(block, dict)
+    }
+    candidate_used_count = sum(
+        1
+        for candidate in question.retrieval_candidates
+        if isinstance(candidate, dict)
+        and _text(candidate.get("source_unit_id")) in context_source_ids
+    )
+    return "".join(
+        [
+            '<section class="report-section classification-cues">',
+            '<p class="stage-kicker">Failure reading</p>',
+            "<h3>Failure classification cues <span>source unit, retrieval, composer, state</span></h3>",
+            '<p class="section-help">이 영역은 답을 새로 만들지 않습니다. 위의 product answer와 evidence path를 네 가지 관점으로 읽기 위한 체크포인트입니다.</p>',
+            '<div class="cue-grid">',
+            _cue_card(
+                "Source unit",
+                f"{len(source_units)} source unit(s), "
+                f"{_compact_lengths(source_units)}",
+                "필요한 정보가 큰 덩어리 안에 묻히거나 별도 후보로 보이지 않으면 source unit 구조를 먼저 의심합니다.",
+            ),
+            _cue_card(
+                "Retrieval",
+                f"{len(question.retrieval_candidates)} candidate(s), "
+                f"{candidate_used_count} sent to composer",
+                "필요한 source unit이 있는데 candidate에 없거나 낮은 순위라면 retrieval 문제로 읽습니다.",
+            ),
+            _cue_card(
+                "Answer composer",
+                f"{len(question.context_blocks)} context block(s), "
+                f"{len(question.answer_items)} answer item(s)",
+                "근거 후보는 전달됐는데 answer item이나 evidence로 조립되지 않으면 composer 문제로 읽습니다.",
+            ),
+            _cue_card(
+                "State validation",
+                f"expected {question.expected_state}, observed "
+                f"{_compact_counts(question.observed_states)}, "
+                f"{len(evidence_refs)} evidence ref(s)",
+                "조건 문맥 없이 supported가 되거나 근거가 있는데 missing/unsupported가 되면 상태 검증 문제로 읽습니다.",
+            ),
+            "</div>",
+            "</section>",
+        ]
+    )
+
+
+def _cue_card(title: str, value: str, body: str) -> str:
+    return (
+        '<article class="cue-card">'
+        f"<h4>{_h(title)}</h4>"
+        f"<strong>{_h(value)}</strong>"
+        f"<p>{_h(body)}</p>"
+        "</article>"
+    )
+
+
+def _compact_lengths(source_units: list[dict[str, Any]]) -> str:
+    lengths = [
+        value
+        for source_unit in source_units
+        if isinstance(value := source_unit.get("char_length"), int)
+    ]
+    if not lengths:
+        return "length not recorded"
+    return f"chars min {min(lengths)}, max {max(lengths)}"
 
 
 def _render_lineage_steps(question: QuestionReport) -> str:
@@ -796,6 +920,7 @@ def _render_source_unit_details(
                 ("char_length", _int_or_text(source_unit.get("char_length"))),
                 ("page", _int_or_text(source_unit.get("page"))),
                 ("unit_index", _int_or_text(source_unit.get("unit_index"))),
+                *_source_unit_metadata_rows(source_unit),
             ],
             body_label="SourceUnit text",
             body=_text(source_unit.get("text")),
@@ -845,6 +970,7 @@ def _render_retrieval_candidate_details(
                 ("score", _score_or_text(candidate.get("score"))),
                 ("vector_score", _score_or_text(candidate.get("vector_score"))),
                 ("lexical_score", _score_or_text(candidate.get("lexical_score"))),
+                *_source_unit_metadata_rows(candidate),
             ],
             body_label="후보 전문",
             body=_text(candidate.get("text")),
@@ -886,6 +1012,7 @@ def _render_context_block_details(
                     _text(block.get("locator"), fallback="not recorded"),
                 ),
                 ("char_length", _int_or_text(block.get("char_length"))),
+                *_source_unit_metadata_rows(block),
             ],
             body_label="전달된 context 전문",
             body=_text(block.get("text")),
@@ -893,6 +1020,39 @@ def _render_context_block_details(
         )
         for index, block in enumerate(context_blocks, start=1)
     )
+
+
+def _source_unit_metadata_rows(block: dict[str, Any]) -> list[tuple[str, object]]:
+    rows: list[tuple[str, object]] = []
+    for key in (
+        "kind",
+        "structural_kind",
+        "bbox",
+        "line_count",
+        "layout_source",
+        "source_text_role",
+        "source_fragment_count",
+        "table_index",
+        "row_index",
+        "column_index",
+        "cell_count",
+        "group_block_count",
+        "extraction_backend",
+        "fallback_used",
+    ):
+        if key in block:
+            rows.append((key, _metadata_value(block.get(key))))
+    return rows
+
+
+def _metadata_value(value: object) -> object:
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if value is None:
+        return "not recorded"
+    return value
 
 
 def _render_answer_item_details(items: list[dict[str, Any]]) -> str:
@@ -1008,6 +1168,20 @@ def _render_trace_details(question: QuestionReport) -> str:
             _stat("observation", question.observation_source),
             _stat("LangSmith hint", f"search correlation_id:{question.correlation_id}"),
             "</dl>",
+            "</details>",
+        ]
+    )
+
+
+def _render_raw_observation(question: QuestionReport) -> str:
+    if question.observation is None:
+        return '<p class="empty">Raw observation JSON is not available for this question.</p>'
+    return "".join(
+        [
+            '<details class="trace-details">',
+            "<summary>Raw observation JSON</summary>",
+            '<p class="section-help">observation JSONL에서 이 질문의 correlation_id/request_id로 매칭된 원본 record입니다. eval expected/pass-fail은 포함하지 않습니다.</p>',
+            _render_json(question.observation.row),
             "</details>",
         ]
     )
@@ -1202,6 +1376,10 @@ def _render_text_blocks(
                         "source location",
                         _text(block.get("locator"), fallback="locator"),
                     ),
+                    "".join(
+                        _stat(label, value)
+                        for label, value in _source_unit_metadata_rows(block)
+                    ),
                     "</dl>",
                     f'<p class="text-label">{_h(text_label)}</p>',
                     f'<pre class="source-text">{_highlighted_text(_text(block.get("text"), fallback=""), highlight_terms or [])}</pre>',
@@ -1227,6 +1405,74 @@ def _source_label(*, material_id: str, material_sources: dict[str, str]) -> str:
     if material_id:
         return f"material {material_id}"
     return "source not recorded"
+
+
+def _run_purpose(run: dict[str, Any]) -> dict[str, str]:
+    purpose = _dict(run.get("run_purpose"))
+    purpose_id = _text(purpose.get("id"), fallback=_legacy_run_purpose_id(run))
+    label = _text(purpose.get("label"), fallback=_run_purpose_label(purpose_id))
+    return {"id": purpose_id, "label": label}
+
+
+def _legacy_run_purpose_id(run: dict[str, Any]) -> str:
+    dataset = _dict(run.get("dataset"))
+    if _text(dataset.get("material_pdf_file")):
+        return "original_pdf_baseline"
+    if _text(dataset.get("material_text_file")):
+        return "sample_fixture_smoke"
+    return "not_recorded"
+
+
+def _run_purpose_label(purpose_id: str) -> str:
+    if purpose_id == "original_pdf_baseline":
+        return "Original PDF baseline"
+    if purpose_id == "sample_fixture_smoke":
+        return "Sample fixture smoke"
+    return purpose_id or "not recorded"
+
+
+def _material_input(run: dict[str, Any]) -> dict[str, str]:
+    dataset = _dict(run.get("dataset"))
+    material_input = _dict(dataset.get("material_input"))
+    kind = _text(material_input.get("kind"), fallback=_legacy_material_kind(dataset))
+    source = _text(
+        material_input.get("source_path"), fallback=_material_input_source(dataset)
+    )
+    uploaded_file_name = _text(
+        material_input.get("uploaded_file_name"), fallback="not recorded"
+    )
+    return {
+        "kind": kind,
+        "kind_label": _material_kind_label(kind),
+        "source": source or "not recorded",
+        "uploaded_file_name": uploaded_file_name,
+    }
+
+
+def _legacy_material_kind(dataset: dict[str, Any]) -> str:
+    if _text(dataset.get("material_pdf_file")):
+        return "pdf_file"
+    if _text(dataset.get("material_text_file")):
+        return "text_fixture_rendered_pdf"
+    return "not_recorded"
+
+
+def _material_input_source(dataset: dict[str, Any]) -> str:
+    material_input = _dict(dataset.get("material_input"))
+    source = _text(material_input.get("source_path"))
+    if source:
+        return source
+    return _text(dataset.get("material_pdf_file")) or _text(
+        dataset.get("material_text_file")
+    )
+
+
+def _material_kind_label(kind: str) -> str:
+    if kind == "pdf_file":
+        return "Original PDF file"
+    if kind == "text_fixture_rendered_pdf":
+        return "Text fixture rendered as PDF"
+    return kind or "not recorded"
 
 
 def _render_json(value: object) -> str:
@@ -1366,8 +1612,16 @@ dd {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
 }
+.context-grid,
+.cue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
 .metric,
 .answer-item,
+.context-card,
+.cue-card,
 .finding-card,
 .outcome-card,
 .trace-details,
@@ -1387,6 +1641,26 @@ dd {
   display: block;
   margin-top: 6px;
   font-size: 18px;
+}
+.context-card h3 {
+  margin-top: 0;
+}
+.context-card > p {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.cue-card strong {
+  display: block;
+  margin: 6px 0 8px;
+  color: #263442;
+  font-size: 13px;
+}
+.cue-card p {
+  margin: 0;
+  color: #52616f;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .investigation-grid {
   display: grid;
@@ -1628,6 +1902,15 @@ th {
 }
 .trace-step strong {
   min-width: 170px;
+}
+.trace-step-json {
+  margin: 8px 0 0 14px;
+}
+.trace-step-json summary {
+  cursor: pointer;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
 }
 .fact-summary {
   display: flex;

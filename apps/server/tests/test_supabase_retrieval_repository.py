@@ -30,6 +30,7 @@ def test_supabase_repository_upserts_tripproof_source_units_and_embeddings() -> 
     assert repository.requests[1]["path"] == "/rest/v1/tripproof_source_units"
     assert repository.requests[1]["body"][0]["id"] == source_unit.id
     assert repository.requests[1]["body"][0]["text"] == source_unit.text
+    assert repository.requests[1]["body"][0]["metadata"] == source_unit.metadata
     assert repository.requests[2]["path"] == "/rest/v1/tripproof_source_embeddings"
     assert repository.requests[2]["body"][0]["source_unit_id"] == source_unit.id
     assert repository.requests[2]["body"][0]["embedding"] == [1.0, 0.0]
@@ -70,6 +71,7 @@ def test_supabase_repository_maps_rpc_matches_to_source_units() -> None:
     assert repository.requests[0]["body"]["p_material_ids"] == ["mat_1"]
     assert matches[0].source_unit.id == "su_1"
     assert matches[0].source_unit.text == "Show your booking confirmation."
+    assert matches[0].source_unit.metadata == {"kind": "pdf"}
     assert matches[0].embedding_record.id == "emb_1"
     assert matches[0].similarity == 0.87
 
@@ -111,6 +113,7 @@ def test_supabase_repository_reads_pgvector_string_values() -> None:
     records = repository.records_for_materials(["mat_1"])
 
     assert records.source_units[0].id == "su_1"
+    assert records.source_units[0].metadata == {}
     assert records.embedding_records[0].vector == [1.0, 0.0]
 
 

@@ -7,7 +7,9 @@ from server.answers.library_chat import (
     LIBRARY_CHAT_TARGET_ID,
     OllamaLibraryChatAnswerComposer,
 )
+from server.answers.body_synthesis import OllamaAnswerBodySynthesizer
 from server.extraction.models import EvidenceState
+from server.prompts.renderers.answer.answer_body import load_answer_body_prompt
 from server.prompts.renderers.answer.library_chat_answer import (
     load_library_chat_answer_prompt,
 )
@@ -37,7 +39,10 @@ def test_library_chat_composer_answers_question_from_grounded_source() -> None:
                     }
                 ]
             }
-        )
+        ),
+        body_synthesizer=_FakeBodySynthesizer(
+            {"answer": "합성된 답변입니다. 체크인 날짜는 2025년 3월 09일입니다."}
+        ),
     )
 
     answer = composer.compose(
@@ -49,10 +54,45 @@ def test_library_chat_composer_answers_question_from_grounded_source() -> None:
     item = answer.items[0]
     assert item.id == "answer"
     assert item.label == "체크인 날짜"
-    assert item.body == "체크인 날짜는 2025년 3월 09일입니다."
+    assert item.body == "합성된 답변입니다. 체크인 날짜는 2025년 3월 09일입니다."
     assert item.evidence_state == EvidenceState.SUPPORTED
     assert item.evidence[0].snippet in unit.text
     assert item.evidence[0].locator == "booking.pdf p.1 u.1"
+
+
+def test_library_chat_composer_without_body_synthesizer_falls_back_to_template() -> (
+    None
+):
+    # body 합성 toggle off(body_synthesizer=None) → 합성 없이 code template body로 폴백하고,
+    # 답변 호출이 낸 draft body는 쓰지 않는다. runtime snapshot도 비활성으로 보고한다.
+    unit = _source_unit("Arrival : 체크인 : 2025년 3월 09일")
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(
+            {
+                "items": [
+                    {
+                        "id": "answer",
+                        "label": "체크인 날짜",
+                        "body": "버려져야 하는 draft 답변 문장",
+                        "value": "2025년 3월 09일",
+                        "evidence_state": "supported",
+                        "source_unit_id": unit.id,
+                        "evidence_snippet": "Arrival : 체크인 : 2025년 3월 09일",
+                    }
+                ]
+            }
+        ),
+        body_synthesizer=None,
+    )
+
+    answer = composer.compose(
+        question="체크인 날짜가 어떻게 돼?", context=_context(unit)
+    )
+
+    item = answer.items[0]
+    assert item.evidence_state == EvidenceState.SUPPORTED
+    assert item.body == "체크인 날짜: 2025년 3월 09일"
+    assert composer.runtime_body_model_snapshot() == {"enabled": False}
 
 
 def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
@@ -79,11 +119,12 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     prompt = load_library_chat_answer_prompt()
     assert composer.prompt.document.domain == "answer"
     assert composer.prompt.document.name == "library_chat_answer"
-    assert composer.prompt.document.version == "2026-06-10"
+    assert composer.prompt.document.version == "2026-06-29"
     assert composer.prompt.document.title == "Library Chat Answer Prompt"
     assert composer.prompt.document.metadata["display_name_ko"] == "자료함 질문 답변"
     assert composer.prompt.document.metadata["description_ko"] == (
-        "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만든다."
+        "자료함 질문에 대해 제공된 source unit 근거만 사용해 답변 후보를 만들고, "
+        "값을 지배하는 조건/caveat가 있으면 caveat으로 함께 보고한다."
     )
     assert (
         "# 자료함 질문 답변 프롬프트"
@@ -95,7 +136,7 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     )
     assert composer.prompt.snapshot()["bodyHash"] == prompt.document.body_hash
     assert composer.prompt.snapshot()["assetPath"] == (
-        "apps/server/prompts/assets/answer/library_chat_answer/2026-06-10.md"
+        "apps/server/prompts/assets/answer/library_chat_answer/2026-06-29.md"
     )
     assert "displayNameKo" not in composer.prompt.snapshot()
     assert "descriptionKo" not in composer.prompt.snapshot()
@@ -108,6 +149,150 @@ def test_library_chat_composer_uses_versioned_prompt_asset() -> None:
     assert "자료함 질문 답변" not in client.last_user
     assert "일반 여행 지식으로 추론하지 않는다." not in client.last_system
     assert "일반 여행 지식으로 추론하지 않는다." not in client.last_user
+
+
+def test_answer_body_synthesis_uses_versioned_prompt_asset() -> None:
+    unit = _source_unit("Check-in starts at 15:00.")
+    client = _CapturingJsonClient(
+        {"items": [{"id": "answer", "body": "체크인 시작 시각은 15:00입니다."}]}
+    )
+    synthesizer = OllamaAnswerBodySynthesizer(client=client)
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(
+            {
+                "items": [
+                    {
+                        "id": "answer",
+                        "label": "체크인 시작 시각",
+                        "body": "answer draft must not be reused",
+                        "value": "15:00",
+                        "evidence_state": "supported",
+                        "source_unit_id": unit.id,
+                        "evidence_snippet": "Check-in starts at 15:00.",
+                    }
+                ]
+            }
+        ),
+        body_synthesizer=synthesizer,
+    )
+
+    answer = composer.compose(
+        question="체크인 시작 시각은 몇 시야?", context=_context(unit)
+    )
+
+    prompt = load_answer_body_prompt()
+    assert answer.items[0].body == "체크인 시작 시각은 15:00입니다."
+    assert synthesizer.prompt.document.domain == "answer"
+    assert synthesizer.prompt.document.name == "answer_body"
+    assert synthesizer.prompt.document.version == "2026-06-30"
+    assert synthesizer.prompt.document.title == "Certified Answer Body Prompt"
+    assert synthesizer.prompt.document.metadata["display_name_ko"] == (
+        "인증 후 답변 문장 합성"
+    )
+    assert (
+        "certification이 확정한 label, value, state, evidence, caveat만 사용해 "
+        "사용자-facing 답변 body를 만든다."
+        == synthesizer.prompt.document.metadata["description_ko"]
+    )
+    assert (
+        "# 인증 후 답변 문장 합성 프롬프트"
+        in synthesizer.prompt.document.metadata["translation_ko"]
+    )
+    assert synthesizer.prompt.snapshot()["bodyHash"] == prompt.document.body_hash
+    assert synthesizer.prompt.snapshot()["assetPath"] == (
+        "apps/server/prompts/assets/answer/answer_body/2026-06-30.md"
+    )
+    assert client.last_system == prompt.system_message()
+    assert client.last_user is not None
+    assert "question: 체크인 시작 시각은 몇 시야?" in client.last_user
+    assert '"state": "supported"' in client.last_user
+    assert '"value": "15:00"' in client.last_user
+    assert "answer draft must not be reused" not in client.last_user
+    assert "인증 후 답변 문장 합성" not in client.last_system
+    assert "인증 후 답변 문장 합성" not in client.last_user
+
+
+def test_body_synthesis_is_not_called_for_missing_items() -> None:
+    unit = _source_unit("체크인 날짜는 2025년 3월 09일입니다.")
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(
+            {
+                "items": [
+                    {
+                        "id": "answer",
+                        "label": "체크인 날짜",
+                        "body": "체크인 날짜는 2025년 3월 10일입니다.",
+                        "value": "2025년 3월 10일",
+                        "evidence_state": "supported",
+                        "source_unit_id": unit.id,
+                        "evidence_snippet": "체크인 날짜는 2025년 3월 10일입니다.",
+                    }
+                ]
+            }
+        ),
+        body_synthesizer=_ExplodingBodySynthesizer(),
+    )
+
+    answer = composer.compose(
+        question="체크인 날짜가 어떻게 돼?", context=_context(unit)
+    )
+
+    assert answer.items[0].evidence_state == EvidenceState.MISSING
+    assert (
+        answer.items[0].body
+        == "현재 등록된 자료에서 체크인 날짜의 근거를 확인하지 못했습니다."
+    )
+
+
+def test_body_synthesis_falls_back_when_needs_review_body_overclaims() -> None:
+    unit = _source_unit(
+        "NonSmoke, LargeBed. All special requests are subject to availability "
+        "at check-in."
+    )
+    synthesizer = OllamaAnswerBodySynthesizer(
+        client=_FakeJsonClient(
+            {
+                "items": [
+                    {
+                        "id": "special_request",
+                        "body": "특별 요청은 확정된 조건입니다.",
+                    }
+                ]
+            }
+        )
+    )
+    composer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(
+            {
+                "items": [
+                    {
+                        "id": "special_request",
+                        "label": "특별 요청",
+                        "body": "특별 요청은 확정된 조건입니다.",
+                        "value": "NonSmoke, LargeBed",
+                        "evidence_state": "supported",
+                        "source_unit_id": unit.id,
+                        "evidence_snippet": "NonSmoke, LargeBed",
+                        "caveat": {
+                            "source_unit_id": unit.id,
+                            "snippet": "subject to availability",
+                            "text": "subject to availability",
+                        },
+                    }
+                ]
+            }
+        ),
+        body_synthesizer=synthesizer,
+    )
+
+    answer = composer.compose(
+        question="NonSmoke, LargeBed는 확정된 조건이야?", context=_context(unit)
+    )
+
+    item = answer.items[0]
+    assert item.evidence_state == EvidenceState.NEEDS_REVIEW
+    assert "확정된 조건입니다" not in item.body
+    assert "subject to availability" in item.body
 
 
 def test_library_chat_answer_changes_when_only_source_checkin_time_changes() -> None:
@@ -219,34 +404,38 @@ def test_library_chat_composer_downgrades_ungrounded_supported_answer() -> None:
     assert answer.items[0].evidence == []
 
 
-def test_library_chat_composer_downgrades_date_answer_when_question_asks_time() -> None:
+def test_library_chat_certification_does_not_read_question_keywords() -> None:
+    # 04 계약: certification은 질문 free text를 보지 않는다(AC2). 이전의
+    # 질문-키워드 시간 게이트(_supported_value_matches_question)는 "질문에 '몇 시'가
+    # 있으면 강등"이라는 단어 매칭이라 mirror-trap과 같은 부류였고 04에서 제거됐다.
+    # 따라서 grounded value를 든 단일 clean unit은 질문 표현과 무관하게 supported로
+    # 남는다. 답 모양이 질문 의도와 맞는지(date vs time)는 certification 층의
+    # 단어 게이트가 아니라 LLM 후보/entailment(보류)의 책임으로 옮긴다.
     unit = _source_unit("Arrival : 체크인 : 2025년 3월 09일")
-    composer = OllamaLibraryChatAnswerComposer(
-        client=_FakeJsonClient(
+    payload = {
+        "items": [
             {
-                "items": [
-                    {
-                        "id": "answer",
-                        "label": "체크인 시작 시각",
-                        "body": "체크인 시작 시각은 2025년 3월 09일입니다.",
-                        "value": "2025년 3월 09일",
-                        "evidence_state": "supported",
-                        "source_unit_id": unit.id,
-                        "evidence_snippet": "Arrival : 체크인 : 2025년 3월 09일",
-                    }
-                ]
+                "id": "answer",
+                "label": "체크인 날짜",
+                "body": "체크인 날짜는 2025년 3월 09일입니다.",
+                "value": "2025년 3월 09일",
+                "evidence_state": "supported",
+                "source_unit_id": unit.id,
+                "evidence_snippet": "Arrival : 체크인 : 2025년 3월 09일",
             }
-        )
-    )
+        ]
+    }
 
-    answer = composer.compose(
-        question="체크인 시작 시각은 몇 시야?", context=_context(unit)
-    )
+    time_answer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(payload)
+    ).compose(question="체크인 시작 시각은 몇 시야?", context=_context(unit))
+    date_answer = OllamaLibraryChatAnswerComposer(
+        client=_FakeJsonClient(payload)
+    ).compose(question="체크인 날짜가 어떻게 돼?", context=_context(unit))
 
-    assert answer.summary == "현재 등록된 자료만으로는 답을 확인하지 못했습니다."
-    assert answer.items[0].evidence_state == EvidenceState.MISSING
-    assert answer.items[0].value is None
-    assert answer.items[0].evidence == []
+    assert time_answer.items[0].evidence_state == EvidenceState.SUPPORTED
+    assert date_answer.items[0].evidence_state == EvidenceState.SUPPORTED
+    assert time_answer.items[0].evidence_state == date_answer.items[0].evidence_state
 
 
 def test_library_chat_composer_repairs_numeric_value_snippet_from_pdf_extracted_text() -> (
@@ -354,6 +543,21 @@ class _CapturingJsonClient(_FakeJsonClient):
         self.last_system = system
         self.last_user = user
         return super().generate_json(system=system, user=user)
+
+
+class _FakeBodySynthesizer:
+    def __init__(self, bodies: dict[str, str] | None) -> None:
+        self._bodies = bodies
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def synthesize(self, *, question, items):
+        self.calls.append((question, [item.id for item in items]))
+        return self._bodies
+
+
+class _ExplodingBodySynthesizer:
+    def synthesize(self, *, question, items):
+        raise AssertionError("body synthesizer should not be called")
 
 
 class _SourceDrivenCheckinTimeJsonClient:
