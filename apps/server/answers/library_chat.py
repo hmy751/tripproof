@@ -164,13 +164,16 @@ def _answer_from_payload(
         )
         if candidate is None:
             continue
-        candidate = _enrich_with_caveat(
+        candidate, caveat_source = _enrich_with_caveat(
             question=question,
             candidate=candidate,
             context=context,
             caveat_extractor=caveat_extractor,
         )
         certification = certify(candidate=candidate, context=context)
+        # caveat provenance(inline vs 분리 호출)는 certify가 모른다 — 여기서 관측용으로
+        # 얹는다. 제품 body 렌더는 이 필드를 읽지 않는다.
+        certification = replace(certification, caveat_source=caveat_source)
         items.append(
             _item_from_certification(candidate=candidate, certification=certification)
         )
@@ -189,27 +192,32 @@ def _enrich_with_caveat(
     candidate: AnswerCandidate,
     context: AnswerContext,
     caveat_extractor: CaveatExtractor | None,
-) -> AnswerCandidate:
+) -> tuple[AnswerCandidate, str | None]:
     """별도 relation pass로 '값을 좌우하는 조건' 역할을 채운다(06 robust fix).
 
     답변 호출이 supported를 제안했는데 caveat을 안 채운 경우에만, 답을 쓴
     호출과 분리된 두 번째 호출로 조건만 따로 묻는다(생성/검증 분리). supported가 아니거나
     이미 조건이 있으면 두 번째 호출을 아끼고 그대로 둔다. certify가 그 결과를 읽어
     grounding되면 강등한다 — 코드는 의미를 분류하지 않는다.
+
+    함께 caveat provenance를 돌려준다(관측용). 답변 모델이 inline으로 이미 caveat을
+    냈으면 분리 호출은 어차피 skip되므로 "inline"이다. 분리 호출이 실제로 돌았는지
+    (separate_call/separate_call_empty)와 inline이 가로챘는지를 eval에서 구분하기 위함이다.
+    실행 조건은 기존과 동일하다 — provenance 기록만 추가한다.
     """
 
-    if caveat_extractor is None:
-        return candidate
-    if candidate.proposed_state != EvidenceState.SUPPORTED:
-        return candidate
     if candidate.caveat is not None:
-        return candidate
+        return candidate, "inline"
+    if caveat_extractor is None:
+        return candidate, None
+    if candidate.proposed_state != EvidenceState.SUPPORTED:
+        return candidate, None
     caveat = caveat_extractor.extract(
         question=question, candidate=candidate, context=context
     )
     if caveat is None:
-        return candidate
-    return replace(candidate, caveat=caveat)
+        return candidate, "separate_call_empty"
+    return replace(candidate, caveat=caveat), "separate_call"
 
 
 def _item_from_certification(

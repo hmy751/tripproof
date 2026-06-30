@@ -45,6 +45,12 @@ class Certification:
 
     `caveat`은 `limited_by_caveat` 강등 때 읽은, 원문에 grounding된
     조건 근거다. 관측용이며 제품 응답 body에는 싣지 않는다.
+
+    `caveat_source`는 certify에 도달한 caveat이 어디서 왔는지를 표시하는 관측용
+    provenance다: "inline"(답변 모델이 답변 payload에 함께 냄), "separate_call"(분리
+    relation 호출이 냄), "separate_call_empty"(분리 호출이 돌았으나 caveat 없음),
+    None(분리 층 없음/supported 아님/조건 없음). A/B에서 분리 검출기가 실제로 일했는지
+    inline이 가로챘는지를 eval 로그로 구분하기 위한 것이며 제품 body에는 싣지 않는다.
     """
 
     state: EvidenceState
@@ -52,3 +58,4 @@ class Certification:
     proposed_state: EvidenceState
     evidence: list[EvidenceRef] = field(default_factory=list)
     caveat: EvidenceRef | None = None
+    caveat_source: str | None = None

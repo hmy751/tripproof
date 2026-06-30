@@ -538,6 +538,10 @@ def _certification_detail(
     # 낸 역할을 코드가 읽었음을 report에서 before/after로 보기 위한 관측이다.
     if certification.caveat is not None:
         detail["caveat_snippet"] = certification.caveat.snippet
+    # caveat provenance(inline vs 분리 호출). A/B에서 분리 검출기가 실제로 일했는지
+    # 답변 모델 inline이 가로챘는지를 eval 로그로 구분하기 위한 관측이다.
+    if certification.caveat_source is not None:
+        detail["caveat_source"] = certification.caveat_source
     return detail
 
 
